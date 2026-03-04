@@ -5,20 +5,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Setup
 
 ```bash
-pip install -r requirements.txt
-python -m grpc_tools.protoc -I. --python_out=. np2_structs.proto
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+.venv/Scripts/python.exe -m grpc_tools.protoc -I. --python_out=. np2_structs.proto
 ```
 
 The second command generates `np2_structs_pb2.py` (not committed). This file is required by the `search_rooms`, `get_score_range`, and `get_score_npid` methods. It must be regenerated whenever `np2_structs.proto` changes.
+
+## Python environment
+
+Always use the project virtual environment when running Python commands:
+
+```bash
+.venv/Scripts/python.exe -m pytest ...
+.venv/Scripts/python.exe rpcn_client.py ...
+.venv/Scripts/python.exe -m grpc_tools.protoc ...
+```
 
 ## Running
 
 ```bash
 # CLI smoke test (connect + login + disconnect)
-python rpcn_client.py --user YOUR_USER --password YOUR_PASS
+.venv/Scripts/python.exe rpcn_client.py --user YOUR_USER --password YOUR_PASS
 
 # Optional flags
-python rpcn_client.py --host rpcn.rpcs3.net --port 31313 --user U --password P --token T
+.venv/Scripts/python.exe rpcn_client.py --host rpcn.rpcs3.net --port 31313 --user U --password P --token T
 ```
 
 ## Architecture
