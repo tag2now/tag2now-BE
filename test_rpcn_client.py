@@ -92,7 +92,7 @@ def test_search_rooms(session):
     worlds = client.get_world_list(COM_ID, servers[0])
 
     world_id = worlds[0] if worlds else 0
-    resp = client.search_rooms(COM_ID, world_id=world_id, max_results=20)
+    resp = client.search_rooms(COM_ID, world_id=world_id, max_results=20, flag_attr=0x00000000)
 
     assert isinstance(resp, SearchRoomsResult)
     assert isinstance(resp.total, int) and resp.total >= 0
@@ -107,7 +107,7 @@ def test_get_score_range(session):
     pytest.importorskip("np2_structs_pb2")
     client = session["client"]
 
-    resp = client.get_score_range(COM_ID, BOARD_ID, start_rank=1, num_ranks=10)
+    resp = client.get_score_range(COM_ID, BOARD_ID, start_rank=1, num_ranks=10, with_game_info=True, with_comment=True)
 
     assert isinstance(resp, ScoreResult)
     assert isinstance(resp.total_records, int) and resp.total_records >= 0

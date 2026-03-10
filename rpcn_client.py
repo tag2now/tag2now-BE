@@ -284,7 +284,7 @@ class RpcnClient:
 	# Rooms
 	# ------------------------------------------------------------------
 
-	def search_rooms(self, com_id: str, world_id: int = 0, start_index: int = 1, max_results: int = 20) -> SearchRoomsResult:
+	def search_rooms(self, com_id: str, world_id: int = 0, start_index: int = 1, max_results: int = 20, flag_attr: int = 0) -> SearchRoomsResult:
 		"""Search for active rooms in the given world.
 
 		Returns a SearchRoomsResult DTO.
@@ -295,6 +295,13 @@ class RpcnClient:
 		req = pb.SearchRoomRequest()
 		# Field names match np2_structs.proto exactly
 		req.worldId = world_id
+		req.option = 31
+		req.flagAttr = flag_attr
+		req.flagFilter = 0
+		for i in [0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53]:
+			at_id = req.attrId.add()
+			at_id.value = i
+		# req.attrId =
 		req.rangeFilter_startIndex = max(1, start_index)
 		req.rangeFilter_max = min(max_results, 20)  # server caps at 20
 
