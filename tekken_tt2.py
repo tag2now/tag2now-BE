@@ -18,7 +18,7 @@ Comm ID note:
 import argparse
 import struct
 from dataclasses import dataclass
-from rpcn_client import RpcnClient, RpcnError, SearchRoomsResult, ScoreResult, ScoreEntry
+from rpcn_client import RpcnClient, RpcnError, SearchRoomsResult, ScoreEntry
 from tekken_tt2_data import TTT2_CHARACTERS
 
 # ---------------------------------------------------------------------------
@@ -49,7 +49,7 @@ class CharInfo:
 		return TTT2_CHARACTERS.get(self.char_id, f"Unknown(0x{self.char_id:02x})")
 
 	def __str__(self):
-		return f"{self.name}(rank {self.rank}) {self.wins}W/{self.losses}L"
+		return f"{self.name}/{hex(self.char_id)}(rank {self.rank}) {self.wins}W/{self.losses}L"
 
 
 @dataclass
@@ -66,7 +66,7 @@ def parse_game_info(data: bytes) -> TTT2GameInfo | None:
 	"""Parse a 64-byte TTT2 game_info blob. Returns None if data is too short."""
 	if len(data) < _GAME_INFO_SIZE:
 		return None
-	c1_id, c1_rank, c2_id, c2_rank, c1_w, c1_l, c2_w, c2_l = struct.unpack(
+	c1_id, c2_id, c1_rank,c2_rank, c1_w, c2_w, c1_l, c2_l = struct.unpack(
 		_GAME_INFO_FMT, data[:_GAME_INFO_SIZE]
 	)
 	return TTT2GameInfo(
