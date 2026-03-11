@@ -37,6 +37,7 @@ CMD_GET_ROOM_EXTERNAL_LIST = 18
 CMD_GET_SCORE_RANGE        = 34
 CMD_GET_SCORE_FRIENDS      = 35
 CMD_GET_SCORE_NPID         = 36
+CMD_SEARCH_ROOM_ALL        = 0x0105
 
 # ErrorType::NoError
 ERR_NO_ERROR = 0
@@ -310,6 +311,48 @@ class RpcnClient:
 		error, data = self._recv_reply(CMD_SEARCH_ROOM)
 		if error != ERR_NO_ERROR:
 			raise RpcnError(f"SearchRoom error {error}")
+
+		resp = pb.SearchRoomResponse()
+		resp.ParseFromString(_unpack_data_packet(data))
+		rooms = [
+			RoomInfo(
+				room_id=room.roomId,
+				owner_npid=room.owner.npId if room.owner else "",
+				owner_online_name=room.owner.onlineName if room.owner else "",
+				current_members=room.curMemberNum.value,
+				max_slots=room.maxSlot.value,
+				flag_attr=room.flagAttr,
+				int_attrs=[RoomAttr(id=a.id.value, value=a.num) for a in room.roomSearchableIntAttrExternal],
+				bin_search_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomSearchableBinAttrExternal],
+				bin_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomBinAttrExternal],
+			)
+			for room in resp.rooms
+		]
+		return SearchRoomsResult(total=resp.total, rooms=rooms)
+
+	def search_rooms_all(self, com_id: str, world_id: int = 0, start_index: int = 1, max_results: int = 20, flag_attr: int = 0) -> SearchRoomsResult:
+		"""Search for all rooms including HIDDEN ones, skipping flag filtering.
+
+		Same request/response format as search_rooms, but the server uses
+		is_match_all() which does not exclude HIDDEN rooms or filter by flags.
+		"""
+		pb = _import_pb2()
+		req = pb.SearchRoomRequest()
+		req.worldId = world_id
+		req.option = 31
+		req.flagAttr = flag_attr
+		req.flagFilter = 0
+		for i in [0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53]:
+			at_id = req.attrId.add()
+			at_id.value = i
+		req.rangeFilter_startIndex = max(1, start_index)
+		req.rangeFilter_max = min(max_results, 20)
+
+		payload = _encode_com_id(com_id) + _pack_protobuf(req)
+		self._send(CMD_SEARCH_ROOM_ALL, payload)
+		error, data = self._recv_reply(CMD_SEARCH_ROOM_ALL)
+		if error != ERR_NO_ERROR:
+			raise RpcnError(f"SearchRoomAll error {error}")
 
 		resp = pb.SearchRoomResponse()
 		resp.ParseFromString(_unpack_data_packet(data))
