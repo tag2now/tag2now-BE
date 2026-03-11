@@ -75,11 +75,27 @@ def test_get_rooms(session):
         assert isinstance(resp, SearchRoomsResult)
 
 
+def test_search_rooms_all(session):
+    """Integration test for search_rooms_all — returns all rooms including HIDDEN ones."""
+    pytest.importorskip("np2_structs_pb2")
+    client = session["client"]
+    tree = get_server_world_tree(client, COM_ID)
+    all_worlds = [w for worlds in tree.values() for w in worlds]
+    for world_id in all_worlds:
+        resp = client.search_rooms_all(COM_ID, world_id=world_id)
+        print(f"SearchRoomAll world {world_id}: total={resp.total}, rooms={len(resp.rooms)}")
+        assert isinstance(resp, SearchRoomsResult)
+        assert resp.total >= 0
+        for room in resp.rooms:
+            assert room.room_id > 0
+
+
 def test_get_leaderboard(session):
     """Integration test for get_leaderboard — returns TTT2LeaderboardResult with parsed entries."""
     pytest.importorskip("np2_structs_pb2")
     client = session["client"]
-    resp = get_leaderboard(client, COM_ID, BOARD_ID, num_ranks=100)
+    # resp = get_leaderboard(client, COM_ID, BOARD_ID, num_ranks=100)
+    resp = get_leaderboard(client, COM_ID, 4, num_ranks=100)
     print(f"Returned leaderboard: {resp}")
     map = [{
         'id': ent.np_id,
