@@ -85,7 +85,7 @@ def test_get_world_list(session):
 # ---------------------------------------------------------------------------
 
 def test_search_rooms(session):
-    pytest.importorskip("np2_structs_pb2")
+    pytest.importorskip("rpcn_client.np2_structs_pb2")
     client = session["client"]
 
     servers = client.get_server_list(COM_ID)
@@ -94,6 +94,23 @@ def test_search_rooms(session):
 
     world_id = worlds[0] if worlds else 0
     resp = client.search_rooms(COM_ID, world_id=world_id, max_results=20, flag_attr=0x00000000)
+    print(resp.__str__())
+
+    assert isinstance(resp, SearchRoomsResult)
+    assert isinstance(resp.total, int) and resp.total >= 0
+    assert isinstance(resp.rooms, list)
+
+def test_search_rooms_all(session):
+    pytest.importorskip("rpcn_client.np2_structs_pb2")
+    client = session["client"]
+
+    servers = client.get_server_list(COM_ID)
+    assert servers, "Need at least one server to resolve worlds"
+    worlds = client.get_world_list(COM_ID, servers[0])
+
+    world_id = worlds[0] if worlds else 0
+    resp = client.search_rooms_all(COM_ID, world_id=world_id, max_results=20, flag_attr=0x00000000)
+    print(resp)
 
     assert isinstance(resp, SearchRoomsResult)
     assert isinstance(resp.total, int) and resp.total >= 0
@@ -105,7 +122,7 @@ def test_search_rooms(session):
 # ---------------------------------------------------------------------------
 
 def test_get_score_range(session):
-    pytest.importorskip("np2_structs_pb2")
+    pytest.importorskip("rpcn_client.np2_structs_pb2")
     client = session["client"]
 
     resp = client.get_score_range(COM_ID, BOARD_ID, start_rank=1, num_ranks=10, with_game_info=True, with_comment=True)
@@ -124,7 +141,7 @@ def test_get_score_range(session):
 
 
 def test_get_score_npid(session):
-    pytest.importorskip("np2_structs_pb2")
+    pytest.importorskip("rpcn_client.np2_structs_pb2")
     client = session["client"]
     # online_name = session["login_info"]["online_name"]
     online_name = "tk_unnamed"

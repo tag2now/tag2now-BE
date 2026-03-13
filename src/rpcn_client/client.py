@@ -1,169 +1,19 @@
-"""RPCN client — minimal Python client for the RPCN PSN multiplayer server.
-
-Protocol reference derived from: https://github.com/RPCS3/rpcn
-
-Quick start:
-  pip install -r requirements.txt
-  python -m grpc_tools.protoc -I. --python_out=. np2_structs.proto
-  python rpcn_client.py --user YOUR_USER --password YOUR_PASS
-"""
-
 import ssl
 import socket
 import struct
-from dataclasses import dataclass
-from datetime import datetime, timezone
 
-# ---------------------------------------------------------------------------
-# Protocol constants (must match src/server/client.rs and src/server.rs)
-# ---------------------------------------------------------------------------
+from .constants import (
+	HEADER_SIZE, PROTOCOL_VERSION,
+	PKT_REQUEST, PKT_REPLY, PKT_NOTIF, PKT_SERVERINFO,
+	CMD_LOGIN, CMD_TERMINATE, CMD_GET_SERVER_LIST, CMD_GET_WORLD_LIST,
+	CMD_SEARCH_ROOM, CMD_SEARCH_ROOM_ALL,
+	CMD_GET_SCORE_RANGE, CMD_GET_SCORE_NPID,
+	ERR_NO_ERROR, _HDR_FMT,
+)
+from .exceptions import RpcnError
+from .models import LoginInfo, RoomAttr, RoomBinAttr, RoomInfo, SearchRoomsResult, ScoreResult
+from .helpers import _encode_com_id, _read_cstr, _pack_protobuf, _unpack_data_packet, _score_response_to_dto, _import_pb2
 
-HEADER_SIZE      = 15   # bytes
-PROTOCOL_VERSION = 30
-
-# PacketType values
-PKT_REQUEST    = 0
-PKT_REPLY      = 1
-PKT_NOTIF      = 2
-PKT_SERVERINFO = 3
-
-# CommandType enum values (0-indexed, see src/server/client.rs)
-CMD_LOGIN                  = 0
-CMD_TERMINATE              = 1
-CMD_GET_SERVER_LIST        = 12
-CMD_GET_WORLD_LIST         = 13
-CMD_SEARCH_ROOM            = 17
-CMD_GET_ROOM_EXTERNAL_LIST = 18
-CMD_GET_SCORE_RANGE        = 34
-CMD_GET_SCORE_FRIENDS      = 35
-CMD_GET_SCORE_NPID         = 36
-CMD_SEARCH_ROOM_ALL        = 0x0105
-
-# ErrorType::NoError
-ERR_NO_ERROR = 0
-
-# comm ID is always 12 ASCII bytes, e.g. b"NPWR04850_00"
-COMMUNICATION_ID_SIZE = 12
-
-# Header struct layout: u8 pkt_type | u16 cmd | u32 total_size | u64 packet_id
-_HDR_FMT = "<BHIQ"  # 1+2+4+8 = 15 bytes
-
-
-# ---------------------------------------------------------------------------
-# Exceptions
-# ---------------------------------------------------------------------------
-
-class RpcnError(Exception):
-	pass
-
-
-# ---------------------------------------------------------------------------
-# DTOs
-# ---------------------------------------------------------------------------
-
-@dataclass
-class LoginInfo:
-	online_name: str
-	avatar_url: str
-	user_id: int
-
-	def __str__(self):
-		return f"online_name={self.online_name!r}, avatar_url={self.avatar_url!r}, user_id={self.user_id}"
-
-@dataclass
-class RoomAttr:
-	id: int
-	value: int
-
-@dataclass
-class RoomBinAttr:
-	id: int
-	data: bytes
-
-@dataclass
-class RoomInfo:
-	room_id: int
-	owner_npid: str
-	owner_online_name: str
-	current_members: int
-	max_slots: int
-	flag_attr: int
-	int_attrs: list  # list[RoomAttr]
-	bin_search_attrs: list  # list[RoomBinAttr]
-	bin_attrs: list  # list[RoomBinAttr]
-
-	def __str__(self):
-		base = f"Room {self.room_id}: {self.current_members}/{self.max_slots} players, owner={self.owner_npid or '?'} ({self.owner_online_name})"
-		parts = [base]
-		if self.flag_attr:
-			parts.append(f"  flagAttr=0x{self.flag_attr:08x}")
-		for a in self.int_attrs:
-			parts.append(f"  IntAttr[{a.id}] = {a.value}")
-		for a in self.bin_search_attrs:
-			parts.append(f"  BinSearchAttr[{a.id}] = {a.data.hex()}")
-		for a in self.bin_attrs:
-			parts.append(f"  BinAttr[{a.id}] = {a.data.hex()}")
-		return "\n".join(parts)
-
-@dataclass
-class SearchRoomsResult:
-	total: int
-	rooms: list  # list[RoomInfo]
-
-	def __str__(self):
-		lines = [f"{self.total} room(s)"]
-		for room in self.rooms:
-			lines.append(f"  {room}")
-		return "\n".join(lines)
-
-@dataclass
-class ScoreEntry:
-	rank: int
-	np_id: str
-	online_name: str
-	score: int
-	pc_id: int
-	record_date: int
-	has_game_data: bool
-	comment: str
-	game_info: bytes
-
-	def __str__(self):
-		lines = [
-			f"#{self.rank:4d}  npId: {self.np_id:<20s}  online: {self.online_name or '(none)'}",
-			f"       score={self.score}  pcId={self.pc_id}  "
-			f"recorded={_format_epoch(self.record_date)}  hasGameData={self.has_game_data}",
-		]
-		if self.comment:
-			lines.append(f'       comment: "{self.comment}"')
-		if self.game_info:
-			lines.append(f"       gameInfo ({len(self.game_info)} bytes):")
-			for off in range(0, len(self.game_info), 16):
-				chunk = self.game_info[off:off + 16]
-				hex_part = " ".join(f"{b:02x}" for b in chunk)
-				ascii_part = "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)
-				lines.append(f"         {off:04x}: {hex_part:<48s} {ascii_part}")
-		return "\n".join(lines)
-
-@dataclass
-class ScoreResult:
-	total_records: int
-	last_sort_date: int
-	entries: list  # list[ScoreEntry]
-
-	def __str__(self):
-		lines = [
-			f"Total records: {self.total_records}",
-			f"Last sort date: {_format_epoch(self.last_sort_date)}",
-		]
-		for entry in self.entries:
-			lines.append(str(entry))
-		return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# Core client
-# ---------------------------------------------------------------------------
 
 class RpcnClient:
 	def __init__(self, host: str = "rpcn.rpcs3.net", port: int = 31313):
@@ -302,7 +152,6 @@ class RpcnClient:
 		for i in [0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53]:
 			at_id = req.attrId.add()
 			at_id.value = i
-		# req.attrId =
 		req.rangeFilter_startIndex = max(1, start_index)
 		req.rangeFilter_max = min(max_results, 20)  # server caps at 20
 
@@ -325,6 +174,7 @@ class RpcnClient:
 				int_attrs=[RoomAttr(id=a.id.value, value=a.num) for a in room.roomSearchableIntAttrExternal],
 				bin_search_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomSearchableBinAttrExternal],
 				bin_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomBinAttrExternal],
+				users=[]
 			)
 			for room in resp.rooms
 		]
@@ -354,7 +204,7 @@ class RpcnClient:
 		if error != ERR_NO_ERROR:
 			raise RpcnError(f"SearchRoomAll error {error}")
 
-		resp = pb.SearchRoomResponse()
+		resp = pb.SearchRoomAllResponse()
 		resp.ParseFromString(_unpack_data_packet(data))
 		rooms = [
 			RoomInfo(
@@ -367,6 +217,7 @@ class RpcnClient:
 				int_attrs=[RoomAttr(id=a.id.value, value=a.num) for a in room.roomSearchableIntAttrExternal],
 				bin_search_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomSearchableBinAttrExternal],
 				bin_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomBinAttrExternal],
+				users=room.users
 			)
 			for room in resp.rooms
 		]
@@ -470,119 +321,3 @@ class RpcnClient:
 			error_type = payload[0] if payload else 0
 			data = payload[1:] if len(payload) > 1 else b""
 			return error_type, data
-
-
-# ---------------------------------------------------------------------------
-# Module-level helpers
-# ---------------------------------------------------------------------------
-
-def _format_epoch(epoch_us: int) -> str:
-	"""Convert a microsecond epoch timestamp to a readable UTC datetime string."""
-	if epoch_us == 0:
-		return "N/A"
-	try:
-		dt = datetime.fromtimestamp(epoch_us / 1_000_000, tz=timezone.utc)
-		return dt.strftime("%Y-%m-%d %H:%M:%S UTC")
-	except (OSError, ValueError):
-		return f"epoch={epoch_us}"
-
-
-def _encode_com_id(com_id_str: str) -> bytes:
-	"""Encode a comm ID string like 'NPWR04850_00' to 12 ASCII bytes."""
-	if len(com_id_str) != COMMUNICATION_ID_SIZE:
-		raise ValueError(f"comm ID must be exactly {COMMUNICATION_ID_SIZE} chars, got {len(com_id_str)!r}")
-	return com_id_str.encode("ascii")
-
-
-def _read_cstr(data: bytes, pos: int) -> tuple:
-	"""Read a null-terminated UTF-8 string starting at *pos* in *data*.
-
-	Returns (string, new_pos).
-	"""
-	end = data.index(b"\x00", pos)
-	return data[pos:end].decode("utf-8", errors="replace"), end + 1
-
-
-def _pack_protobuf(msg) -> bytes:
-	"""Serialize *msg* with a u32 LE length prefix (matches get_protobuf in stream_extractor.rs)."""
-	raw = msg.SerializeToString()
-	return struct.pack("<I", len(raw)) + raw
-
-
-def _unpack_data_packet(data: bytes) -> bytes:
-	"""Extract the raw protobuf bytes written by Client::add_data_packet.
-
-	add_data_packet prepends a u32 LE length before the protobuf bytes.
-	"""
-	if len(data) < 4:
-		raise RpcnError(f"Data packet too short: {len(data)} bytes")
-	(size,) = struct.unpack_from("<I", data, 0)
-	return data[4:4 + size]
-
-
-def _score_response_to_dto(resp) -> ScoreResult:
-	"""Convert a GetScoreResponse protobuf into a ScoreResult DTO."""
-	entries = []
-	for i, entry in enumerate(resp.rankArray):
-		comment = resp.commentArray[i] if i < len(resp.commentArray) else ""
-		game_info = resp.infoArray[i].data if i < len(resp.infoArray) else b""
-		entries.append(ScoreEntry(
-			rank=entry.rank,
-			np_id=entry.npId,
-			online_name=entry.onlineName,
-			score=entry.score,
-			pc_id=entry.pcId,
-			record_date=entry.recordDate,
-			has_game_data=entry.hasGameData,
-			comment=comment,
-			game_info=game_info,
-		))
-	return ScoreResult(
-		total_records=resp.totalRecord,
-		last_sort_date=resp.lastSortDate,
-		entries=entries,
-	)
-
-
-def _import_pb2():
-	"""Import the generated protobuf module, with a helpful error if missing."""
-	try:
-		import np2_structs_pb2 as pb
-		return pb
-	except ImportError:
-		raise RpcnError(
-			"np2_structs_pb2 not found.\n"
-			"Generate it with:\n"
-			"  python -m grpc_tools.protoc -I. --python_out=. np2_structs.proto"
-		)
-
-
-# ---------------------------------------------------------------------------
-# CLI smoke test
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-	import argparse
-
-	parser = argparse.ArgumentParser(description="RPCN client smoke test")
-	parser.add_argument("--host",     default="rpcn.mynarco.xyz")
-	parser.add_argument("--port",     type=int, default=31313)
-	parser.add_argument("--user",     required=True, help="RPCN username")
-	parser.add_argument("--password", required=True, help="RPCN password")
-	parser.add_argument("--token",    default="", help="RPCN token (leave blank if not required)")
-	args = parser.parse_args()
-
-	client = RpcnClient(host=args.host, port=args.port)
-
-	print(f"Connecting to {args.host}:{args.port} ...")
-	version = client.connect()
-	print(f"  Protocol version: {version}")
-
-	print(f"Logging in as {args.user!r} ...")
-	info = client.login(args.user, args.password, args.token)
-	print(f"  online_name : {info.online_name}")
-	print(f"  avatar_url  : {info.avatar_url}")
-	print(f"  user_id     : {info.user_id}")
-
-	client.disconnect()
-	print("Done.")

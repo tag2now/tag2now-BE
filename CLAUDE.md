@@ -6,10 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 .venv/Scripts/python.exe -m pip install -r requirements.txt
-.venv/Scripts/python.exe -m grpc_tools.protoc -I. --python_out=. np2_structs.proto
+.venv/Scripts/python.exe -m pip install -e .
+.venv/Scripts/python.exe -m grpc_tools.protoc -I. --python_out=src/rpcn_client np2_structs.proto
 ```
 
-The second command generates `np2_structs_pb2.py` (not committed). This file is required by the `search_rooms`, `get_score_range`, and `get_score_npid` methods. It must be regenerated whenever `np2_structs.proto` changes.
+The last command generates `src/rpcn_client/np2_structs_pb2.py` (not committed). This file is required by the `search_rooms`, `get_score_range`, and `get_score_npid` methods. It must be regenerated whenever `np2_structs.proto` changes.
 
 ## Python environment
 
@@ -17,7 +18,7 @@ Always use the project virtual environment when running Python commands:
 
 ```bash
 .venv/Scripts/python.exe -m pytest ...
-.venv/Scripts/python.exe rpcn_client.py ...
+.venv/Scripts/python.exe -m rpcn_client ...
 .venv/Scripts/python.exe -m grpc_tools.protoc ...
 ```
 
@@ -25,15 +26,34 @@ Always use the project virtual environment when running Python commands:
 
 ```bash
 # CLI smoke test (connect + login + disconnect)
-.venv/Scripts/python.exe rpcn_client.py --user YOUR_USER --password YOUR_PASS
+.venv/Scripts/python.exe -m rpcn_client --user YOUR_USER --password YOUR_PASS
 
 # Optional flags
-.venv/Scripts/python.exe rpcn_client.py --host rpcn.rpcs3.net --port 31313 --user U --password P --token T
+.venv/Scripts/python.exe -m rpcn_client --host rpcn.rpcs3.net --port 31313 --user U --password P --token T
+```
+
+## Tests
+
+```bash
+.venv/Scripts/python.exe -m pytest tests/ -v
 ```
 
 ## Architecture
 
-This is a single-file Python client (`rpcn_client.py`) for [RPCN](https://github.com/RPCS3/rpcn), the PSN-compatible multiplayer server used by the RPCS3 emulator. The original RPCN server source is located at `C:/project/rpcn`.
+This is a Python package (`src/rpcn_client/`) for [RPCN](https://github.com/RPCS3/rpcn), the PSN-compatible multiplayer server used by the RPCS3 emulator. The original RPCN server source is located at `C:/project/rpcn`.
+
+### Package modules
+
+| Module | Contents |
+|--------|----------|
+| `constants.py` | `HEADER_SIZE`, `PKT_*`, `CMD_*`, `ERR_*`, `_HDR_FMT` |
+| `exceptions.py` | `RpcnError` |
+| `utils.py` | `_format_epoch` |
+| `models.py` | `LoginInfo`, `RoomAttr`, `RoomBinAttr`, `RoomInfo`, `SearchRoomsResult`, `ScoreEntry`, `ScoreResult` |
+| `helpers.py` | `_encode_com_id`, `_read_cstr`, `_pack_protobuf`, `_unpack_data_packet`, `_score_response_to_dto`, `_import_pb2` |
+| `client.py` | `RpcnClient` class |
+| `__init__.py` | re-exports full public API |
+| `__main__.py` | CLI entry point (`python -m rpcn_client`) |
 
 ### Binary protocol framing
 
@@ -42,7 +62,7 @@ All packets share a 15-byte little-endian header (`<BHIQ`):
 | Field | Type | Description |
 |-------|------|-------------|
 | `pkt_type` | u8 | 0=Request, 1=Reply, 2=Notification, 3=ServerInfo |
-| `cmd` | u16 | CommandType enum (see constants in `rpcn_client.py`) |
+| `cmd` | u16 | CommandType enum (see `constants.py`) |
 | `total_size` | u32 | Header + payload bytes |
 | `packet_id` | u64 | Monotonically increasing per-connection counter |
 

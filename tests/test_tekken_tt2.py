@@ -63,7 +63,7 @@ def test_get_server_world_tree(session):
 
 def test_get_rooms(session):
     """Integration test for get_rooms — returns dict[int, SearchRoomsResult]."""
-    pytest.importorskip("np2_structs_pb2")
+    pytest.importorskip("rpcn_client.np2_structs_pb2")
     client = session["client"]
     tree = get_server_world_tree(client, COM_ID)
     all_worlds = [w for worlds in tree.values() for w in worlds]
@@ -77,7 +77,7 @@ def test_get_rooms(session):
 
 def test_search_rooms_all(session):
     """Integration test for search_rooms_all — returns all rooms including HIDDEN ones."""
-    pytest.importorskip("np2_structs_pb2")
+    pytest.importorskip("rpcn_client.np2_structs_pb2")
     client = session["client"]
     tree = get_server_world_tree(client, COM_ID)
     all_worlds = [w for worlds in tree.values() for w in worlds]
@@ -92,7 +92,7 @@ def test_search_rooms_all(session):
 
 def test_get_leaderboard(session):
     """Integration test for get_leaderboard — returns TTT2LeaderboardResult with parsed entries."""
-    pytest.importorskip("np2_structs_pb2")
+    pytest.importorskip("rpcn_client.np2_structs_pb2")
     client = session["client"]
     # resp = get_leaderboard(client, COM_ID, BOARD_ID, num_ranks=100)
     resp = get_leaderboard(client, COM_ID, 4, num_ranks=100)
