@@ -11,7 +11,7 @@ from .constants import (
 	ERR_NO_ERROR, _HDR_FMT,
 )
 from .exceptions import RpcnError
-from .models import LoginInfo, RoomAttr, RoomBinAttr, RoomInfo, SearchRoomsResult, ScoreResult
+from .models import UserInfo, RoomAttr, RoomBinAttr, RoomInfo, SearchRoomsResult, ScoreResult
 from .helpers import _encode_com_id, _read_cstr, _pack_protobuf, _unpack_data_packet, _score_response_to_dto, _import_pb2
 
 
@@ -76,7 +76,7 @@ class RpcnClient:
 	# Authentication
 	# ------------------------------------------------------------------
 
-	def login(self, username: str, password: str, token: str = "") -> LoginInfo:
+	def login(self, username: str, password: str, token: str = "") -> UserInfo:
 		"""Log in to RPCN.
 
 		Payload: username\\0 password\\0 token\\0  (token is empty for normal login)
@@ -106,7 +106,7 @@ class RpcnClient:
 		avatar_url, pos  = _read_cstr(data, pos)
 		(user_id,) = struct.unpack_from("<q", data, pos)
 		# The remainder is friend-list data which we don't need to parse here.
-		return LoginInfo(online_name=online_name, avatar_url=avatar_url, user_id=user_id)
+		return UserInfo(online_name=online_name, avatar_url=avatar_url, user_id=user_id)
 
 	# ------------------------------------------------------------------
 	# Server / World list
@@ -199,8 +199,7 @@ class RpcnClient:
 		req.rangeFilter_max = min(max_results, 20)
 
 		payload = _encode_com_id(com_id) + _pack_protobuf(req)
-		# self._send(CMD_SEARCH_ROOM_ALL, payload)
-		self._send(0x0106, payload)
+		self._send(CMD_SEARCH_ROOM_ALL, payload)
 		error, data = self._recv_reply(CMD_SEARCH_ROOM_ALL)
 		if error != ERR_NO_ERROR:
 			raise RpcnError(f"SearchRoomAll error {error}")
@@ -218,7 +217,10 @@ class RpcnClient:
 				int_attrs=[RoomAttr(id=a.id.value, value=a.num) for a in room.roomSearchableIntAttrExternal],
 				bin_search_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomSearchableBinAttrExternal],
 				bin_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomBinAttrExternal],
-				users=room.users
+				users=[UserInfo(user_id=ru.userInfo.npId,
+								online_name=ru.userInfo.onlineName,
+								avatar_url=ru.userInfo.avatarUrl)
+					   for ru in room.users]
 			)
 			for room in resp.rooms
 		]

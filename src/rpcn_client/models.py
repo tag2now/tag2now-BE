@@ -3,13 +3,14 @@ from .utils import _format_epoch
 
 
 @dataclass
-class LoginInfo:
+class UserInfo:
 	online_name: str
 	avatar_url: str
 	user_id: int
 
 	def __str__(self):
 		return f"online_name={self.online_name!r}, avatar_url={self.avatar_url!r}, user_id={self.user_id}"
+
 
 @dataclass
 class RoomAttr:

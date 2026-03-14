@@ -1,6 +1,7 @@
 """TTT2 business logic functions."""
 
 import struct
+from contextlib import contextmanager
 
 from rpcn_client import RpcnClient, RpcnError, ScoreEntry
 from tekken_tt2.models import (
@@ -12,6 +13,15 @@ from tekken_tt2.models import (
 	_GAME_INFO_FMT,
 	_GAME_INFO_SIZE,
 )
+
+
+@contextmanager
+def make_client(host: str, port: int, user: str, password: str, token: str):
+	"""Open an authenticated RpcnClient. Raises RpcnError on failure."""
+	with RpcnClient(host=host, port=port) as client:
+		client.connect()
+		client.login(user, password, token)
+		yield client
 
 
 def parse_game_info(data: bytes) -> TTT2GameInfo | None:
@@ -52,6 +62,19 @@ def get_rooms(client: RpcnClient, com_id: str, worlds: list[int]) -> dict[int, l
 	for world_id in worlds:
 		try:
 			resp = client.search_rooms(com_id, world_id=world_id, max_results=20)
+			if resp.total > 0:
+				results[world_id] = [RoomInfoDTO(room) for room in resp.rooms]
+		except RpcnError:
+			pass
+	return results
+
+
+def get_rooms_all(client: RpcnClient, com_id: str, worlds: list[int]) -> dict[int, list[RoomInfoDTO]]:
+	"""Search all rooms (including hidden) across all worlds. Returns {world_id: [RoomInfoDTO]}."""
+	results = {}
+	for world_id in worlds:
+		try:
+			resp = client.search_rooms_all(com_id, world_id=world_id)
 			if resp.total > 0:
 				results[world_id] = [RoomInfoDTO(room) for room in resp.rooms]
 		except RpcnError:

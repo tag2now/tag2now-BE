@@ -9,7 +9,7 @@ np2_structs_pb2.py to be generated first:
 """
 
 import pytest
-from rpcn_client import RpcnClient, RpcnError, PROTOCOL_VERSION, LoginInfo, SearchRoomsResult, ScoreResult, _format_epoch
+from rpcn_client import RpcnClient, RpcnError, PROTOCOL_VERSION, UserInfo, SearchRoomsResult, ScoreResult, _format_epoch
 
 # ---------------------------------------------------------------------------
 # Hardcoded credentials (Tekken Tag Tournament 2 / np.rpcs3.net)
@@ -51,7 +51,7 @@ def test_connect_returns_protocol_version():
 
 def test_login_info(session):
     info = session["login_info"]
-    assert isinstance(info, LoginInfo)
+    assert isinstance(info, UserInfo)
     assert isinstance(info.online_name, str) and info.online_name, \
         "online_name should be a non-empty string"
     assert isinstance(info.avatar_url, str), \

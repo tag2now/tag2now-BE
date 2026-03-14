@@ -89,4 +89,4 @@ class RoomInfoDTO:
 		self.max_slots = room_info.max_slots
 		self.users = room_info.users
 
-		self.rank = room_info.int_attrs[4] - 7
+		self.rank = room_info.int_attrs[4].value - 7

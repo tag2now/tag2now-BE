@@ -19,9 +19,9 @@ import redis as _redis
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
-from rpcn_client import RpcnClient, RpcnError
+from rpcn_client import RpcnError
 from tekken_tt2.models import TTT2_COM_ID, TTT2_BOARD_ID
-from tekken_tt2.service import get_server_world_tree, get_rooms, get_leaderboard
+from tekken_tt2.service import make_client, get_server_world_tree, get_rooms, get_rooms_all, get_leaderboard
 from tekken_tt2.settings import get_settings
 
 
@@ -29,11 +29,12 @@ from tekken_tt2.settings import get_settings
 # Cache helpers
 # ---------------------------------------------------------------------------
 
+_redis_client = _redis.from_url(get_settings().redis_url, decode_responses=True)
+
+
 def _cache_get(key: str):
-	settings = get_settings()
 	try:
-		client = _redis.from_url(settings.redis_url, decode_responses=True)
-		raw = client.get(key)
+		raw = _redis_client.get(key)
 		return json.loads(raw) if raw else None
 	except Exception as e:
 		logging.warning("Redis get failed: %s", e)
@@ -41,10 +42,8 @@ def _cache_get(key: str):
 
 
 def _cache_set(key: str, value, ttl: int):
-	settings = get_settings()
 	try:
-		client = _redis.from_url(settings.redis_url, decode_responses=True)
-		client.setex(key, ttl, json.dumps(value))
+		_redis_client.setex(key, ttl, json.dumps(value))
 	except Exception as e:
 		logging.warning("Redis set failed: %s", e)
 
@@ -53,13 +52,11 @@ def _cache_set(key: str, value, ttl: int):
 def _api_client():
 	"""Open an authenticated RpcnClient for an API request."""
 	settings = get_settings()
-	with RpcnClient(host=settings.rpcn_host, port=settings.rpcn_port) as client:
-		try:
-			client.connect()
-			client.login(settings.rpcn_user, settings.rpcn_password, settings.rpcn_token)
+	try:
+		with make_client(settings.rpcn_host, settings.rpcn_port, settings.rpcn_user, settings.rpcn_password, settings.rpcn_token) as client:
 			yield client
-		except RpcnError as exc:
-			raise HTTPException(status_code=502, detail=str(exc)) from exc
+	except RpcnError as exc:
+		raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -79,17 +76,21 @@ app.add_middleware(
 )
 
 
+def _get_world_tree() -> dict[int, list[int]]:
+	"""Return {server_id: [world_ids]}, using the servers cache when available."""
+	key = f"ttt2:servers:{TTT2_COM_ID}"
+	if cached := _cache_get(key):
+		return {int(k): v for k, v in cached.items()}
+	with _api_client() as client:
+		tree = get_server_world_tree(client, TTT2_COM_ID)
+	_cache_set(key, {str(k): v for k, v in tree.items()}, get_settings().cache_ttl_servers)
+	return tree
+
+
 @app.get("/servers", summary="Server and world list")
 def servers():
 	"""Return the server → world hierarchy."""
-	key = f"ttt2:servers:{TTT2_COM_ID}"
-	if cached := _cache_get(key):
-		return cached
-	with _api_client() as client:
-		tree = get_server_world_tree(client, TTT2_COM_ID)
-	result = {str(k): v for k, v in tree.items()}
-	_cache_set(key, result, get_settings().cache_ttl_servers)
-	return result
+	return {str(k): v for k, v in _get_world_tree().items()}
 
 
 @app.get("/rooms", summary="Active rooms")
@@ -98,9 +99,8 @@ def rooms():
 	key = f"ttt2:rooms:{TTT2_COM_ID}"
 	if cached := _cache_get(key):
 		return cached
+	all_worlds = [w for worlds in _get_world_tree().values() for w in worlds]
 	with _api_client() as client:
-		tree = get_server_world_tree(client, TTT2_COM_ID)
-		all_worlds = [w for worlds in tree.values() for w in worlds]
 		room_map = get_rooms(client, TTT2_COM_ID, all_worlds)
 	result = {str(world_id): resp for world_id, resp in room_map.items()}
 	_cache_set(key, jsonable_encoder(result), get_settings().cache_ttl_rooms)
@@ -113,10 +113,12 @@ def rooms_all():
 	key = f"ttt2:rooms_all:{TTT2_COM_ID}"
 	if cached := _cache_get(key):
 		return cached
+	all_worlds = [w for worlds in _get_world_tree().values() for w in worlds]
 	with _api_client() as client:
-		resp = client.search_rooms_all(TTT2_COM_ID)
-	_cache_set(key, jsonable_encoder(resp), get_settings().cache_ttl_rooms_all)
-	return resp
+		room_map = get_rooms_all(client, TTT2_COM_ID, all_worlds)
+	result = {str(world_id): resp for world_id, resp in room_map.items()}
+	_cache_set(key, jsonable_encoder(result), get_settings().cache_ttl_rooms_all)
+	return result
 
 
 @app.get("/leaderboard", summary="Leaderboard entries")

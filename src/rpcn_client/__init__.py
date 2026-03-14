@@ -26,7 +26,7 @@ from .constants import (
 )
 from .exceptions import RpcnError
 from .utils import _format_epoch
-from .models import LoginInfo, RoomAttr, RoomBinAttr, RoomInfo, SearchRoomsResult, ScoreEntry, ScoreResult
+from .models import UserInfo, RoomAttr, RoomBinAttr, RoomInfo, SearchRoomsResult, ScoreEntry, ScoreResult
 from .helpers import _encode_com_id, _read_cstr, _pack_protobuf, _unpack_data_packet, _score_response_to_dto, _import_pb2
 from .client import RpcnClient
 
@@ -39,7 +39,7 @@ __all__ = [
 	"CMD_SEARCH_ROOM_ALL", "ERR_NO_ERROR", "COMMUNICATION_ID_SIZE", "_HDR_FMT",
 	"RpcnError",
 	"_format_epoch",
-	"LoginInfo", "RoomAttr", "RoomBinAttr", "RoomInfo", "SearchRoomsResult", "ScoreEntry", "ScoreResult",
+    "UserInfo", "RoomAttr", "RoomBinAttr", "RoomInfo", "SearchRoomsResult", "ScoreEntry", "ScoreResult",
 	"_encode_com_id", "_read_cstr", "_pack_protobuf", "_unpack_data_packet", "_score_response_to_dto", "_import_pb2",
 	"RpcnClient",
 ]

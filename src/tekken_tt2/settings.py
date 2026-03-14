@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     rpcn_port: int = 31313
 
     redis_url: str = "redis://localhost:6379"
-    cache_ttl_servers: int = 3600
+    cache_ttl_servers: int = 86400
     cache_ttl_leaderboard: int = 300
     cache_ttl_rooms: int = 60
     cache_ttl_rooms_all: int = 60
