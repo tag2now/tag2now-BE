@@ -1,6 +1,6 @@
 """TTT2 dataclasses and game constants."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from rpcn_client import RoomInfo
 from tekken_tt2.data import TTT2_CHARACTERS
@@ -27,10 +27,10 @@ class CharInfo:
 	rank: int
 	wins: int
 	losses: int
+	name: str = field(init=False)
 
-	@property
-	def name(self) -> str:
-		return TTT2_CHARACTERS.get(self.char_id, f"Unknown(0x{self.char_id:02x})")
+	def __post_init__(self):
+		self.name = TTT2_CHARACTERS.get(self.char_id, f"Unknown(0x{self.char_id:02x})")
 
 	def __str__(self):
 		return f"{self.name}/{hex(self.char_id)}(rank {self.rank}) {self.wins}W/{self.losses}L"
