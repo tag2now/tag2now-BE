@@ -18,6 +18,7 @@ from contextlib import contextmanager
 import redis as _redis
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
+from fastapi.middleware.cors import CORSMiddleware
 from rpcn_client import RpcnClient, RpcnError
 from tekken_tt2.models import TTT2_COM_ID, TTT2_BOARD_ID
 from tekken_tt2.service import get_server_world_tree, get_rooms, get_leaderboard
@@ -68,6 +69,13 @@ def _api_client():
 app = FastAPI(
 	title="Tekken Tag Tournament 2 RPCN API",
 	description="Live data from the RPCN multiplayer server for TTT2.",
+)
+
+app.add_middleware(
+	CORSMiddleware,
+	allow_origins=get_settings().cors_origins,
+	allow_methods=["*"],
+	allow_headers=["*"],
 )
 
 
