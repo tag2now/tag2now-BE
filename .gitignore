@@ -6,3 +6,6 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+
+# Generated protobuf file (regenerate with grpc_tools.protoc)
+src/rpcn_client/np2_structs_pb2.py
