@@ -114,4 +114,4 @@ class RoomInfoDTO:
 
 		attr4_value = room_info.int_attrs[4].value
 		self.room_type = RoomType.PLAYER_MATCH if attr4_value == 0 else RoomType.RANK_MATCH
-		self.rank_info = Rank(id=attr4_value - 7) if attr4_value != 0 else None
+		self.rank_info = Rank(id=attr4_value) if attr4_value != 0 else None
