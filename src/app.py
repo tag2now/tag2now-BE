@@ -20,7 +20,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from rpcn_client import RpcnError
-from tekken_tt2.models import TTT2_COM_ID, TTT2_BOARD_ID
+from tekken_tt2.models import TTT2_COM_ID, TTT2_RANK_BOARD_ID
 from tekken_tt2.service import make_client, get_server_world_tree, get_rooms, get_rooms_all, get_leaderboard
 from tekken_tt2.settings import get_settings
 
@@ -101,8 +101,7 @@ def rooms():
 		return cached
 	all_worlds = [w for worlds in _get_world_tree().values() for w in worlds]
 	with _api_client() as client:
-		room_map = get_rooms(client, TTT2_COM_ID, all_worlds)
-	result = {str(world_id): resp for world_id, resp in room_map.items()}
+		result = get_rooms(client, TTT2_COM_ID, all_worlds)
 	_cache_set(key, jsonable_encoder(result), get_settings().cache_ttl_rooms)
 	return result
 
@@ -115,15 +114,14 @@ def rooms_all():
 		return cached
 	all_worlds = [w for worlds in _get_world_tree().values() for w in worlds]
 	with _api_client() as client:
-		room_map = get_rooms_all(client, TTT2_COM_ID, all_worlds)
-	result = {str(world_id): resp for world_id, resp in room_map.items()}
+		result = get_rooms_all(client, TTT2_COM_ID, all_worlds)
 	_cache_set(key, jsonable_encoder(result), get_settings().cache_ttl_rooms_all)
 	return result
 
 
 @app.get("/leaderboard", summary="Leaderboard entries")
 def leaderboard(
-	board: int = Query(default=TTT2_BOARD_ID, description="Score board ID"),
+	board: int = Query(default=TTT2_RANK_BOARD_ID, description="Score board ID"),
 	top: int = Query(default=10, ge=1, le=100, description="Number of entries to return"),
 ):
 	"""Return the top N leaderboard entries with TTT2 character info decoded."""

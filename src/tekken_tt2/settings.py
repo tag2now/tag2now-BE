@@ -1,6 +1,9 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 class Settings(BaseSettings):
@@ -18,7 +21,10 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["*"]
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=(_PROJECT_ROOT / ".env", _PROJECT_ROOT / ".env.local"),
+        env_file_encoding="utf-8",
+    )
 
 
 @lru_cache

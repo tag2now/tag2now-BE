@@ -6,7 +6,9 @@ from contextlib import contextmanager
 from rpcn_client import RpcnClient, RpcnError, ScoreEntry
 from tekken_tt2.models import (
 	CharInfo,
+	Rank,
 	RoomInfoDTO,
+	RoomType,
 	TTT2GameInfo,
 	TTT2LeaderboardEntry,
 	TTT2LeaderboardResult,
@@ -32,8 +34,8 @@ def parse_game_info(data: bytes) -> TTT2GameInfo | None:
 		_GAME_INFO_FMT, data[:_GAME_INFO_SIZE]
 	)
 	return TTT2GameInfo(
-		main_char_info=CharInfo(char_id=c1_id, rank=c1_rank, wins=c1_w, losses=c1_l),
-		sub_char_info=CharInfo(char_id=c2_id, rank=c2_rank, wins=c2_w, losses=c2_l),
+		main_char_info=CharInfo(char_id=c1_id, rank_info=Rank(id=c1_rank), wins=c1_w, losses=c1_l),
+		sub_char_info=CharInfo(char_id=c2_id, rank_info=Rank(id=c2_rank), wins=c2_w, losses=c2_l),
 	)
 
 
@@ -56,30 +58,37 @@ def get_server_world_tree(client: RpcnClient, com_id: str) -> dict[int, list[int
 	return tree
 
 
-def get_rooms(client: RpcnClient, com_id: str, worlds: list[int]) -> dict[int, list[RoomInfoDTO]]:
-	"""Search active rooms across all worlds.  Returns {world_id: result}, skipping empty/failed."""
-	results = {}
+def _group_rooms_by_type(rooms: list[RoomInfoDTO]) -> dict[str, list[RoomInfoDTO]]:
+	grouped: dict[str, list[RoomInfoDTO]] = {RoomType.PLAYER_MATCH.value: [], RoomType.RANK_MATCH.value: []}
+	for room in rooms:
+		grouped[room.room_type.value].append(room)
+	return grouped
+
+
+def get_rooms(client: RpcnClient, com_id: str, worlds: list[int]) -> dict[str, list[RoomInfoDTO]]:
+	"""Search active rooms across all worlds. Returns rooms grouped by type."""
+	all_rooms: list[RoomInfoDTO] = []
 	for world_id in worlds:
 		try:
 			resp = client.search_rooms(com_id, world_id=world_id, max_results=20)
 			if resp.total > 0:
-				results[world_id] = [RoomInfoDTO(room) for room in resp.rooms]
+				all_rooms.extend(RoomInfoDTO(room) for room in resp.rooms)
 		except RpcnError:
 			pass
-	return results
+	return _group_rooms_by_type(all_rooms)
 
 
-def get_rooms_all(client: RpcnClient, com_id: str, worlds: list[int]) -> dict[int, list[RoomInfoDTO]]:
-	"""Search all rooms (including hidden) across all worlds. Returns {world_id: [RoomInfoDTO]}."""
-	results = {}
+def get_rooms_all(client: RpcnClient, com_id: str, worlds: list[int]) -> dict[str, list[RoomInfoDTO]]:
+	"""Search all rooms (including hidden) across all worlds. Returns rooms grouped by type."""
+	all_rooms: list[RoomInfoDTO] = []
 	for world_id in worlds:
 		try:
 			resp = client.search_rooms_all(com_id, world_id=world_id)
 			if resp.total > 0:
-				results[world_id] = [RoomInfoDTO(room) for room in resp.rooms]
+				all_rooms.extend(RoomInfoDTO(room) for room in resp.rooms)
 		except RpcnError:
 			pass
-	return results
+	return _group_rooms_by_type(all_rooms)
 
 
 def get_leaderboard(client: RpcnClient, com_id: str, board_id: int, num_ranks: int = 10) -> TTT2LeaderboardResult:

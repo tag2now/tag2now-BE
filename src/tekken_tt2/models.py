@@ -1,16 +1,17 @@
 """TTT2 dataclasses and game constants."""
 
 from dataclasses import dataclass, field
+from enum import Enum
 
 from rpcn_client import RoomInfo
-from tekken_tt2.data import TTT2_CHARACTERS
+from tekken_tt2.data import TEKKEN_RANKS, TTT2_CHARACTERS
 
 # ---------------------------------------------------------------------------
 # Game constants
 # ---------------------------------------------------------------------------
 
 TTT2_COM_ID = "NPWR02973_00"
-TTT2_BOARD_ID = 0
+TTT2_RANK_BOARD_ID = 4
 
 _GAME_INFO_FMT = ">4B4I"
 _GAME_INFO_SIZE = 20
@@ -20,11 +21,32 @@ _GAME_INFO_SIZE = 20
 # Dataclasses
 # ---------------------------------------------------------------------------
 
+class RoomType(str, Enum):
+	PLAYER_MATCH = "player_match"
+	RANK_MATCH = "rank_match"
+
+
+@dataclass
+class Rank:
+	"""A Tekken rank resolved from a numeric ID."""
+	id: int
+	name: str = field(init=False)
+	tier: str = field(init=False)
+
+	def __post_init__(self):
+		rank_info = TEKKEN_RANKS.get(self.id, {"name": f"Unknown({self.id})", "tier": "Unknown"})
+		self.name = rank_info["name"]
+		self.tier = rank_info["tier"]
+
+	def __str__(self):
+		return self.name
+
+
 @dataclass
 class CharInfo:
 	"""A single character's stats from a TTT2 leaderboard entry."""
 	char_id: int
-	rank: int
+	rank_info: Rank
 	wins: int
 	losses: int
 	name: str = field(init=False)
@@ -33,7 +55,7 @@ class CharInfo:
 		self.name = TTT2_CHARACTERS.get(self.char_id, f"Unknown(0x{self.char_id:02x})")
 
 	def __str__(self):
-		return f"{self.name}/{hex(self.char_id)}(rank {self.rank}) {self.wins}W/{self.losses}L"
+		return f"{self.name}/{hex(self.char_id)}({self.rank_info.name}) {self.wins}W/{self.losses}L"
 
 
 @dataclass
@@ -79,7 +101,8 @@ class RoomInfoDTO:
 	owner_npid: str
 	owner_online_name: str
 	max_slots: int
-	rank: int
+	room_type: RoomType
+	rank_info: Rank | None
 	users: list
 
 	def __init__(self, room_info: RoomInfo):
@@ -89,4 +112,6 @@ class RoomInfoDTO:
 		self.max_slots = room_info.max_slots
 		self.users = room_info.users
 
-		self.rank = room_info.int_attrs[4].value - 7
+		attr4_value = room_info.int_attrs[4].value
+		self.room_type = RoomType.PLAYER_MATCH if attr4_value == 0 else RoomType.RANK_MATCH
+		self.rank_info = Rank(id=attr4_value - 7) if attr4_value != 0 else None
