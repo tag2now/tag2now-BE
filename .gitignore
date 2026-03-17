@@ -2,6 +2,7 @@
 .idea
 .venv
 
+.env.local
 # Python build artifacts
 __pycache__/
 *.pyc
