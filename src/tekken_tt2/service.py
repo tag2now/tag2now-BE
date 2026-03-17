@@ -1,7 +1,6 @@
 """TTT2 business logic functions."""
 
 import struct
-from contextlib import contextmanager
 
 from rpcn_client import RpcnClient, RpcnError, ScoreEntry
 from tekken_tt2.models import (
@@ -15,15 +14,6 @@ from tekken_tt2.models import (
 	_GAME_INFO_FMT,
 	_GAME_INFO_SIZE,
 )
-
-
-@contextmanager
-def make_client(host: str, port: int, user: str, password: str, token: str):
-	"""Open an authenticated RpcnClient. Raises RpcnError on failure."""
-	with RpcnClient(host=host, port=port) as client:
-		client.connect()
-		client.login(user, password, token)
-		yield client
 
 
 def parse_game_info(data: bytes) -> TTT2GameInfo | None:
