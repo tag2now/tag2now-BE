@@ -9,7 +9,7 @@ np2_structs_pb2.py to be generated first:
 """
 
 import pytest
-from rpcn_client import RpcnClient, SearchRoomsResult
+from rpcn_client import SearchRoomsResult
 from tekken_tt2 import (
     TTT2_COM_ID,
     TTT2LeaderboardResult,
@@ -20,29 +20,11 @@ from tekken_tt2 import (
 )
 
 # ---------------------------------------------------------------------------
-# Hardcoded credentials (Tekken Tag Tournament 2 / np.rpcs3.net)
+# Game-specific constants
 # ---------------------------------------------------------------------------
 
-HOST     = "rpcn.mynarco.xyz"
-PORT     = 31313
-USER     = "doStudy"
-PASSWORD = "23866C8DAF2A8675DFB90B34A35089A68C813BFDEFB2EC99A0CD532A55BB62BB"
-TOKEN    = "D317CCD5737361FC"
 COM_ID   = TTT2_COM_ID
 BOARD_ID = 0
-
-
-# ---------------------------------------------------------------------------
-# Session fixture — connect + login once, share across all tests
-# ---------------------------------------------------------------------------
-
-@pytest.fixture(scope="session")
-def session():
-    c = RpcnClient(HOST, PORT)
-    c.connect()
-    info = c.login(USER, PASSWORD, TOKEN)
-    yield {"client": c, "login_info": info}
-    c.disconnect()
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +44,7 @@ def test_get_server_world_tree(session):
 
 
 def test_get_rooms(session):
-    """Integration test for get_rooms — returns dict[int, SearchRoomsResult]."""
+    """Integration test for get_rooms — returns rooms grouped by type."""
     pytest.importorskip("rpcn_client.np2_structs_pb2")
     client = session["client"]
     tree = get_server_world_tree(client, COM_ID)
@@ -70,9 +52,9 @@ def test_get_rooms(session):
     results = get_rooms(client, COM_ID, all_worlds)
     print(f"Returned rooms: {results}")
     assert isinstance(results, dict)
-    for world_id, resp in results.items():
-        assert isinstance(world_id, int)
-        assert isinstance(resp, SearchRoomsResult)
+    for room_type, rooms in results.items():
+        assert isinstance(room_type, str)
+        assert isinstance(rooms, list)
 
 
 def test_search_rooms_all(session):

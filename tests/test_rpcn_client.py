@@ -12,30 +12,13 @@ import pytest
 from rpcn_client import RpcnClient, RpcnError, PROTOCOL_VERSION, UserInfo, SearchRoomsResult, ScoreResult, _format_epoch
 
 # ---------------------------------------------------------------------------
-# Hardcoded credentials (Tekken Tag Tournament 2 / np.rpcs3.net)
+# Credentials (imported from shared conftest) & game-specific constants
 # ---------------------------------------------------------------------------
 
-HOST     = "rpcn.mynarco.xyz"
-# HOST = "localhost"
-PORT     = 31313
-USER     = "doStudy"
-PASSWORD = "23866C8DAF2A8675DFB90B34A35089A68C813BFDEFB2EC99A0CD532A55BB62BB"
-TOKEN    = "D317CCD5737361FC"
+from conftest import HOST, PORT, USER, PASSWORD
+
 COM_ID   = "NPWR02973_00"
 BOARD_ID = 0
-
-
-# ---------------------------------------------------------------------------
-# Session fixture — connect + login once, share across all tests
-# ---------------------------------------------------------------------------
-
-@pytest.fixture(scope="session")
-def session():
-    c = RpcnClient(HOST, PORT)
-    c.connect()
-    info = c.login(USER, PASSWORD, TOKEN)
-    yield {"client": c, "login_info": info}
-    c.disconnect()
 
 
 # ---------------------------------------------------------------------------
