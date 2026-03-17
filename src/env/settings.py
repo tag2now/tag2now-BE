@@ -4,7 +4,8 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_ENV_DIR = Path(__file__).resolve().parent
+profile = os.getenv('FAST_API_PROFILE', 'local')
 
 class Settings(BaseSettings):
     rpcn_user: str
@@ -22,7 +23,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["*"]
 
     model_config = SettingsConfigDict(
-        env_file=(_PROJECT_ROOT / ".env", _PROJECT_ROOT / f".env.{os.getenv('FAST_API_PROFILE', 'local')}"),
+        env_file=(_ENV_DIR / ".env", _ENV_DIR / f".env.{profile}"),
         env_file_encoding="utf-8",
     )
 
