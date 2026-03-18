@@ -8,6 +8,8 @@ _ENV_DIR = Path(__file__).resolve().parent
 profile = os.getenv('FAST_API_PROFILE', 'local')
 
 class Settings(BaseSettings):
+    profile: str = profile
+
     rpcn_user: str
     rpcn_password: str
     rpcn_token: str
