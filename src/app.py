@@ -10,11 +10,30 @@ Credentials are read from environment variables (or a .env file):
 API usage:
   RPCN_USER=you RPCN_PASSWORD=secret uvicorn tekken_tt2.app:app --reload
 """
+import json
+import logging
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from tekken_tt2.cache import redis_health_check
 from tekken_tt2.router import router as ttt2_router
 from env import get_settings
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+logger.info("Settings:\n%s", json.dumps(get_settings().model_dump(), indent=2, default=str))
+
+try:
+    redis_health_check()
+except Exception:
+    logger.critical("Shutting down: Redis is unavailable")
+    os._exit(1)
 
 app = FastAPI(
     title="Tekken Tag Tournament 2 RPCN API",
