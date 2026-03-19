@@ -17,11 +17,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from tekken_tt2.cache import redis_health_check
-from tekken_tt2.client import shutdown_client
+from shared.cache import redis_health_check
+from shared.exceptions import NotFoundError, ForbiddenError, ValidationError, ServiceUnavailableError
+from tekken_tt2.rpcn_lifecycle import shutdown_client
 from tekken_tt2.router import router as ttt2_router
-from env import get_settings
+from community import init_db, close_db
+from community.router import router as community_router
+from shared.settings import get_settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,7 +43,9 @@ except Exception:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await init_db()
     yield
+    await close_db()
     shutdown_client()
 
 
@@ -57,6 +63,27 @@ app.add_middleware(
 )
 
 app.include_router(ttt2_router)
+app.include_router(community_router, prefix="/community", tags=["community"])
+
+
+@app.exception_handler(NotFoundError)
+async def not_found_handler(request, exc):
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(ForbiddenError)
+async def forbidden_handler(request, exc):
+    return JSONResponse(status_code=403, content={"detail": str(exc)})
+
+
+@app.exception_handler(ValidationError)
+async def validation_handler(request, exc):
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(ServiceUnavailableError)
+async def service_unavailable_handler(request, exc):
+    return JSONResponse(status_code=502, content={"detail": str(exc)})
 
 
 @app.get("/health", include_in_schema=False)

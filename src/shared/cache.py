@@ -6,7 +6,7 @@ import time
 from urllib.parse import urlparse
 
 import redis
-from env import get_settings
+from shared.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,20 @@ def cache_set(key: str, value, ttl: int):
         _redis_client.setex(key, ttl, json.dumps(value))
     except Exception as e:
         logger.warning("Redis set failed: %s", e)
+
+
+def cache_delete_pattern(pattern: str):
+    """Delete all keys matching *pattern* (uses SCAN, safe for production)."""
+    try:
+        cursor = 0
+        while True:
+            cursor, keys = _redis_client.scan(cursor, match=pattern, count=100)
+            if keys:
+                _redis_client.delete(*keys)
+            if cursor == 0:
+                break
+    except Exception as e:
+        logger.warning("Redis delete pattern failed: %s", e)
 
 
 def redis_health_check(timeout: float = 5.0, interval: float = 1.0):

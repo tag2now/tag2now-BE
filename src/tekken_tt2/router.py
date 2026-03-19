@@ -2,11 +2,11 @@
 
 from fastapi import APIRouter, Query
 from fastapi.encoders import jsonable_encoder
-from tekken_tt2.cache import cache_get, cache_set
-from tekken_tt2.client import api_client
+from shared.cache import cache_get, cache_set
+from tekken_tt2.rpcn_lifecycle import api_client
 from tekken_tt2.models import TTT2_COM_ID, TTT2_RANK_BOARD_ID
 from tekken_tt2.service import get_server_world_tree, get_rooms, get_rooms_all, get_leaderboard
-from env import get_settings
+from shared.settings import get_settings
 
 router = APIRouter(tags=["Tekken Tag Tournament 2"])
 

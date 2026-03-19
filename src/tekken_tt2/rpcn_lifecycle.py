@@ -4,9 +4,9 @@ import time
 import threading
 from contextlib import contextmanager
 
-from fastapi import HTTPException
 from rpcn_client import RpcnClient, RpcnError
-from env import get_settings
+from tekken_tt2.exceptions import RpcnUnavailableError
+from shared.settings import get_settings
 from tekken_tt2.metrics import TrackedRpcnClient
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ def api_client():
         if _shared_client is None:
             elapsed = time.monotonic() - _last_failure
             if _last_failure and elapsed < _RECONNECT_COOLDOWN:
-                raise HTTPException(status_code=502, detail=f"RPCN reconnect cooldown ({_RECONNECT_COOLDOWN - elapsed:.1f}s remaining)")
+                raise RpcnUnavailableError(f"RPCN reconnect cooldown ({_RECONNECT_COOLDOWN - elapsed:.1f}s remaining)")
         try:
             if _shared_client is None:
                 raw = RpcnClient(host=settings.rpcn_host, port=settings.rpcn_port)
@@ -56,4 +56,4 @@ def api_client():
                     pass
                 _shared_client = None
             _last_failure = time.monotonic()
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+            raise RpcnUnavailableError(str(exc)) from exc

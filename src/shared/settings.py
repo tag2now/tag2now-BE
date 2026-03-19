@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_ENV_DIR = Path(__file__).resolve().parent
+_ENV_DIR = Path(__file__).resolve().parent.parent.parent.joinpath("env")
 profile = os.getenv('FAST_API_PROFILE', 'local')
 
 class Settings(BaseSettings):
@@ -16,11 +16,14 @@ class Settings(BaseSettings):
     rpcn_host: str
     rpcn_port: int
 
-    redis_url: str = "redis://localhost:6379"
-    cache_ttl_servers: int = 86400
+    redis_url: str
+    cache_ttl_servers: int
     cache_ttl_leaderboard: int = 300
     cache_ttl_rooms: int = 60
     cache_ttl_rooms_all: int = 60
+
+    db_url: str = "postgresql://localhost:5432/rpcn_community"
+    cache_ttl_community: int = 30
 
     cors_origins: list[str] = ["*"]
 
@@ -32,4 +35,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    # noinspection PyArgumentList
     return Settings()

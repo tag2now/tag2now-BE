@@ -15,7 +15,7 @@ from rpcn_client import RpcnClient, RpcnError, PROTOCOL_VERSION, UserInfo, Searc
 # Credentials (imported from shared conftest) & game-specific constants
 # ---------------------------------------------------------------------------
 
-from conftest import HOST, PORT, USER, PASSWORD
+from conftest import HOST, PORT, USER
 
 COM_ID   = "NPWR02973_00"
 BOARD_ID = 0
@@ -108,7 +108,7 @@ def test_get_score_range(session):
     pytest.importorskip("rpcn_client.np2_structs_pb2")
     client = session["client"]
 
-    resp = client.get_score_range(COM_ID, BOARD_ID, start_rank=1, num_ranks=10, with_game_info=True, with_comment=True)
+    resp = client.get_score_range(COM_ID, BOARD_ID, start_rank=101, num_ranks=100, with_game_info=True, with_comment=True)
 
     assert isinstance(resp, ScoreResult)
     assert isinstance(resp.total_records, int) and resp.total_records >= 0
