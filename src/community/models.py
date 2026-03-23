@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 from tekken_tt2.data import TTT2_CHARACTERS
 
 VALID_POST_TYPES: set[str] = (
-    {"free", "랭매구인"}
+    {"자유", "랭매구인"}
     | {name for name in TTT2_CHARACTERS.values() if name and name != "?"}
 )
 
@@ -19,8 +19,9 @@ class SetIdentityRequest(BaseModel):
 
 
 class CreatePostRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=100)
     body: str = Field(..., min_length=1, max_length=1000)
-    post_type: str = "free"
+    post_type: str = "자유"
 
     @field_validator("post_type")
     @classmethod
@@ -35,15 +36,22 @@ class CreateCommentRequest(BaseModel):
     parent_id: int | None = None
 
 
+DIRECTION_MAP: dict[str, int] = {"up": 1, "down": -1}
+
+
 class ThumbRequest(BaseModel):
-    direction: int = Field(..., description="1 for thumbs up, -1 for thumbs down")
+    direction: str = Field(..., description="up for thumbs up, down for thumbs down")
 
     @field_validator("direction")
     @classmethod
-    def must_be_plus_or_minus_one(cls, v: int) -> int:
-        if v not in (1, -1):
-            raise ValueError("direction must be 1 or -1")
+    def must_be_up_or_down(cls, v: str) -> str:
+        if v not in DIRECTION_MAP:
+            raise ValueError("direction must be up or down")
         return v
+
+    @property
+    def direction_int(self) -> int:
+        return DIRECTION_MAP[self.direction]
 
 
 # --- Responses ---
@@ -51,8 +59,9 @@ class ThumbRequest(BaseModel):
 class PostSummary(BaseModel):
     id: int
     author: str
+    title: str
     body: str
-    post_type: str = "free"
+    post_type: str = "자유"
     thumbs_up: int
     thumbs_down: int
     created_at: datetime
@@ -72,8 +81,9 @@ class CommentOut(BaseModel):
 class PostDetail(BaseModel):
     id: int
     author: str
+    title: str
     body: str
-    post_type: str = "free"
+    post_type: str = "자유"
     thumbs_up: int
     thumbs_down: int
     created_at: datetime

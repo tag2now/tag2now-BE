@@ -11,7 +11,7 @@ def test_identity_from_cookie(client):
     # set cookie
     client.post("/community/identity", json={"name": "bob"})
     # use cookie (no header) to create post
-    r = client.post("/community/posts", json={"body": "via cookie"})
+    r = client.post("/community/posts", json={"title": "test", "body": "via cookie"})
     assert r.status_code == 201
     assert r.json()["author"] == "bob"
 

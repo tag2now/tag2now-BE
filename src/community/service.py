@@ -19,8 +19,8 @@ async def get_post_comments(post_id: int) -> list[dict]:
     return await get_repo().get_post_comments(post_id)
 
 
-async def create_post(author: str, body: str, post_type: str = "free") -> dict:
-    return await get_repo().create_post(author, body, post_type)
+async def create_post(author: str, title: str, body: str, post_type: str = "자유") -> dict:
+    return await get_repo().create_post(author, title, body, post_type)
 
 
 async def delete_post(post_id: int, user: str):

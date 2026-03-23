@@ -1,5 +1,7 @@
 """FastAPI router for the community board."""
 
+import asyncio
+
 from fastapi import APIRouter, Depends, Query, Response
 
 from community import models, service
@@ -55,7 +57,7 @@ async def list_posts(
 
 @router.post("/posts", status_code=201)
 async def create_post(req: models.CreatePostRequest, user: str = Depends(get_user)):
-    post = await service.create_post(user, req.body, req.post_type)
+    post = await service.create_post(user, req.title, req.body, req.post_type)
     _invalidate_posts()
     return post
 
@@ -67,8 +69,10 @@ async def get_post(post_id: int):
     if cached:
         return cached
 
-    post = await service.get_post(post_id)
-    comments = await service.get_post_comments(post_id)
+    post, comments = await asyncio.gather(
+        service.get_post(post_id),
+        service.get_post_comments(post_id),
+    )
 
     # nest replies under their parent
     top_level: list[dict] = []
@@ -115,7 +119,6 @@ async def create_comment(
 
 @router.post("/posts/{post_id}/thumb")
 async def thumb_post(post_id: int, req: models.ThumbRequest, user: str = Depends(get_user)):
-    result = await service.toggle_thumb(post_id, user, req.direction)
-    _invalidate_posts()
+    result = await service.toggle_thumb(post_id, user, req.direction_int)
     _invalidate_post(post_id)
     return result

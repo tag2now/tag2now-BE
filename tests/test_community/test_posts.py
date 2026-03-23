@@ -6,7 +6,7 @@ HEADERS = {"X-Community-User": USER, "Content-Type": "application/json"}
 
 def test_create_and_list_posts(client):
     # Create a post
-    r = client.post("/community/posts", json={"body": "hello world"}, headers=HEADERS)
+    r = client.post("/community/posts", json={"title": "test", "body": "hello world"}, headers=HEADERS)
     assert r.status_code == 201
     post = r.json()
     assert post["author"] == USER
@@ -22,7 +22,7 @@ def test_create_and_list_posts(client):
 
 
 def test_get_post_detail(client):
-    r = client.post("/community/posts", json={"body": "detail test"}, headers=HEADERS)
+    r = client.post("/community/posts", json={"title": "test", "body": "detail test"}, headers=HEADERS)
     post_id = r.json()["id"]
 
     r = client.get(f"/community/posts/{post_id}")
@@ -32,7 +32,7 @@ def test_get_post_detail(client):
 
 
 def test_delete_post(client):
-    r = client.post("/community/posts", json={"body": "to delete"}, headers=HEADERS)
+    r = client.post("/community/posts", json={"title": "test", "body": "to delete"}, headers=HEADERS)
     post_id = r.json()["id"]
 
     r = client.delete(f"/community/posts/{post_id}", headers=HEADERS)
@@ -43,7 +43,7 @@ def test_delete_post(client):
 
 
 def test_delete_post_forbidden(client):
-    r = client.post("/community/posts", json={"body": "not yours"}, headers=HEADERS)
+    r = client.post("/community/posts", json={"title": "test", "body": "not yours"}, headers=HEADERS)
     post_id = r.json()["id"]
 
     other = {"X-Community-User": "other", "Content-Type": "application/json"}
@@ -52,10 +52,10 @@ def test_delete_post_forbidden(client):
 
 
 def test_create_post_no_identity(client):
-    r = client.post("/community/posts", json={"body": "anon"})
+    r = client.post("/community/posts", json={"title": "test", "body": "anon"})
     assert r.status_code == 400
 
 
 def test_post_body_too_long(client):
-    r = client.post("/community/posts", json={"body": "x" * 1001}, headers=HEADERS)
+    r = client.post("/community/posts", json={"title": "test", "body": "x" * 1001}, headers=HEADERS)
     assert r.status_code == 422

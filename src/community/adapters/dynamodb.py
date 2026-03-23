@@ -36,8 +36,9 @@ def _item_to_post(item: dict) -> dict:
     return {
         "id": _decimal_to_int(item["id"]),
         "author": item["author"],
+        "title": item.get("title", ""),
         "body": item["body"],
-        "post_type": item.get("post_type", "free"),
+        "post_type": item.get("post_type", "자유"),
         "thumbs_up": _decimal_to_int(item.get("thumbs_up", 0)),
         "thumbs_down": _decimal_to_int(item.get("thumbs_down", 0)),
         "created_at": item["created_at"],
@@ -201,7 +202,7 @@ class DynamoCommunityRepository(CommunityRepository):
         items = sorted(resp.get("Items", []), key=lambda x: x["created_at"])
         return [_item_to_comment(item) for item in items]
 
-    async def create_post(self, author: str, body: str, post_type: str = "free") -> dict:
+    async def create_post(self, author: str, title: str, body: str, post_type: str = "자유") -> dict:
         post_id = await _next_id(self._table)
         now = _now_iso()
         item = {
@@ -211,6 +212,7 @@ class DynamoCommunityRepository(CommunityRepository):
             "GSI1SK": now,
             "id": post_id,
             "author": author,
+            "title": title,
             "body": body,
             "post_type": post_type,
             "thumbs_up": 0,

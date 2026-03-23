@@ -5,7 +5,7 @@ HEADERS = {"X-Community-User": USER, "Content-Type": "application/json"}
 
 
 def _create_post(client, body="test post"):
-    r = client.post("/community/posts", json={"body": body}, headers=HEADERS)
+    r = client.post("/community/posts", json={"title": "test", "body": body}, headers=HEADERS)
     return r.json()["id"]
 
 

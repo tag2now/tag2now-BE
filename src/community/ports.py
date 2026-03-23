@@ -28,7 +28,7 @@ class CommunityRepository(ABC):
         """Return flat list of comments for *post_id*, ordered by created_at ASC."""
 
     @abstractmethod
-    async def create_post(self, author: str, body: str, post_type: str = "free") -> dict:
+    async def create_post(self, author: str, title: str, body: str, post_type: str = "자유") -> dict:
         """Insert a new post and return it."""
 
     @abstractmethod
