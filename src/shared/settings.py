@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     dynamodb_region: str = "ap-northeast-2"
     dynamodb_table_name: str = "tag2now-community"
     dynamodb_endpoint_url: str | None = None
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
 
     cache_ttl_community: int = 30
 

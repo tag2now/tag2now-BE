@@ -24,6 +24,8 @@ def _create_repo() -> CommunityRepository:
             region=settings.dynamodb_region,
             table_name=settings.dynamodb_table_name,
             endpoint_url=settings.dynamodb_endpoint_url,
+            aws_access_key_id=settings.aws_access_key_id,
+            aws_secret_access_key=settings.aws_secret_access_key,
         )
 
     raise ValueError(f"Unknown db_type: {db_type!r}")

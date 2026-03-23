@@ -107,17 +107,31 @@ class DynamoCommunityRepository(CommunityRepository):
     Counter: PK=COUNTER                     SK=COUNTER
     """
 
-    def __init__(self, region: str, table_name: str, endpoint_url: str | None = None):
+    def __init__(
+        self,
+        region: str,
+        table_name: str,
+        endpoint_url: str | None = None,
+        aws_access_key_id: str | None = None,
+        aws_secret_access_key: str | None = None,
+    ):
         self._region = region
         self._table_name = table_name
         self._endpoint_url = endpoint_url
+        self._aws_access_key_id = aws_access_key_id
+        self._aws_secret_access_key = aws_secret_access_key
         self._session: aioboto3.Session | None = None
         self._resource_ctx = None
         self._resource = None
         self._table = None
 
     async def init(self) -> None:
-        self._session = aioboto3.Session()
+        session_kwargs = {}
+        if self._aws_access_key_id:
+            session_kwargs["aws_access_key_id"] = self._aws_access_key_id
+        if self._aws_secret_access_key:
+            session_kwargs["aws_secret_access_key"] = self._aws_secret_access_key
+        self._session = aioboto3.Session(**session_kwargs)
         kwargs = {"region_name": self._region}
         if self._endpoint_url:
             kwargs["endpoint_url"] = self._endpoint_url
