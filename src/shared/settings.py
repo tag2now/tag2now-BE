@@ -22,7 +22,13 @@ class Settings(BaseSettings):
     cache_ttl_rooms: int = 60
     cache_ttl_rooms_all: int = 60
 
+    db_type: str = "postgresql"
     db_url: str = "postgresql://localhost:5432/rpcn_community"
+
+    dynamodb_region: str = "ap-northeast-2"
+    dynamodb_table_name: str = "rpcn_community"
+    dynamodb_endpoint_url: str | None = None
+
     cache_ttl_community: int = 30
 
     cors_origins: list[str] = ["*"]

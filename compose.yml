@@ -5,8 +5,15 @@ services:
       - "8000:8000"
     environment:
       FAST_API_PROFILE: dev
+      DB_TYPE: dynamodb
+      DYNAMODB_REGION: ap-northeast-2
+      DYNAMODB_TABLE_NAME: rpcn_community
+      DYNAMODB_ENDPOINT_URL: http://dynamodb-local:8000
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
     depends_on:
       - redis
+      - dynamodb-local
   fe:
     image: 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com/tag2-now/fe
     ports:
@@ -18,3 +25,8 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+
+  dynamodb-local:
+    image: amazon/dynamodb-local
+    ports:
+      - "8001:8000"

@@ -1,74 +1,48 @@
-"""PostgreSQL lifecycle for the community board."""
+"""Community repository factory and lifecycle."""
 
 import logging
 
-import asyncpg
-
+from community.ports import CommunityRepository
 from shared.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
-_pool: asyncpg.Pool | None = None
+_repo: CommunityRepository | None = None
 
-_SCHEMA_STATEMENTS = [
-    """
-    CREATE TABLE IF NOT EXISTS posts (
-        id          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        author      TEXT    NOT NULL,
-        body        TEXT    NOT NULL CHECK(length(body) <= 1000),
-        thumbs_up   INTEGER NOT NULL DEFAULT 0,
-        thumbs_down INTEGER NOT NULL DEFAULT 0,
-        created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS comments (
-        id          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        post_id     INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
-        parent_id   INTEGER REFERENCES comments(id) ON DELETE CASCADE,
-        author      TEXT    NOT NULL,
-        body        TEXT    NOT NULL CHECK(length(body) <= 1000),
-        thumbs_up   INTEGER NOT NULL DEFAULT 0,
-        thumbs_down INTEGER NOT NULL DEFAULT 0,
-        created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-    """,
-    "CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id)",
-    "CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_id)",
-    """
-    CREATE TABLE IF NOT EXISTS thumbs (
-        id          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-        target_type TEXT    NOT NULL CHECK(target_type IN ('post','comment')),
-        target_id   INTEGER NOT NULL,
-        voter       TEXT    NOT NULL,
-        direction   INTEGER NOT NULL CHECK(direction IN (1,-1)),
-        created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(target_type, target_id, voter)
-    )
-    """,
-]
+
+def _create_repo() -> CommunityRepository:
+    settings = get_settings()
+    db_type = settings.db_type
+
+    if db_type == "postgresql":
+        from community.adapters.postgresql import PostgresCommunityRepository
+        return PostgresCommunityRepository(dsn=settings.db_url)
+
+    if db_type == "dynamodb":
+        from community.adapters.dynamodb import DynamoCommunityRepository
+        return DynamoCommunityRepository(
+            region=settings.dynamodb_region,
+            table_name=settings.dynamodb_table_name,
+            endpoint_url=settings.dynamodb_endpoint_url,
+        )
+
+    raise ValueError(f"Unknown db_type: {db_type!r}")
 
 
 async def init_db():
-    global _pool
-    dsn = get_settings().db_url
-    logger.info("Connecting to community DB at %s", dsn.split("@")[-1] if "@" in dsn else dsn)
-    _pool = await asyncpg.create_pool(dsn=dsn, min_size=2, max_size=10)
-    async with _pool.acquire() as conn:
-        async with conn.transaction():
-            for stmt in _SCHEMA_STATEMENTS:
-                await conn.execute(stmt)
+    global _repo
+    _repo = _create_repo()
+    await _repo.init()
 
 
 async def close_db():
-    global _pool
-    if _pool:
-        await _pool.close()
-        _pool = None
-        logger.info("Community DB pool closed")
+    global _repo
+    if _repo:
+        await _repo.close()
+        _repo = None
 
 
-def get_db() -> asyncpg.Pool:
-    if _pool is None:
-        raise RuntimeError("Community DB not initialized — call init_db() first")
-    return _pool
+def get_repo() -> CommunityRepository:
+    if _repo is None:
+        raise RuntimeError("Community repository not initialized — call init_db() first")
+    return _repo
