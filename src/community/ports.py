@@ -16,7 +16,7 @@ class CommunityRepository(ABC):
     # -- Posts ---------------------------------------------------------------
 
     @abstractmethod
-    async def list_posts(self, page: int, page_size: int) -> tuple[list[dict], int]:
+    async def list_posts(self, page: int, page_size: int, post_type: str | None = None) -> tuple[list[dict], int]:
         """Return (posts, total_count). Each post dict includes a comment_count key."""
 
     @abstractmethod
@@ -28,7 +28,7 @@ class CommunityRepository(ABC):
         """Return flat list of comments for *post_id*, ordered by created_at ASC."""
 
     @abstractmethod
-    async def create_post(self, author: str, body: str) -> dict:
+    async def create_post(self, author: str, body: str, post_type: str = "free") -> dict:
         """Insert a new post and return it."""
 
     @abstractmethod

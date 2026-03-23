@@ -7,8 +7,8 @@ from community.db import get_repo
 # Posts
 # ---------------------------------------------------------------------------
 
-async def list_posts(page: int, page_size: int) -> tuple[list[dict], int]:
-    return await get_repo().list_posts(page, page_size)
+async def list_posts(page: int, page_size: int, post_type: str | None = None) -> tuple[list[dict], int]:
+    return await get_repo().list_posts(page, page_size, post_type)
 
 
 async def get_post(post_id: int) -> dict:
@@ -19,8 +19,8 @@ async def get_post_comments(post_id: int) -> list[dict]:
     return await get_repo().get_post_comments(post_id)
 
 
-async def create_post(author: str, body: str) -> dict:
-    return await get_repo().create_post(author, body)
+async def create_post(author: str, body: str, post_type: str = "free") -> dict:
+    return await get_repo().create_post(author, body, post_type)
 
 
 async def delete_post(post_id: int, user: str):

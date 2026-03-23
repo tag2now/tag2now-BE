@@ -37,6 +37,7 @@ def _item_to_post(item: dict) -> dict:
         "id": _decimal_to_int(item["id"]),
         "author": item["author"],
         "body": item["body"],
+        "post_type": item.get("post_type", "free"),
         "thumbs_up": _decimal_to_int(item.get("thumbs_up", 0)),
         "thumbs_down": _decimal_to_int(item.get("thumbs_down", 0)),
         "created_at": item["created_at"],
@@ -148,13 +149,17 @@ class DynamoCommunityRepository(CommunityRepository):
 
     # -- Posts ---------------------------------------------------------------
 
-    async def list_posts(self, page: int, page_size: int) -> tuple[list[dict], int]:
-        resp = await self._table.query(
-            IndexName="GSI1",
-            KeyConditionExpression="GSI1PK = :pk",
-            ExpressionAttributeValues={":pk": "POSTS"},
-            ScanIndexForward=False,
-        )
+    async def list_posts(self, page: int, page_size: int, post_type: str | None = None) -> tuple[list[dict], int]:
+        query_kwargs = {
+            "IndexName": "GSI1",
+            "KeyConditionExpression": "GSI1PK = :pk",
+            "ExpressionAttributeValues": {":pk": "POSTS"},
+            "ScanIndexForward": False,
+        }
+        if post_type:
+            query_kwargs["FilterExpression"] = "post_type = :pt"
+            query_kwargs["ExpressionAttributeValues"][":pt"] = post_type
+        resp = await self._table.query(**query_kwargs)
         all_items = resp.get("Items", [])
         total = len(all_items)
 
@@ -182,7 +187,7 @@ class DynamoCommunityRepository(CommunityRepository):
         items = sorted(resp.get("Items", []), key=lambda x: x["created_at"])
         return [_item_to_comment(item) for item in items]
 
-    async def create_post(self, author: str, body: str) -> dict:
+    async def create_post(self, author: str, body: str, post_type: str = "free") -> dict:
         post_id = await _next_id(self._table)
         now = _now_iso()
         item = {
@@ -193,6 +198,7 @@ class DynamoCommunityRepository(CommunityRepository):
             "id": post_id,
             "author": author,
             "body": body,
+            "post_type": post_type,
             "thumbs_up": 0,
             "thumbs_down": 0,
             "comment_count": 0,

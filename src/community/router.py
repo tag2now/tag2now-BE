@@ -37,13 +37,17 @@ def set_identity(req: models.SetIdentityRequest, response: Response):
 # ---------------------------------------------------------------------------
 
 @router.get("/posts", response_model=models.PostListResponse)
-async def list_posts(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100)):
-    cache_key = f"community:posts:p{page}:s{page_size}"
+async def list_posts(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    post_type: str | None = Query(None),
+):
+    cache_key = f"community:posts:p{page}:s{page_size}:t{post_type or 'all'}"
     cached = cache_get(cache_key)
     if cached:
         return cached
 
-    posts, total = await service.list_posts(page, page_size)
+    posts, total = await service.list_posts(page, page_size, post_type)
     result = {"posts": posts, "total": total, "page": page, "page_size": page_size}
     cache_set(cache_key, result, _ttl())
     return result
@@ -51,7 +55,7 @@ async def list_posts(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1
 
 @router.post("/posts", status_code=201)
 async def create_post(req: models.CreatePostRequest, user: str = Depends(get_user)):
-    post = await service.create_post(user, req.body)
+    post = await service.create_post(user, req.body, req.post_type)
     _invalidate_posts()
     return post
 

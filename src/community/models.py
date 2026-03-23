@@ -4,6 +4,13 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+from tekken_tt2.data import TTT2_CHARACTERS
+
+VALID_POST_TYPES: set[str] = (
+    {"free", "랭매구인"}
+    | {name for name in TTT2_CHARACTERS.values() if name and name != "?"}
+)
+
 
 # --- Requests ---
 
@@ -13,6 +20,14 @@ class SetIdentityRequest(BaseModel):
 
 class CreatePostRequest(BaseModel):
     body: str = Field(..., min_length=1, max_length=1000)
+    post_type: str = "free"
+
+    @field_validator("post_type")
+    @classmethod
+    def must_be_valid_post_type(cls, v: str) -> str:
+        if v not in VALID_POST_TYPES:
+            raise ValueError(f"post_type must be one of: {sorted(VALID_POST_TYPES)}")
+        return v
 
 
 class CreateCommentRequest(BaseModel):
@@ -37,6 +52,7 @@ class PostSummary(BaseModel):
     id: int
     author: str
     body: str
+    post_type: str = "free"
     thumbs_up: int
     thumbs_down: int
     created_at: datetime
@@ -57,6 +73,7 @@ class PostDetail(BaseModel):
     id: int
     author: str
     body: str
+    post_type: str = "free"
     thumbs_up: int
     thumbs_down: int
     created_at: datetime

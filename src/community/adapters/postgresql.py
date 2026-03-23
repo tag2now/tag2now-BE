@@ -20,6 +20,7 @@ _SCHEMA_STATEMENTS = [
         id          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
         author      TEXT    NOT NULL,
         body        TEXT    NOT NULL CHECK(length(body) <= 1000),
+        post_type   TEXT    NOT NULL DEFAULT 'free',
         thumbs_up   INTEGER NOT NULL DEFAULT 0,
         thumbs_down INTEGER NOT NULL DEFAULT 0,
         created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -81,20 +82,35 @@ class PostgresCommunityRepository(CommunityRepository):
 
     # -- Posts ---------------------------------------------------------------
 
-    async def list_posts(self, page: int, page_size: int) -> tuple[list[dict], int]:
+    async def list_posts(self, page: int, page_size: int, post_type: str | None = None) -> tuple[list[dict], int]:
         offset = (page - 1) * page_size
-        rows = await self._db.fetch(
-            """
-            SELECT p.*, COALESCE(c.cnt, 0) AS comment_count,
-                   COUNT(*) OVER() AS total
-            FROM posts p
-            LEFT JOIN (SELECT post_id, COUNT(*) AS cnt FROM comments GROUP BY post_id) c
-                ON c.post_id = p.id
-            ORDER BY p.created_at DESC
-            LIMIT $1 OFFSET $2
-            """,
-            page_size, offset,
-        )
+        if post_type:
+            rows = await self._db.fetch(
+                """
+                SELECT p.*, COALESCE(c.cnt, 0) AS comment_count,
+                       COUNT(*) OVER() AS total
+                FROM posts p
+                LEFT JOIN (SELECT post_id, COUNT(*) AS cnt FROM comments GROUP BY post_id) c
+                    ON c.post_id = p.id
+                WHERE p.post_type = $3
+                ORDER BY p.created_at DESC
+                LIMIT $1 OFFSET $2
+                """,
+                page_size, offset, post_type,
+            )
+        else:
+            rows = await self._db.fetch(
+                """
+                SELECT p.*, COALESCE(c.cnt, 0) AS comment_count,
+                       COUNT(*) OVER() AS total
+                FROM posts p
+                LEFT JOIN (SELECT post_id, COUNT(*) AS cnt FROM comments GROUP BY post_id) c
+                    ON c.post_id = p.id
+                ORDER BY p.created_at DESC
+                LIMIT $1 OFFSET $2
+                """,
+                page_size, offset,
+            )
         total = rows[0]["total"] if rows else 0
         return [dict(r) for r in rows], total
 
@@ -111,10 +127,10 @@ class PostgresCommunityRepository(CommunityRepository):
         )
         return [dict(r) for r in rows]
 
-    async def create_post(self, author: str, body: str) -> dict:
+    async def create_post(self, author: str, body: str, post_type: str = "free") -> dict:
         row = await self._db.fetchrow(
-            "INSERT INTO posts (author, body) VALUES ($1, $2) RETURNING *",
-            author, body,
+            "INSERT INTO posts (author, body, post_type) VALUES ($1, $2, $3) RETURNING *",
+            author, body, post_type,
         )
         return dict(row)
 
