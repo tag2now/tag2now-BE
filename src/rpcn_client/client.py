@@ -12,7 +12,16 @@ from .constants import (
 )
 from .exceptions import RpcnError
 from .models import UserInfo, RoomAttr, RoomBinAttr, RoomInfo, SearchRoomsResult, ScoreResult
-from .helpers import _encode_com_id, _read_cstr, _pack_protobuf, _unpack_data_packet, _score_response_to_dto, _import_pb2
+from .helpers import _encode_com_id, _read_cstr, _pack_protobuf, _unpack_data_packet
+
+try:
+	from . import np2_structs_pb2 as pb
+except ImportError:
+	raise RpcnError(
+		"np2_structs_pb2 not found.\n"
+		"Generate it with:\n"
+		"  python -m grpc_tools.protoc -I. --python_out=src/rpcn_client np2_structs.proto"
+	)
 
 
 class RpcnClient:
@@ -90,7 +99,7 @@ class RpcnClient:
 			+ token.encode("utf-8") + b"\x00"
 		)
 		self._send(CMD_LOGIN, payload)
-		error, data = self._recv_reply(CMD_LOGIN)
+		error, data = self._recv_reply()
 		if error != ERR_NO_ERROR:
 			names = {
 				5: "LoginError",
@@ -115,7 +124,7 @@ class RpcnClient:
 	def get_server_list(self, com_id: str) -> list:
 		"""Return a list of server IDs (u16) for the given comm ID string."""
 		self._send(CMD_GET_SERVER_LIST, _encode_com_id(com_id))
-		error, data = self._recv_reply(CMD_GET_SERVER_LIST)
+		error, data = self._recv_reply()
 		if error != ERR_NO_ERROR:
 			raise RpcnError(f"GetServerList error {error}")
 		(num,) = struct.unpack_from("<H", data, 0)
@@ -125,7 +134,7 @@ class RpcnClient:
 		"""Return a list of world IDs (u32) for the given comm ID + server."""
 		payload = _encode_com_id(com_id) + struct.pack("<H", server_id)
 		self._send(CMD_GET_WORLD_LIST, payload)
-		error, data = self._recv_reply(CMD_GET_WORLD_LIST)
+		error, data = self._recv_reply()
 		if error != ERR_NO_ERROR:
 			raise RpcnError(f"GetWorldList error {error}")
 		(num,) = struct.unpack_from("<I", data, 0)
@@ -142,7 +151,6 @@ class RpcnClient:
 		Requires np2_structs_pb2 (generate with grpc_tools.protoc).
 		Note: start_index must be >= 1 (the server rejects 0).
 		"""
-		pb = _import_pb2()
 		req = pb.SearchRoomRequest()
 		# Field names match np2_structs.proto exactly
 		req.worldId = world_id
@@ -157,7 +165,7 @@ class RpcnClient:
 
 		payload = _encode_com_id(com_id) + _pack_protobuf(req)
 		self._send(CMD_SEARCH_ROOM, payload)
-		error, data = self._recv_reply(CMD_SEARCH_ROOM)
+		error, data = self._recv_reply()
 		if error != ERR_NO_ERROR:
 			raise RpcnError(f"SearchRoom error {error}")
 
@@ -186,7 +194,6 @@ class RpcnClient:
 		Same request/response format as search_rooms, but the server uses
 		is_match_all() which does not exclude HIDDEN rooms or filter by flags.
 		"""
-		pb = _import_pb2()
 		req = pb.SearchRoomRequest()
 		req.worldId = world_id
 		req.option = 31
@@ -200,7 +207,7 @@ class RpcnClient:
 
 		payload = _encode_com_id(com_id) + _pack_protobuf(req)
 		self._send(CMD_SEARCH_ROOM_ALL, payload)
-		error, data = self._recv_reply(CMD_SEARCH_ROOM_ALL)
+		error, data = self._recv_reply()
 		if error != ERR_NO_ERROR:
 			raise RpcnError(f"SearchRoomAll error {error}")
 
@@ -237,7 +244,6 @@ class RpcnClient:
 
 		Returns a ScoreResult DTO.
 		"""
-		pb = _import_pb2()
 		req = pb.GetScoreRangeRequest()
 		req.boardId    = board_id
 		req.startRank  = start_rank
@@ -247,13 +253,13 @@ class RpcnClient:
 
 		payload = _encode_com_id(com_id) + _pack_protobuf(req)
 		self._send(CMD_GET_SCORE_RANGE, payload)
-		error, data = self._recv_reply(CMD_GET_SCORE_RANGE)
+		error, data = self._recv_reply()
 		if error != ERR_NO_ERROR:
 			raise RpcnError(f"GetScoreRange error {error}")
 
 		resp = pb.GetScoreResponse()
 		resp.ParseFromString(_unpack_data_packet(data))
-		return _score_response_to_dto(resp)
+		return ScoreResult.from_response(resp)
 
 	def get_score_npid(self, com_id: str, board_id: int, npids: list,
 	                   pc_id: int = 0, with_comment: bool = False, with_game_info: bool = False) -> ScoreResult:
@@ -261,7 +267,6 @@ class RpcnClient:
 
 		Returns a ScoreResult DTO.
 		"""
-		pb = _import_pb2()
 		req = pb.GetScoreNpIdRequest()
 		req.boardId    = board_id
 		req.withComment  = with_comment
@@ -273,13 +278,13 @@ class RpcnClient:
 
 		payload = _encode_com_id(com_id) + _pack_protobuf(req)
 		self._send(CMD_GET_SCORE_NPID, payload)
-		error, data = self._recv_reply(CMD_GET_SCORE_NPID)
+		error, data = self._recv_reply()
 		if error != ERR_NO_ERROR:
 			raise RpcnError(f"GetScoreNpId error {error}")
 
 		resp = pb.GetScoreResponse()
 		resp.ParseFromString(_unpack_data_packet(data))
-		return _score_response_to_dto(resp)
+		return ScoreResult.from_response(resp)
 
 	# ------------------------------------------------------------------
 	# Internal I/O
@@ -300,7 +305,7 @@ class RpcnClient:
 			buf.extend(chunk)
 		return bytes(buf)
 
-	def _recv_reply(self, expected_cmd: int) -> tuple:
+	def _recv_reply(self) -> tuple[int, bytes]:
 		"""Read packets until a Reply for expected_cmd is found.
 
 		Notification packets (type=2) are silently discarded — the server can
@@ -324,3 +329,5 @@ class RpcnClient:
 			error_type = payload[0] if payload else 0
 			data = payload[1:] if len(payload) > 1 else b""
 			return error_type, data
+
+		raise RpcnError(f"No packet found")

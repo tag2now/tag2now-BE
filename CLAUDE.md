@@ -53,7 +53,7 @@ This is a Python package (`src/rpcn_client/`) for [RPCN](https://github.com/RPCS
 | `exceptions.py` | `RpcnError` |
 | `utils.py` | `_format_epoch` |
 | `models.py` | `LoginInfo`, `RoomAttr`, `RoomBinAttr`, `RoomInfo`, `SearchRoomsResult`, `ScoreEntry`, `ScoreResult` |
-| `helpers.py` | `_encode_com_id`, `_read_cstr`, `_pack_protobuf`, `_unpack_data_packet`, `_score_response_to_dto`, `_import_pb2` |
+| `helpers.py` | `_encode_com_id`, `_read_cstr`, `_pack_protobuf`, `_unpack_data_packet`, `_import_pb2` |
 | `client.py` | `RpcnClient` class |
 | `__init__.py` | re-exports full public API |
 | `__main__.py` | CLI entry point (`python -m rpcn_client`) |

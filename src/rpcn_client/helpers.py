@@ -1,7 +1,6 @@
 import struct
 from .constants import COMMUNICATION_ID_SIZE
 from .exceptions import RpcnError
-from .models import ScoreEntry, ScoreResult
 
 
 def _encode_com_id(com_id_str: str) -> bytes:
@@ -35,40 +34,3 @@ def _unpack_data_packet(data: bytes) -> bytes:
 		raise RpcnError(f"Data packet too short: {len(data)} bytes")
 	(size,) = struct.unpack_from("<I", data, 0)
 	return data[4:4 + size]
-
-
-def _score_response_to_dto(resp) -> ScoreResult:
-	"""Convert a GetScoreResponse protobuf into a ScoreResult DTO."""
-	entries = []
-	for i, entry in enumerate(resp.rankArray):
-		comment = resp.commentArray[i] if i < len(resp.commentArray) else ""
-		game_info = resp.infoArray[i].data if i < len(resp.infoArray) else b""
-		entries.append(ScoreEntry(
-			rank=entry.rank,
-			np_id=entry.npId,
-			online_name=entry.onlineName,
-			score=entry.score,
-			pc_id=entry.pcId,
-			record_date=entry.recordDate,
-			has_game_data=entry.hasGameData,
-			comment=comment,
-			game_info=game_info,
-		))
-	return ScoreResult(
-		total_records=resp.totalRecord,
-		last_sort_date=resp.lastSortDate,
-		entries=entries,
-	)
-
-
-def _import_pb2():
-	"""Import the generated protobuf module, with a helpful error if missing."""
-	try:
-		from . import np2_structs_pb2 as pb
-		return pb
-	except ImportError:
-		raise RpcnError(
-			"np2_structs_pb2 not found.\n"
-			"Generate it with:\n"
-			"  python -m grpc_tools.protoc -I. --python_out=src/rpcn_client np2_structs.proto"
-		)

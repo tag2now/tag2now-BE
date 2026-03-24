@@ -102,3 +102,26 @@ class ScoreResult:
 		for entry in self.entries:
 			lines.append(str(entry))
 		return "\n".join(lines)
+
+	@classmethod
+	def from_response(cls, resp):
+		entries = []
+		for i, entry in enumerate(resp.rankArray):
+			comment = resp.commentArray[i] if i < len(resp.commentArray) else ""
+			game_info = resp.infoArray[i].data if i < len(resp.infoArray) else b""
+			entries.append(ScoreEntry(
+				rank=entry.rank,
+				np_id=entry.npId,
+				online_name=entry.onlineName,
+				score=entry.score,
+				pc_id=entry.pcId,
+				record_date=entry.recordDate,
+				has_game_data=entry.hasGameData,
+				comment=comment,
+				game_info=game_info,
+			))
+		return cls(
+			total_records=resp.totalRecord,
+			last_sort_date=resp.lastSortDate,
+			entries=entries,
+		)

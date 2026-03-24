@@ -27,7 +27,7 @@ from .constants import (
 from .exceptions import RpcnError
 from .utils import _format_epoch
 from .models import UserInfo, RoomAttr, RoomBinAttr, RoomInfo, SearchRoomsResult, ScoreEntry, ScoreResult
-from .helpers import _encode_com_id, _read_cstr, _pack_protobuf, _unpack_data_packet, _score_response_to_dto, _import_pb2
+from .helpers import _encode_com_id, _read_cstr, _pack_protobuf, _unpack_data_packet
 from .client import RpcnClient
 
 __all__ = [
@@ -40,6 +40,6 @@ __all__ = [
 	"RpcnError",
 	"_format_epoch",
     "UserInfo", "RoomAttr", "RoomBinAttr", "RoomInfo", "SearchRoomsResult", "ScoreEntry", "ScoreResult",
-	"_encode_com_id", "_read_cstr", "_pack_protobuf", "_unpack_data_packet", "_score_response_to_dto", "_import_pb2",
+	"_encode_com_id", "_read_cstr", "_pack_protobuf", "_unpack_data_packet",
 	"RpcnClient",
 ]
