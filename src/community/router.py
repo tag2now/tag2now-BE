@@ -5,7 +5,7 @@ import asyncio
 from fastapi import APIRouter, Depends, Query, Response
 
 from community import models, service
-from community.identity import get_user
+from fastapi import HTTPException, Request
 from shared.cache import cache_get, cache_set, cache_delete_pattern
 from shared.settings import get_settings
 
@@ -15,13 +15,19 @@ router = APIRouter()
 def _ttl() -> int:
     return get_settings().cache_ttl_community
 
-
 def _invalidate_posts():
     cache_delete_pattern("community:posts:*")
 
-
 def _invalidate_post(post_id: int):
     cache_delete_pattern(f"community:post:{post_id}")
+
+def _get_user(request: Request) -> str:
+    """Resolve user name from header or cookie. Raises 400 if absent."""
+    name = request.headers.get("X-Community-User") or request.cookies.get("community_user")
+    if not name or not name.strip():
+        raise HTTPException(status_code=400, detail="User identity required (X-Community-User header or community_user cookie)")
+    name = name.strip()[:50]
+    return name
 
 
 # ---------------------------------------------------------------------------
@@ -56,7 +62,7 @@ async def list_posts(
 
 
 @router.post("/posts", status_code=201)
-async def create_post(req: models.CreatePostRequest, user: str = Depends(get_user)):
+async def create_post(req: models.CreatePostRequest, user: str = Depends(_get_user)):
     post = await service.create_post(user, req.title, req.body, req.post_type)
     _invalidate_posts()
     return post
@@ -92,7 +98,7 @@ async def get_post(post_id: int):
 
 
 @router.delete("/posts/{post_id}", status_code=204)
-async def delete_post(post_id: int, user: str = Depends(get_user)):
+async def delete_post(post_id: int, user: str = Depends(_get_user)):
     await service.delete_post(post_id, user)
     _invalidate_posts()
     _invalidate_post(post_id)
@@ -106,7 +112,7 @@ async def delete_post(post_id: int, user: str = Depends(get_user)):
 async def create_comment(
     post_id: int,
     req: models.CreateCommentRequest,
-    user: str = Depends(get_user),
+    user: str = Depends(_get_user),
 ):
     comment = await service.create_comment(post_id, user, req.body, req.parent_id)
     _invalidate_post(post_id)
@@ -118,7 +124,7 @@ async def create_comment(
 # ---------------------------------------------------------------------------
 
 @router.post("/posts/{post_id}/thumb")
-async def thumb_post(post_id: int, req: models.ThumbRequest, user: str = Depends(get_user)):
+async def thumb_post(post_id: int, req: models.ThumbRequest, user: str = Depends(_get_user)):
     result = await service.toggle_thumb(post_id, user, req.direction_int)
     _invalidate_post(post_id)
     return result
