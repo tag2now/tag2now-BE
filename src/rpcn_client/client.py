@@ -11,7 +11,7 @@ from .constants import (
 	ERR_NO_ERROR, _HDR_FMT,
 )
 from .exceptions import RpcnError
-from .models import UserInfo, RoomAttr, RoomBinAttr, RoomInfo, SearchRoomsResult, ScoreResult
+from .models import UserInfo, RoomInfo, SearchRoomsResult, ScoreResult
 from .helpers import _encode_com_id, _read_cstr, _pack_protobuf, _unpack_data_packet
 
 try:
@@ -171,21 +171,8 @@ class RpcnClient:
 
 		resp = pb.SearchRoomResponse()
 		resp.ParseFromString(_unpack_data_packet(data))
-		rooms = [
-			RoomInfo(
-				room_id=room.roomId,
-				owner_npid=room.owner.npId if room.owner else "",
-				owner_online_name=room.owner.onlineName if room.owner else "",
-				current_members=room.curMemberNum.value,
-				max_slots=room.maxSlot.value,
-				flag_attr=room.flagAttr,
-				int_attrs=[RoomAttr(id=a.id.value, value=a.num) for a in room.roomSearchableIntAttrExternal],
-				bin_search_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomSearchableBinAttrExternal],
-				bin_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomBinAttrExternal],
-				users=[]
-			)
-			for room in resp.rooms
-		]
+
+		rooms = [ RoomInfo.from_response_room(room) for room in resp.rooms]
 		return SearchRoomsResult(total=resp.total, rooms=rooms)
 
 	def search_rooms_all(self, com_id: str, world_id: int = 0, start_index: int = 1, max_results: int = 20, flag_attr: int = 0) -> SearchRoomsResult:
@@ -213,24 +200,8 @@ class RpcnClient:
 
 		resp = pb.SearchRoomAllResponse()
 		resp.ParseFromString(_unpack_data_packet(data))
-		rooms = [
-			RoomInfo(
-				room_id=room.roomId,
-				owner_npid=room.owner.npId if room.owner else "",
-				owner_online_name=room.owner.onlineName if room.owner else "",
-				current_members=room.curMemberNum.value,
-				max_slots=room.maxSlot.value,
-				flag_attr=room.flagAttr,
-				int_attrs=[RoomAttr(id=a.id.value, value=a.num) for a in room.roomSearchableIntAttrExternal],
-				bin_search_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomSearchableBinAttrExternal],
-				bin_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomBinAttrExternal],
-				users=[UserInfo(user_id=ru.userInfo.npId,
-								online_name=ru.userInfo.onlineName,
-								avatar_url=ru.userInfo.avatarUrl)
-					   for ru in room.users]
-			)
-			for room in resp.rooms
-		]
+
+		rooms = [ RoomInfo.from_response_room(room) for room in resp.rooms]
 		return SearchRoomsResult(total=resp.total, rooms=rooms)
 
 	# ------------------------------------------------------------------

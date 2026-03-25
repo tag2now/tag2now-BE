@@ -35,6 +35,24 @@ class RoomInfo:
 	bin_attrs: list  # list[RoomBinAttr]
 	users: list
 
+	@classmethod
+	def from_response_room(cls, room):
+		return cls(
+			room_id=room.roomId,
+			owner_npid=room.owner.npId if room.owner else "",
+			owner_online_name=room.owner.onlineName if room.owner else "",
+			current_members=room.curMemberNum.value,
+			max_slots=room.maxSlot.value,
+			flag_attr=room.flagAttr,
+			int_attrs=[RoomAttr(id=a.id.value, value=a.num) for a in room.roomSearchableIntAttrExternal],
+			bin_search_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomSearchableBinAttrExternal],
+			bin_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomBinAttrExternal],
+			users=[UserInfo(user_id=ru.userInfo.npId,
+							online_name=ru.userInfo.onlineName,
+							avatar_url=ru.userInfo.avatarUrl)
+				   for ru in room.users]
+		)
+
 	def __str__(self):
 		base = f"Room {self.room_id}: {self.current_members}/{self.max_slots} players, owner={self.owner_npid or '?'} ({self.owner_online_name})"
 		parts = [base]
