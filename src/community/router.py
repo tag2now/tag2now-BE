@@ -22,7 +22,7 @@ def _invalidate_post(post_id: int):
     cache_delete_pattern(f"community:post:{post_id}")
 
 def _get_user(request: Request) -> str:
-    """Resolve user name from header or cookie. Raises 400 if absent."""
+    """Resolve username from header or cookie. Raises 400 if absent."""
     name = request.headers.get("X-Community-User") or request.cookies.get("community_user")
     if not name or not name.strip():
         raise HTTPException(status_code=400, detail="User identity required (X-Community-User header or community_user cookie)")
