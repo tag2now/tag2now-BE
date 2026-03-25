@@ -1,5 +1,7 @@
 # Protocol constants (must match src/server/client.rs and src/server.rs)
 
+from enum import IntEnum
+
 HEADER_SIZE      = 15   # bytes
 PROTOCOL_VERSION = 30
 
@@ -9,17 +11,23 @@ PKT_REPLY      = 1
 PKT_NOTIF      = 2
 PKT_SERVERINFO = 3
 
-# CommandType enum values (0-indexed, see src/server/client.rs)
-CMD_LOGIN                  = 0
-CMD_TERMINATE              = 1
-CMD_GET_SERVER_LIST        = 12
-CMD_GET_WORLD_LIST         = 13
-CMD_SEARCH_ROOM            = 17
-CMD_GET_ROOM_EXTERNAL_LIST = 18
-CMD_GET_SCORE_RANGE        = 34
-CMD_GET_SCORE_FRIENDS      = 35
-CMD_GET_SCORE_NPID         = 36
-CMD_SEARCH_ROOM_ALL        = 0x0105
+
+class Cmd(IntEnum):
+	LOGIN                  = 0
+	TERMINATE              = 1
+	GET_SERVER_LIST        = 12
+	GET_WORLD_LIST         = 13
+	SEARCH_ROOM            = 17
+	GET_ROOM_EXTERNAL_LIST = 18
+	GET_SCORE_RANGE        = 34
+	GET_SCORE_FRIENDS      = 35
+	GET_SCORE_NPID         = 36
+	SEARCH_ROOM_ALL        = 0x0105
+
+	@property
+	def label(self) -> str:
+		return self.name.replace("_", " ").title().replace(" ", "")
+
 
 # ErrorType::NoError
 ERR_NO_ERROR = 0

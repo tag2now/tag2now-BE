@@ -5,10 +5,7 @@ import struct
 from .constants import (
 	HEADER_SIZE, PROTOCOL_VERSION,
 	PKT_REQUEST, PKT_REPLY, PKT_NOTIF, PKT_SERVERINFO,
-	CMD_LOGIN, CMD_TERMINATE, CMD_GET_SERVER_LIST, CMD_GET_WORLD_LIST,
-	CMD_SEARCH_ROOM, CMD_SEARCH_ROOM_ALL,
-	CMD_GET_SCORE_RANGE, CMD_GET_SCORE_NPID,
-	ERR_NO_ERROR, _HDR_FMT,
+	Cmd, ERR_NO_ERROR, _HDR_FMT,
 )
 from .exceptions import RpcnError
 from .models import UserInfo, RoomInfo, SearchRoomsResult, ScoreResult
@@ -68,7 +65,7 @@ class RpcnClient:
 	def disconnect(self):
 		"""Send the Terminate command and close the socket."""
 		try:
-			self._send(CMD_TERMINATE, b"")
+			self._send(Cmd.TERMINATE, b"")
 		except Exception:
 			pass
 		if self._sock:
@@ -98,7 +95,7 @@ class RpcnClient:
 			+ password.encode("utf-8") + b"\x00"
 			+ token.encode("utf-8") + b"\x00"
 		)
-		self._send(CMD_LOGIN, payload)
+		self._send(Cmd.LOGIN, payload)
 		error, data = self._recv_reply()
 		if error != ERR_NO_ERROR:
 			names = {
@@ -123,20 +120,14 @@ class RpcnClient:
 
 	def get_server_list(self, com_id: str) -> list:
 		"""Return a list of server IDs (u16) for the given comm ID string."""
-		self._send(CMD_GET_SERVER_LIST, _encode_com_id(com_id))
-		error, data = self._recv_reply()
-		if error != ERR_NO_ERROR:
-			raise RpcnError(f"GetServerList error {error}")
+		data = self._request_with_data(com_id, Cmd.GET_SERVER_LIST)
 		(num,) = struct.unpack_from("<H", data, 0)
 		return list(struct.unpack_from(f"<{num}H", data, 2))
 
 	def get_world_list(self, com_id: str, server_id: int) -> list:
 		"""Return a list of world IDs (u32) for the given comm ID + server."""
-		payload = _encode_com_id(com_id) + struct.pack("<H", server_id)
-		self._send(CMD_GET_WORLD_LIST, payload)
-		error, data = self._recv_reply()
-		if error != ERR_NO_ERROR:
-			raise RpcnError(f"GetWorldList error {error}")
+		req_data = struct.pack("<H", server_id)
+		data = self._request_with_data(com_id, Cmd.GET_WORLD_LIST, req_data)
 		(num,) = struct.unpack_from("<I", data, 0)
 		return list(struct.unpack_from(f"<{num}I", data, 4))
 
@@ -145,35 +136,13 @@ class RpcnClient:
 	# ------------------------------------------------------------------
 
 	def search_rooms(self, com_id: str, world_id: int = 0, start_index: int = 1, max_results: int = 20, flag_attr: int = 0) -> SearchRoomsResult:
-		"""Search for active rooms in the given world.
-
-		Returns a SearchRoomsResult DTO.
-		Requires np2_structs_pb2 (generate with grpc_tools.protoc).
-		Note: start_index must be >= 1 (the server rejects 0).
-		"""
-		req = pb.SearchRoomRequest()
-		# Field names match np2_structs.proto exactly
-		req.worldId = world_id
-		req.option = 31
-		req.flagAttr = flag_attr
-		req.flagFilter = 0
-		for i in [0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53]:
-			at_id = req.attrId.add()
-			at_id.value = i
-		req.rangeFilter_startIndex = max(1, start_index)
-		req.rangeFilter_max = min(max_results, 20)  # server caps at 20
-
-		payload = _encode_com_id(com_id) + _pack_protobuf(req)
-		self._send(CMD_SEARCH_ROOM, payload)
-		error, data = self._recv_reply()
-		if error != ERR_NO_ERROR:
-			raise RpcnError(f"SearchRoom error {error}")
+		"""start_index must be >= 1 (the server rejects 0)."""
+		req = self._build_search_room_request(world_id, flag_attr, start_index, max_results)
+		data = self._request_proto(com_id, Cmd.SEARCH_ROOM, req)
 
 		resp = pb.SearchRoomResponse()
 		resp.ParseFromString(_unpack_data_packet(data))
-
-		rooms = [ RoomInfo.from_response_room(room) for room in resp.rooms]
-		return SearchRoomsResult(total=resp.total, rooms=rooms)
+		return SearchRoomsResult(total=resp.total, rooms=[RoomInfo.from_response_room(room) for room in resp.rooms])
 
 	def search_rooms_all(self, com_id: str, world_id: int = 0, start_index: int = 1, max_results: int = 20, flag_attr: int = 0) -> SearchRoomsResult:
 		"""Search for all rooms including HIDDEN ones, skipping flag filtering.
@@ -181,28 +150,12 @@ class RpcnClient:
 		Same request/response format as search_rooms, but the server uses
 		is_match_all() which does not exclude HIDDEN rooms or filter by flags.
 		"""
-		req = pb.SearchRoomRequest()
-		req.worldId = world_id
-		req.option = 31
-		req.flagAttr = flag_attr
-		req.flagFilter = 0
-		for i in [0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53]:
-			at_id = req.attrId.add()
-			at_id.value = i
-		req.rangeFilter_startIndex = max(1, start_index)
-		req.rangeFilter_max = min(max_results, 20)
-
-		payload = _encode_com_id(com_id) + _pack_protobuf(req)
-		self._send(CMD_SEARCH_ROOM_ALL, payload)
-		error, data = self._recv_reply()
-		if error != ERR_NO_ERROR:
-			raise RpcnError(f"SearchRoomAll error {error}")
+		req = self._build_search_room_request(world_id, flag_attr, start_index, max_results)
+		data = self._request_proto(com_id, Cmd.SEARCH_ROOM_ALL, req)
 
 		resp = pb.SearchRoomAllResponse()
 		resp.ParseFromString(_unpack_data_packet(data))
-
-		rooms = [ RoomInfo.from_response_room(room) for room in resp.rooms]
-		return SearchRoomsResult(total=resp.total, rooms=rooms)
+		return SearchRoomsResult(total=resp.total, rooms=[RoomInfo.from_response_room(room) for room in resp.rooms])
 
 	# ------------------------------------------------------------------
 	# Scores / Leaderboards
@@ -222,11 +175,7 @@ class RpcnClient:
 		req.withComment  = with_comment
 		req.withGameInfo = with_game_info
 
-		payload = _encode_com_id(com_id) + _pack_protobuf(req)
-		self._send(CMD_GET_SCORE_RANGE, payload)
-		error, data = self._recv_reply()
-		if error != ERR_NO_ERROR:
-			raise RpcnError(f"GetScoreRange error {error}")
+		data = self._request_proto(com_id, Cmd.GET_SCORE_RANGE, req)
 
 		resp = pb.GetScoreResponse()
 		resp.ParseFromString(_unpack_data_packet(data))
@@ -247,11 +196,7 @@ class RpcnClient:
 			entry.npid = npid
 			entry.pcId = pc_id
 
-		payload = _encode_com_id(com_id) + _pack_protobuf(req)
-		self._send(CMD_GET_SCORE_NPID, payload)
-		error, data = self._recv_reply()
-		if error != ERR_NO_ERROR:
-			raise RpcnError(f"GetScoreNpId error {error}")
+		data = self._request_proto(com_id, Cmd.GET_SCORE_NPID, req)
 
 		resp = pb.GetScoreResponse()
 		resp.ParseFromString(_unpack_data_packet(data))
@@ -260,6 +205,34 @@ class RpcnClient:
 	# ------------------------------------------------------------------
 	# Internal I/O
 	# ------------------------------------------------------------------
+
+	def _build_search_room_request(self, world_id: int, flag_attr: int, start_index: int, max_results: int):
+		req = pb.SearchRoomRequest()
+		req.worldId = world_id
+		req.option = 31
+		req.flagAttr = flag_attr
+		req.flagFilter = 0
+		for i in [0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53]:
+			at_id = req.attrId.add()
+			at_id.value = i
+		req.rangeFilter_startIndex = max(1, start_index)
+		req.rangeFilter_max = min(max_results, 20)
+		return req
+
+	def _request_proto(self, com_id: str, cmd: Cmd, req) -> bytes:
+		req_data = _pack_protobuf(req)
+		return self._request_with_data(com_id, cmd, req_data)
+
+	def _request_with_data(self, com_id: str, cmd: Cmd, req_data=None) -> bytes:
+		payload = _encode_com_id(com_id)
+		if req_data is not None:
+			payload += req_data
+
+		self._send(cmd, payload)
+		error, data = self._recv_reply()
+		if error != ERR_NO_ERROR:
+			raise RpcnError(f"{cmd.label} error {error}")
+		return data
 
 	def _send(self, cmd: int, payload: bytes):
 		self._packet_id += 1
@@ -277,12 +250,7 @@ class RpcnClient:
 		return bytes(buf)
 
 	def _recv_reply(self) -> tuple[int, bytes]:
-		"""Read packets until a Reply for expected_cmd is found.
-
-		Notification packets (type=2) are silently discarded — the server can
-		push async notifications (friend status changes, room events) at any time
-		between replies.
-		"""
+		"""Read packets until a Reply is found, discarding notifications."""
 		while True:
 			hdr = self._recv_exact(HEADER_SIZE)
 			pkt_type, cmd, pkt_size, _pkt_id = struct.unpack(_HDR_FMT, hdr)
@@ -291,7 +259,6 @@ class RpcnClient:
 			payload = self._recv_exact(payload_size) if payload_size > 0 else b""
 
 			if pkt_type == PKT_NOTIF:
-				# Async server push — discard and keep waiting
 				continue
 
 			if pkt_type != PKT_REPLY:
@@ -300,5 +267,3 @@ class RpcnClient:
 			error_type = payload[0] if payload else 0
 			data = payload[1:] if len(payload) > 1 else b""
 			return error_type, data
-
-		raise RpcnError(f"No packet found")

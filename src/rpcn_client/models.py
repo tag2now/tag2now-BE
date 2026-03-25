@@ -50,7 +50,7 @@ class RoomInfo:
 			users=[UserInfo(user_id=ru.userInfo.npId,
 							online_name=ru.userInfo.onlineName,
 							avatar_url=ru.userInfo.avatarUrl)
-				   for ru in room.users]
+				   for ru in getattr(room, 'users', [])]
 		)
 
 	def __str__(self):
@@ -124,9 +124,11 @@ class ScoreResult:
 	@classmethod
 	def from_response(cls, resp):
 		entries = []
+		n_comments = len(resp.commentArray)
+		n_info = len(resp.infoArray)
 		for i, entry in enumerate(resp.rankArray):
-			comment = resp.commentArray[i] if i < len(resp.commentArray) else ""
-			game_info = resp.infoArray[i].data if i < len(resp.infoArray) else b""
+			comment = resp.commentArray[i] if i < n_comments else ""
+			game_info = resp.infoArray[i].data if i < n_info else b""
 			entries.append(ScoreEntry(
 				rank=entry.rank,
 				np_id=entry.npId,
