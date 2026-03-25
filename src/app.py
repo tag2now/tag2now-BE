@@ -23,6 +23,7 @@ from shared.cache import redis_health_check
 from shared.exceptions import NotFoundError, ForbiddenError, ValidationError, ServiceUnavailableError
 from tekken_tt2.rpcn_lifecycle import shutdown_client
 from tekken_tt2.router import router as ttt2_router
+from tekken_tt2 import activity_tracker
 from community import init_db, close_db
 from community.router import router as community_router
 from shared.settings import get_settings
@@ -44,7 +45,9 @@ except Exception:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await activity_tracker.init()
     yield
+    await activity_tracker.close()
     await close_db()
     shutdown_client()
 
