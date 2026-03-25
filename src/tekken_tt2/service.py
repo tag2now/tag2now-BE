@@ -3,11 +3,17 @@
 import struct
 
 from rpcn_client import RpcnClient, RpcnError, ScoreEntry
+from shared.cache import cache_get
+from tekken_tt2 import activity_tracker
 from tekken_tt2.models import (
 	CharInfo,
+	PlayerLookupResponse,
+	PlayerOnlineStatus,
 	Rank,
 	RoomInfoDTO,
 	RoomType,
+	TTT2_COM_ID,
+	TTT2_RANK_BOARD_ID,
 	TTT2GameInfo,
 	TTT2LeaderboardEntry,
 	TTT2LeaderboardResult,
@@ -102,4 +108,82 @@ def get_leaderboard(client: RpcnClient, com_id: str, board_id: int, num_ranks: i
 		total_records=result.total_records,
 		last_sort_date=result.last_sort_date,
 		entries=entries,
+	)
+
+
+async def lookup_player(npid: str) -> PlayerLookupResponse:
+	"""Look up a player by NPID using cached room/leaderboard data + DynamoDB activity."""
+
+	# 1. Online status from cached /rooms/all
+	online_status = PlayerOnlineStatus(is_online=False, is_matchmaking=False)
+
+	rooms_cached = cache_get(f"ttt2:rooms_all:{TTT2_COM_ID}")
+	if rooms_cached:
+		for room_type_key in ("player_match", "rank_match"):
+			for room in rooms_cached.get(room_type_key, []):
+				owner = room.get("owner_npid", "")
+				members = [u.get("user_id", "") for u in room.get("users", [])]
+				if npid == owner or npid in members:
+					# Phantom rooms (matchmaking) have room_id=0
+					if room.get("room_id", 0) == 0:
+						online_status = PlayerOnlineStatus(
+							is_online=True,
+							is_matchmaking=True,
+							room_type=room_type_key,
+						)
+					else:
+						online_status = PlayerOnlineStatus(
+							is_online=True,
+							is_matchmaking=False,
+							room_type=room_type_key,
+							room_id=room.get("room_id"),
+						)
+					break
+
+	# 2. Leaderboard from cache (search across common top-N caches)
+	lb_entry = None
+	for top in (100, 50, 10):
+		lb_cached = cache_get(f"ttt2:leaderboard:{TTT2_COM_ID}:{TTT2_RANK_BOARD_ID}:{top}")
+		if lb_cached and lb_cached.get("entries"):
+			for entry in lb_cached["entries"]:
+				if entry.get("np_id") == npid:
+					lb_entry = TTT2LeaderboardEntry(
+						rank=entry["rank"],
+						np_id=entry["np_id"],
+						online_name=entry.get("online_name", ""),
+						score=entry["score"],
+						pc_id=entry.get("pc_id", 0),
+						record_date=entry.get("record_date", 0),
+						has_game_data=entry.get("has_game_data", False),
+						comment=entry.get("comment", ""),
+						player_info=None,
+					)
+					pi = entry.get("player_info")
+					if pi:
+						lb_entry.player_info = TTT2GameInfo(
+							main_char_info=CharInfo(
+								char_id=pi["main_char_info"]["char_id"],
+								rank_info=Rank(id=pi["main_char_info"]["rank_info"]["id"]),
+								wins=pi["main_char_info"]["wins"],
+								losses=pi["main_char_info"]["losses"],
+							),
+							sub_char_info=CharInfo(
+								char_id=pi["sub_char_info"]["char_id"],
+								rank_info=Rank(id=pi["sub_char_info"]["rank_info"]["id"]),
+								wins=pi["sub_char_info"]["wins"],
+								losses=pi["sub_char_info"]["losses"],
+							),
+						)
+					break
+			if lb_entry:
+				break
+
+	# 3. Usual playing hours from DynamoDB
+	usual_hours = await activity_tracker.get_player_hours(npid)
+
+	return PlayerLookupResponse(
+		npid=npid,
+		online_status=online_status,
+		leaderboard=lb_entry,
+		usual_playing_hours_kst=usual_hours,
 	)

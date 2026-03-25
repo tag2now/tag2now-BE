@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None
 
+    matchmaking_ttl: int = 60
+
     cache_ttl_community: int = 30
 
     cors_origins: list[str] = ["*"]

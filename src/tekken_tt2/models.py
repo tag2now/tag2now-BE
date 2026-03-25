@@ -96,10 +96,36 @@ class TTT2LeaderboardResult:
 	entries: list[TTT2LeaderboardEntry]
 
 @dataclass
+class HourlyActivityEntry:
+	"""Average player count for a single KST hour."""
+	hour: int
+	avg_players: float
+
+
+@dataclass
+class PlayerOnlineStatus:
+	"""Current online status of a player."""
+	is_online: bool
+	is_matchmaking: bool
+	room_type: str | None = None
+	room_id: int | None = None
+
+
+@dataclass
+class PlayerLookupResponse:
+	"""Combined player information from rooms, leaderboard, and activity."""
+	npid: str
+	online_status: PlayerOnlineStatus
+	leaderboard: TTT2LeaderboardEntry | None
+	usual_playing_hours_kst: list[int]
+
+
+@dataclass
 class RoomInfoDTO:
 	room_id: int
 	owner_npid: str
 	owner_online_name: str
+	current_members: int
 	max_slots: int
 	room_type: RoomType
 	rank_info: Rank | None
@@ -109,9 +135,24 @@ class RoomInfoDTO:
 		self.room_id = room_info.room_id
 		self.owner_npid = room_info.owner_npid
 		self.owner_online_name = room_info.owner_online_name
+		self.current_members = room_info.current_members
 		self.max_slots = room_info.max_slots
 		self.users = room_info.users
 
 		attr4_value = room_info.int_attrs[4].value
 		self.room_type = RoomType.PLAYER_MATCH if attr4_value == 0 else RoomType.RANK_MATCH
 		self.rank_info = Rank(id=attr4_value) if attr4_value != 0 else None
+
+	@classmethod
+	def phantom(cls, owner_npid: str, owner_online_name: str, room_type: RoomType, rank_info: Rank | None):
+		"""Create a phantom room for a matchmaking player not currently in any room."""
+		obj = object.__new__(cls)
+		obj.room_id = 0
+		obj.owner_npid = owner_npid
+		obj.owner_online_name = owner_online_name
+		obj.current_members = 1
+		obj.max_slots = 2
+		obj.room_type = room_type
+		obj.rank_info = rank_info
+		obj.users = []
+		return obj
