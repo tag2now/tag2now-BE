@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from history.entities import HourlyStatsRow, RoomSnapshotRow, SnapshotMemberRow
-from history.models import RoomSnapshotRecord
+from history.models import DailySummary, HourlyActivity, PlayerStats, RoomSnapshotRecord
 from history.ports import HistoryPort
 
 logger = logging.getLogger(__name__)
@@ -90,7 +90,7 @@ class PostgresHistoryAdapter(HistoryPort):
 
 	# -- Read: global stats --------------------------------------------------
 
-	async def get_hourly_activity(self, days: int = 7) -> list[dict]:
+	async def get_hourly_activity(self, days: int = 7) -> list[HourlyActivity]:
 		start_key = (datetime.now(KST) - timedelta(days=days)).strftime("%Y-%m-%dT%H")
 
 		stmt = (
@@ -106,14 +106,17 @@ class PostgresHistoryAdapter(HistoryPort):
 
 		async with self._session_factory() as session:
 			result = await session.execute(stmt)
-			result_map = {row.hour: {"hour": row.hour, "avg_players": float(row.avg_players), "peak_players": row.peak_players} for row in result}
+			result_map = {
+				row.hour: HourlyActivity(hour=row.hour, avg_players=float(row.avg_players), peak_players=row.peak_players)
+				for row in result
+			}
 
 		return [
-			result_map.get(h, {"hour": h, "avg_players": 0, "peak_players": 0})
+			result_map.get(h, HourlyActivity(hour=h, avg_players=0, peak_players=0))
 			for h in range(24)
 		]
 
-	async def get_daily_summary(self, days: int = 30) -> list[dict]:
+	async def get_daily_summary(self, days: int = 30) -> list[DailySummary]:
 		stmt = (
 			select(
 				func.split_part(HourlyStatsRow.hour_key, "T", 1).label("date"),
@@ -129,13 +132,13 @@ class PostgresHistoryAdapter(HistoryPort):
 		async with self._session_factory() as session:
 			result = await session.execute(stmt)
 			return [
-				{"date": row.date, "peak_players": row.peak_players, "avg_players": float(row.avg_players), "peak_rooms": row.peak_rooms}
+				DailySummary(date=row.date, peak_players=row.peak_players, avg_players=float(row.avg_players), peak_rooms=row.peak_rooms)
 				for row in result
 			]
 
 	# -- Read: per-player stats ----------------------------------------------
 
-	async def get_player_stats(self, npid: str, days: int = 30) -> dict:
+	async def get_player_stats(self, npid: str, days: int = 30) -> PlayerStats:
 		cutoff = func.now() - timedelta(days=days)
 
 		# Build a subquery to find all snapshot IDs where the player appears
@@ -168,14 +171,14 @@ class PostgresHistoryAdapter(HistoryPort):
 			row = (await session.execute(stats_stmt)).one_or_none()
 			type_rows = (await session.execute(type_stmt)).all()
 
-		return {
-			"npid": npid,
-			"days_active": row.days_active if row else 0,
-			"times_seen": row.times_seen if row else 0,
-			"first_seen": row.first_seen.isoformat() if row and row.first_seen else None,
-			"last_seen": row.last_seen.isoformat() if row and row.last_seen else None,
-			"room_type_counts": {r.room_type: r.cnt for r in type_rows},
-		}
+		return PlayerStats(
+			npid=npid,
+			days_active=row.days_active if row else 0,
+			times_seen=row.times_seen if row else 0,
+			first_seen=row.first_seen.isoformat() if row and row.first_seen else None,
+			last_seen=row.last_seen.isoformat() if row and row.last_seen else None,
+			room_type_counts={r.room_type: r.cnt for r in type_rows},
+		)
 
 	async def get_player_hours(self, npid: str, days: int = 7) -> list[int]:
 		cutoff = func.now() - timedelta(days=days)

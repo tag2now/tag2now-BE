@@ -16,3 +16,31 @@ class RoomSnapshotRecord:
 	is_matchmaking: bool
 	member_npids: list[str] = field(default_factory=list)
 	member_online_names: list[str] = field(default_factory=list)
+
+
+@dataclass
+class HourlyActivity:
+	"""Average and peak player counts for a single KST hour."""
+	hour: int
+	avg_players: float
+	peak_players: int
+
+
+@dataclass
+class DailySummary:
+	"""Daily aggregated player and room statistics."""
+	date: str
+	peak_players: int
+	avg_players: float
+	peak_rooms: int
+
+
+@dataclass
+class PlayerStats:
+	"""Aggregated history stats for a single player."""
+	npid: str
+	days_active: int
+	times_seen: int
+	first_seen: str | None
+	last_seen: str | None
+	room_type_counts: dict[str, int] = field(default_factory=dict)

@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 
-from history.models import RoomSnapshotRecord
+from history.models import DailySummary, HourlyActivity, PlayerStats, RoomSnapshotRecord
 
 
 class HistoryPort(ABC):
@@ -25,17 +25,17 @@ class HistoryPort(ABC):
 	# -- Read: global stats --------------------------------------------------
 
 	@abstractmethod
-	async def get_hourly_activity(self, days: int = 7) -> list[dict]:
+	async def get_hourly_activity(self, days: int = 7) -> list[HourlyActivity]:
 		"""Return average and peak player counts per KST hour."""
 
 	@abstractmethod
-	async def get_daily_summary(self, days: int = 30) -> list[dict]:
+	async def get_daily_summary(self, days: int = 30) -> list[DailySummary]:
 		"""Return daily player and room totals."""
 
 	# -- Read: per-player stats ----------------------------------------------
 
 	@abstractmethod
-	async def get_player_stats(self, npid: str, days: int = 30) -> dict:
+	async def get_player_stats(self, npid: str, days: int = 30) -> PlayerStats:
 		"""Return aggregated stats for a single player."""
 
 	@abstractmethod

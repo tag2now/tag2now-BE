@@ -65,6 +65,23 @@ class TTT2GameInfo:
 	main_char_info: CharInfo
 	sub_char_info: CharInfo
 
+	@classmethod
+	def from_cache(cls, data: dict) -> "TTT2GameInfo":
+		return cls(
+			main_char_info=CharInfo(
+				char_id=data["main_char_info"]["char_id"],
+				rank_info=Rank(id=data["main_char_info"]["rank_info"]["id"]),
+				wins=data["main_char_info"]["wins"],
+				losses=data["main_char_info"]["losses"],
+			),
+			sub_char_info=CharInfo(
+				char_id=data["sub_char_info"]["char_id"],
+				rank_info=Rank(id=data["sub_char_info"]["rank_info"]["id"]),
+				wins=data["sub_char_info"]["wins"],
+				losses=data["sub_char_info"]["losses"],
+			),
+		)
+
 	def __str__(self):
 		return f"{self.main_char_info} + {self.sub_char_info}"
 
@@ -81,6 +98,21 @@ class TTT2LeaderboardEntry:
 	has_game_data: bool
 	comment: str
 	player_info: TTT2GameInfo | None
+
+	@classmethod
+	def from_cache(cls, data: dict) -> "TTT2LeaderboardEntry":
+		pi = data.get("player_info")
+		return cls(
+			rank=data["rank"],
+			np_id=data["np_id"],
+			online_name=data.get("online_name", ""),
+			score=data["score"],
+			pc_id=data.get("pc_id", 0),
+			record_date=data.get("record_date", 0),
+			has_game_data=data.get("has_game_data", False),
+			comment=data.get("comment", ""),
+			player_info=TTT2GameInfo.from_cache(pi) if pi else None,
+		)
 
 	def __str__(self):
 		base = f"#{self.rank} {self.online_name} ({self.np_id}) score={self.score}"
@@ -108,8 +140,7 @@ class PlayerOnlineStatus:
 	"""Current online status of a player."""
 	is_online: bool
 	is_matchmaking: bool
-	room_type: str | None = None
-	room_id: int | None = None
+	last_seen: str | None = None
 
 
 @dataclass

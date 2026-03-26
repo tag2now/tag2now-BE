@@ -142,30 +142,28 @@ def get_leaderboard(com_id: str, board_id: int, num_ranks: int) -> dict:
 async def lookup_player(npid: str) -> PlayerLookupResponse:
 	"""Look up a player by NPID using cached room/leaderboard data + history."""
 
-	# 1. Online status from cached /rooms/all
-	online_status = PlayerOnlineStatus(is_online=False, is_matchmaking=False)
+	# 1. Online status from cached /rooms/all + last_seen from history
+	from history import service as history_service
+	is_online = False
+	is_matchmaking = False
 
 	rooms_cached = cache_get(f"ttt2:rooms_all:{TTT2_COM_ID}")
 	if rooms_cached:
 		for room_type_key in ("player_match", "rank_match"):
 			for room in rooms_cached.get(room_type_key, []):
-				owner = room.get("owner_npid", "")
 				members = [u.get("user_id", "") for u in room.get("users", [])]
-				if npid == owner or npid in members:
-					if room.get("room_id", 0) == 0:
-						online_status = PlayerOnlineStatus(
-							is_online=True,
-							is_matchmaking=True,
-							room_type=room_type_key,
-						)
-					else:
-						online_status = PlayerOnlineStatus(
-							is_online=True,
-							is_matchmaking=False,
-							room_type=room_type_key,
-							room_id=room.get("room_id"),
-						)
+				if npid in members:
+					is_online = True
+					is_matchmaking = True
 					break
+
+	player_stats = await history_service.get_player_stats(npid)
+	last_seen = player_stats.last_seen
+	online_status = PlayerOnlineStatus(
+		is_online=is_matchmaking or last_seen,
+		is_matchmaking=is_matchmaking,
+		last_seen=last_seen,
+	)
 
 	# 2. Leaderboard from cache (search across common top-N caches)
 	lb_entry = None
@@ -174,39 +172,12 @@ async def lookup_player(npid: str) -> PlayerLookupResponse:
 		if lb_cached and lb_cached.get("entries"):
 			for entry in lb_cached["entries"]:
 				if entry.get("np_id") == npid:
-					lb_entry = TTT2LeaderboardEntry(
-						rank=entry["rank"],
-						np_id=entry["np_id"],
-						online_name=entry.get("online_name", ""),
-						score=entry["score"],
-						pc_id=entry.get("pc_id", 0),
-						record_date=entry.get("record_date", 0),
-						has_game_data=entry.get("has_game_data", False),
-						comment=entry.get("comment", ""),
-						player_info=None,
-					)
-					pi = entry.get("player_info")
-					if pi:
-						lb_entry.player_info = TTT2GameInfo(
-							main_char_info=CharInfo(
-								char_id=pi["main_char_info"]["char_id"],
-								rank_info=Rank(id=pi["main_char_info"]["rank_info"]["id"]),
-								wins=pi["main_char_info"]["wins"],
-								losses=pi["main_char_info"]["losses"],
-							),
-							sub_char_info=CharInfo(
-								char_id=pi["sub_char_info"]["char_id"],
-								rank_info=Rank(id=pi["sub_char_info"]["rank_info"]["id"]),
-								wins=pi["sub_char_info"]["wins"],
-								losses=pi["sub_char_info"]["losses"],
-							),
-						)
+					lb_entry = TTT2LeaderboardEntry.from_cache(entry)
 					break
 			if lb_entry:
 				break
 
 	# 3. Usual playing hours from history
-	from history import service as history_service
 	usual_hours = await history_service.get_player_hours(npid)
 
 	return PlayerLookupResponse(
