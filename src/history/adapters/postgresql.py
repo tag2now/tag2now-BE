@@ -175,8 +175,8 @@ class PostgresHistoryAdapter(HistoryPort):
 			npid=npid,
 			days_active=row.days_active if row else 0,
 			times_seen=row.times_seen if row else 0,
-			first_seen=row.first_seen.isoformat() if row and row.first_seen else None,
-			last_seen=row.last_seen.isoformat() if row and row.last_seen else None,
+			first_seen=row.first_seen if row else None,
+			last_seen=row.last_seen if row else None,
 			room_type_counts={r.room_type: r.cnt for r in type_rows},
 		)
 

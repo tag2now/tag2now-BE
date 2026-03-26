@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import struct
+from datetime import datetime, timedelta, timezone
 
 from fastapi.encoders import jsonable_encoder
 from rpcn_client import ScoreEntry
@@ -144,7 +145,6 @@ async def lookup_player(npid: str) -> PlayerLookupResponse:
 
 	# 1. Online status from cached /rooms/all + last_seen from history
 	from history import service as history_service
-	is_online = False
 	is_matchmaking = False
 
 	rooms_cached = cache_get(f"ttt2:rooms_all:{TTT2_COM_ID}")
@@ -153,14 +153,14 @@ async def lookup_player(npid: str) -> PlayerLookupResponse:
 			for room in rooms_cached.get(room_type_key, []):
 				members = [u.get("user_id", "") for u in room.get("users", [])]
 				if npid in members:
-					is_online = True
 					is_matchmaking = True
 					break
 
 	player_stats = await history_service.get_player_stats(npid)
 	last_seen = player_stats.last_seen
+	recently_seen = last_seen is not None and (datetime.now(timezone.utc) - last_seen) < timedelta(minutes=5)
 	online_status = PlayerOnlineStatus(
-		is_online=is_matchmaking or last_seen,
+		is_online=is_matchmaking or recently_seen,
 		is_matchmaking=is_matchmaking,
 		last_seen=last_seen,
 	)

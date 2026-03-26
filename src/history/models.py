@@ -1,6 +1,7 @@
 """Data models for the history module."""
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 
 @dataclass
@@ -41,6 +42,6 @@ class PlayerStats:
 	npid: str
 	days_active: int
 	times_seen: int
-	first_seen: str | None
-	last_seen: str | None
+	first_seen: datetime | None
+	last_seen: datetime | None
 	room_type_counts: dict[str, int] = field(default_factory=dict)

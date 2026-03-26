@@ -1,6 +1,7 @@
 """TTT2 dataclasses and game constants."""
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 
 from rpcn_client import RoomInfo
@@ -140,7 +141,7 @@ class PlayerOnlineStatus:
 	"""Current online status of a player."""
 	is_online: bool
 	is_matchmaking: bool
-	last_seen: str | None = None
+	last_seen: datetime | None = None
 
 
 @dataclass
