@@ -1,8 +1,8 @@
-"""Repository factory and lifecycle for tekken_tt2."""
+"""Repository factory and lifecycle for matching."""
 
 import logging
 
-from tekken_tt2.ports import GameServerPort
+from matching.ports import GameServerPort
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +10,7 @@ _game_repo: GameServerPort | None = None
 
 
 def _create_game_repo() -> GameServerPort:
-    from tekken_tt2.adapters.rpcn import RpcnGameServerAdapter
+    from matching.adapters.rpcn import RpcnGameServerAdapter
     return RpcnGameServerAdapter()
 
 

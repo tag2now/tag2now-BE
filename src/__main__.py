@@ -1,8 +1,8 @@
 """Run the Tekken Tag Tournament 2 API server.
 
 Usage:
-    python -m tekken_tt2
-    python -m tekken_tt2 --host 0.0.0.0 --port 8000 --reload
+    python -m matching
+    python -m matching --host 0.0.0.0 --port 8000 --reload
 """
 import argparse
 

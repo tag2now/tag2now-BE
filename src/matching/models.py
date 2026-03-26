@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from rpcn_client import RoomInfo
-from tekken_tt2.data import TEKKEN_RANKS, TTT2_CHARACTERS
+from matching.constants import TEKKEN_RANKS, TTT2_CHARACTERS
 
 # ---------------------------------------------------------------------------
 # Game constants

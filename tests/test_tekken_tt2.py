@@ -10,7 +10,7 @@ np2_structs_pb2.py to be generated first:
 
 import pytest
 from rpcn_client import SearchRoomsResult
-from tekken_tt2 import (
+from matching import (
     TTT2_COM_ID,
     TTT2LeaderboardResult,
     TTT2LeaderboardEntry,

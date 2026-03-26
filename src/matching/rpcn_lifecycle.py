@@ -5,7 +5,7 @@ import threading
 from contextlib import contextmanager
 
 from rpcn_client import RpcnClient, RpcnError
-from tekken_tt2.exceptions import RpcnUnavailableError
+from matching.exceptions import RpcnUnavailableError
 from shared.settings import get_settings, Settings
 from rpcn_client.metrics import TrackedRpcnClient
 

@@ -8,7 +8,7 @@ Credentials are read from environment variables (or a .env file):
   RPCN_PORT      - server port  (optional, default: 31313)
 
 API usage:
-  RPCN_USER=you RPCN_PASSWORD=secret uvicorn tekken_tt2.app:app --reload
+  RPCN_USER=you RPCN_PASSWORD=secret uvicorn app:app --reload
 """
 import json
 import logging
@@ -23,8 +23,8 @@ from shared.cache import redis_health_check
 from shared.exceptions import NotFoundError, ForbiddenError, ValidationError, ServiceUnavailableError
 from activity import init_activity_repo, close_activity_repo
 from activity.router import router as activity_router
-from tekken_tt2.router import router as ttt2_router
-from tekken_tt2.db import init_game_repo, close_game_repo
+from matching.router import router as ttt2_router
+from matching.db import init_game_repo, close_game_repo
 from community import init_db, close_db
 from community.router import router as community_router
 from shared.settings import get_settings

@@ -10,8 +10,8 @@ import time
 from dataclasses import dataclass
 
 from shared.settings import get_settings
-from tekken_tt2.events import MatchmakingDetected, MatchmakingResolved, publish
-from tekken_tt2.models import Rank, RoomInfoDTO, RoomType
+from matching.events import MatchmakingDetected, MatchmakingResolved, publish
+from matching.models import Rank, RoomInfoDTO, RoomType
 
 
 # ---------------------------------------------------------------------------

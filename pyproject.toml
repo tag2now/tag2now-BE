@@ -18,7 +18,7 @@ dependencies = [
 
 [project.scripts]
 rpcn-client = "rpcn_client.__main__:main"
-tekken-tt2  = "tekken_tt2.__main__:main"
+tekken-tt2  = "matching.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

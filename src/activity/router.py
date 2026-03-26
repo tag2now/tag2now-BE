@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 
 from activity import service
-from tekken_tt2.models import TTT2_COM_ID
+from matching.models import TTT2_COM_ID
 
 router = APIRouter(tags=["Activity"])
 

@@ -3,7 +3,7 @@
 import struct
 
 from rpcn_client import RpcnError
-from tekken_tt2.models import (
+from matching.models import (
     CharInfo,
     Rank,
     RoomInfoDTO,
@@ -13,8 +13,8 @@ from tekken_tt2.models import (
     _GAME_INFO_FMT,
     _GAME_INFO_SIZE,
 )
-from tekken_tt2.ports import GameServerPort
-from tekken_tt2.rpcn_lifecycle import api_client, shutdown_client
+from matching.ports import GameServerPort
+from matching.rpcn_lifecycle import api_client, shutdown_client
 
 
 class RpcnGameServerAdapter(GameServerPort):

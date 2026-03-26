@@ -1,4 +1,4 @@
-"""Domain events and simple in-process event bus for tekken_tt2."""
+"""Domain events and simple in-process event bus for matching."""
 
 import asyncio
 import logging
@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from tekken_tt2.models import RoomType
+from matching.models import RoomType
 
 logger = logging.getLogger(__name__)
 

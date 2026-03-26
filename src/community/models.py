@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
-from tekken_tt2.data import TTT2_CHARACTERS
+from matching.constants import TTT2_CHARACTERS
 
 VALID_POST_TYPES: set[str] = (
     {"자유", "랭매구인"}

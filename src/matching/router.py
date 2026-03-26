@@ -5,8 +5,8 @@ import logging
 from fastapi import APIRouter, Path, Query
 from fastapi.encoders import jsonable_encoder
 
-from tekken_tt2.models import TTT2_COM_ID, TTT2_RANK_BOARD_ID
-from tekken_tt2 import service
+from matching.models import TTT2_COM_ID, TTT2_RANK_BOARD_ID
+from matching import service
 
 logger = logging.getLogger(__name__)
 

@@ -1,8 +1,8 @@
-"""Port interfaces for the tekken_tt2 domain."""
+"""Port interfaces for the matching domain."""
 
 from abc import ABC, abstractmethod
 
-from tekken_tt2.models import RoomInfoDTO, TTT2LeaderboardResult
+from matching.models import RoomInfoDTO, TTT2LeaderboardResult
 
 
 class GameServerPort(ABC):

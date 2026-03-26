@@ -10,9 +10,9 @@ from rpcn_client import ScoreEntry
 from activity import service as activity_service
 from shared.cache import cache_get, cache_set
 from shared.settings import get_settings
-from tekken_tt2.db import get_game_server_repo
-from tekken_tt2.matchmaking_tracker import update_and_get_matchmaking
-from tekken_tt2.models import (
+from matching.db import get_game_server_repo
+from matching.matchmaking_tracker import update_and_get_matchmaking
+from matching.models import (
 	CharInfo,
 	PlayerLookupResponse,
 	PlayerOnlineStatus,
