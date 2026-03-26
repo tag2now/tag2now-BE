@@ -6,6 +6,7 @@ services:
     environment:
       FAST_API_PROFILE: dev
       DB_TYPE: dynamodb
+      DB_URL: postgresql://tag2now:tag2now@postgres:5432/tag2now
       DYNAMODB_REGION: ap-northeast-2
       DYNAMODB_TABLE_NAME: tag2now-community
       DYNAMODB_ENDPOINT_URL: http://dynamodb-local:8000
@@ -13,6 +14,7 @@ services:
       AWS_SECRET_ACCESS_KEY: local
     depends_on:
       - redis
+      - postgres
       - dynamodb-local
   fe:
     image: 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com/tag2-now/fe
@@ -20,6 +22,17 @@ services:
       - "80:80"
     environment:
       BACKEND_URL: http://be:8000
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: tag2now
+      POSTGRES_PASSWORD: tag2now
+      POSTGRES_DB: tag2now
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
 
   redis:
     image: redis:7-alpine
@@ -35,4 +48,5 @@ services:
     command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data"
 
 volumes:
+  postgres-data:
   dynamodb-data:
