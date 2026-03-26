@@ -5,11 +5,10 @@ import struct
 from .constants import (
 	HEADER_SIZE, PROTOCOL_VERSION,
 	PKT_REQUEST, PKT_REPLY, PKT_NOTIF, PKT_SERVERINFO,
-	Cmd, ERR_NO_ERROR, _HDR_FMT,
+	Cmd, ERR_NO_ERROR, _HDR_FMT, COMMUNICATION_ID_SIZE,
 )
 from .exceptions import RpcnError
 from .models import UserInfo, RoomInfo, SearchRoomsResult, ScoreResult
-from .helpers import _encode_com_id, _read_cstr, _pack_protobuf, _unpack_data_packet
 
 try:
 	from . import np2_structs_pb2 as pb
@@ -19,6 +18,24 @@ except ImportError:
 		"Generate it with:\n"
 		"  python -m grpc_tools.protoc -I. --python_out=src/rpcn_client np2_structs.proto"
 	)
+
+
+def _unpack_data_packet(data: bytes) -> bytes:
+	"""Extract the raw protobuf bytes written by Client::add_data_packet.
+add_data_packet prepends u32 LE length before the protobuf bytes.
+"""
+	if len(data) < 4:
+		raise RpcnError(f"Data packet too short: {len(data)} bytes")
+	(size,) = struct.unpack_from("<I", data, 0)
+	return data[4:4 + size]
+
+def _read_null_terminated_str(data: bytes, pos: int) -> tuple:
+	"""Read a null-terminated UTF-8 string starting at *pos* in *data*.
+	Returns (string, new_pos).
+	"""
+	end = data.index(b"\x00", pos)
+	return data[pos:end].decode("utf-8", errors="replace"), end + 1
+
 
 
 class RpcnClient:
@@ -52,7 +69,7 @@ class RpcnClient:
 		if pkt_type != PKT_SERVERINFO:
 			raise RpcnError(f"Expected ServerInfo packet (type 3), got {pkt_type}")
 
-		# The payload is PROTOCOL_VERSION as a u32 LE
+		# The payload is PROTOCOL_VERSION as u32 LE
 		payload_size = pkt_size - HEADER_SIZE
 		if payload_size < 4:
 			raise RpcnError("ServerInfo payload too short")
@@ -108,8 +125,8 @@ class RpcnClient:
 			raise RpcnError(f"Login failed: {names.get(error, f'error {error}')}")
 
 		pos = 0
-		online_name, pos = _read_cstr(data, pos)
-		avatar_url, pos  = _read_cstr(data, pos)
+		online_name, pos = _read_null_terminated_str(data, pos)
+		avatar_url, pos  = _read_null_terminated_str(data, pos)
 		(user_id,) = struct.unpack_from("<q", data, pos)
 		# The remainder is friend-list data which we don't need to parse here.
 		return UserInfo(online_name=online_name, avatar_url=avatar_url, user_id=user_id)
@@ -220,11 +237,15 @@ class RpcnClient:
 		return req
 
 	def _request_proto(self, com_id: str, cmd: Cmd, req) -> bytes:
-		req_data = _pack_protobuf(req)
-		return self._request_with_data(com_id, cmd, req_data)
+		raw = req.SerializeToString()
+		packed_protobuf = struct.pack("<I", len(raw)) + raw
+		return self._request_with_data(com_id, cmd, packed_protobuf)
 
 	def _request_with_data(self, com_id: str, cmd: Cmd, req_data=None) -> bytes:
-		payload = _encode_com_id(com_id)
+		if len(com_id) != COMMUNICATION_ID_SIZE:
+			raise ValueError(f"comm ID must be exactly {COMMUNICATION_ID_SIZE} chars, got {len(com_id)!r}")
+		payload = com_id.encode("ascii")
+
 		if req_data is not None:
 			payload += req_data
 
@@ -249,6 +270,7 @@ class RpcnClient:
 			buf.extend(chunk)
 		return bytes(buf)
 
+	# noinspection PyTypeChecker
 	def _recv_reply(self) -> tuple[int, bytes]:
 		"""Read packets until a Reply is found, discarding notifications."""
 		while True:

@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 import aioboto3
 from botocore.exceptions import ClientError
+from botocore.session import Session
 
 from shared.settings import get_settings
 
@@ -25,7 +26,7 @@ _RETENTION_DAYS = 7
 # ---------------------------------------------------------------------------
 
 _session: aioboto3.Session | None = None
-_resource_ctx = None
+_resource_ctx: Session = None
 _resource = None
 _table = None
 

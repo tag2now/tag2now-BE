@@ -10,6 +10,7 @@ from tekken_tt2.data import TEKKEN_RANKS, TTT2_CHARACTERS
 # Game constants
 # ---------------------------------------------------------------------------
 
+# noinspection SpellCheckingInspection
 TTT2_COM_ID = "NPWR02973_00"
 TTT2_RANK_BOARD_ID = 4
 

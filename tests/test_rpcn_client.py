@@ -9,7 +9,7 @@ np2_structs_pb2.py to be generated first:
 """
 
 import pytest
-from rpcn_client import RpcnClient, RpcnError, PROTOCOL_VERSION, UserInfo, SearchRoomsResult, ScoreResult, _format_epoch
+from rpcn_client import RpcnClient, RpcnError, PROTOCOL_VERSION, UserInfo, SearchRoomsResult, ScoreResult
 
 # ---------------------------------------------------------------------------
 # Credentials (imported from shared conftest) & game-specific constants
@@ -153,25 +153,3 @@ def test_wrong_password_raises():
             c.login(USER, "wrongpassword", "")
     finally:
         c.disconnect()
-
-
-# ---------------------------------------------------------------------------
-# Utility function tests
-# ---------------------------------------------------------------------------
-
-def test_format_epoch():
-    """Unit test for _format_epoch — no server connection needed."""
-    result_zero = _format_epoch(0)
-    print(f"_format_epoch(0) = {result_zero!r}")
-    assert result_zero == "N/A"
-
-    # 2024-01-01 00:00:00 UTC in microseconds
-    known_us = 1_704_067_200 * 1_000_000
-    result_known = _format_epoch(known_us)
-    print(f"_format_epoch({known_us}) = {result_known!r}")
-    assert result_known == "2024-01-01 00:00:00 UTC"
-
-    # Negative overflow — should fall through to the fallback string
-    result_bad = _format_epoch(-999_999_999_999_999_999)
-    print(f"_format_epoch(-999...) = {result_bad!r}")
-    assert result_bad.startswith("epoch=")
