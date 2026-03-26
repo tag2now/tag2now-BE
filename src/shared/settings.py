@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     cache_ttl_rooms: int = 10
     cache_ttl_rooms_all: int = 10
     cache_ttl_community: int = 30
+    cache_ttl_activity: int = 300
+    cache_ttl_player_hours: int = 300
     matchmaking_ttl: int = 60
 
     db_type: str = "postgresql"
@@ -29,7 +31,7 @@ class Settings(BaseSettings):
 
     dynamodb_region: str = "ap-northeast-2"
     dynamodb_table_name: str = "tag2now-community"
-    dynamodb_activity_table_name: str = "tag2now-activity"
+
     dynamodb_endpoint_url: str | None = None
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None

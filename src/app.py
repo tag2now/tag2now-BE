@@ -20,9 +20,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from shared.cache import redis_health_check
+from shared.database import init_database, close_database
 from shared.exceptions import NotFoundError, ForbiddenError, ValidationError, ServiceUnavailableError
-from activity import init_activity_repo, close_activity_repo
-from activity.router import router as activity_router
+from history import init_history_repo, close_history_repo
+from history.router import router as history_router
 from matching.router import router as ttt2_router
 from matching.db import init_game_repo, close_game_repo
 from community import init_db, close_db
@@ -45,13 +46,15 @@ except Exception:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await init_database()
     await init_db()
-    await init_activity_repo()
+    await init_history_repo()
     await init_game_repo()
     yield
     await close_game_repo()
-    await close_activity_repo()
+    await close_history_repo()
     await close_db()
+    await close_database()
 
 
 app = FastAPI(
@@ -68,7 +71,7 @@ app.add_middleware(
 )
 
 app.include_router(ttt2_router)
-app.include_router(activity_router)
+app.include_router(history_router)
 app.include_router(community_router, prefix="/community", tags=["community"])
 
 

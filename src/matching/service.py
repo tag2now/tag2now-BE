@@ -7,7 +7,8 @@ import struct
 from fastapi.encoders import jsonable_encoder
 from rpcn_client import ScoreEntry
 
-from activity import service as activity_service
+from history import service as history_service
+from history.models import RoomSnapshotRecord
 from shared.cache import cache_get, cache_set
 from shared.settings import get_settings
 from matching.db import get_game_server_repo
@@ -56,6 +57,30 @@ def format_score_entry(entry: ScoreEntry) -> str:
 		if info:
 			base += f"\n       >> {info}"
 	return base
+
+
+def _to_snapshot_record(room: RoomInfoDTO) -> RoomSnapshotRecord:
+	"""Convert a RoomInfoDTO to a RoomSnapshotRecord for history persistence."""
+	member_npids = []
+	member_names = []
+	if room.owner_npid:
+		member_npids.append(room.owner_npid)
+		member_names.append(room.owner_online_name)
+	for user in room.users:
+		if hasattr(user, "user_id") and user.user_id != room.owner_npid:
+			member_npids.append(user.user_id)
+			member_names.append(getattr(user, "online_name", ""))
+	return RoomSnapshotRecord(
+		room_id=room.room_id,
+		room_type=room.room_type.value,
+		owner_npid=room.owner_npid,
+		owner_online_name=room.owner_online_name,
+		current_members=room.current_members,
+		max_slots=room.max_slots,
+		is_matchmaking=room.room_id == 0,
+		member_npids=member_npids,
+		member_online_names=member_names,
+	)
 
 
 def _group_rooms_by_type(rooms: list[RoomInfoDTO]) -> dict[str, list[RoomInfoDTO]]:
@@ -118,20 +143,12 @@ async def get_rooms_all(com_id: str) -> dict:
 
 	result, all_room_dtos = await asyncio.to_thread(_fetch_rooms_all, com_id)
 
-	# Record activity (fire-and-forget on error)
+	# Record history snapshot (fire-and-forget on error)
 	try:
-		player_npids = []
-		total_players = 0
-		for room in all_room_dtos:
-			total_players += room.current_members
-			if room.owner_npid:
-				player_npids.append(room.owner_npid)
-			for user in room.users:
-				if hasattr(user, "user_id") and user.user_id != room.owner_npid:
-					player_npids.append(user.user_id)
-		await activity_service.record_activity(player_npids, total_players)
+		snapshots = [_to_snapshot_record(room) for room in all_room_dtos]
+		await history_service.record_snapshot(snapshots)
 	except Exception:
-		logger.warning("Failed to record activity", exc_info=True)
+		logger.warning("Failed to record history snapshot", exc_info=True)
 
 	encoded = jsonable_encoder(result)
 	cache_set(key, encoded, get_settings().cache_ttl_rooms_all)
@@ -152,7 +169,7 @@ def get_leaderboard(com_id: str, board_id: int, num_ranks: int) -> dict:
 
 
 async def lookup_player(npid: str) -> PlayerLookupResponse:
-	"""Look up a player by NPID using cached room/leaderboard data + DynamoDB activity."""
+	"""Look up a player by NPID using cached room/leaderboard data + history."""
 
 	# 1. Online status from cached /rooms/all
 	online_status = PlayerOnlineStatus(is_online=False, is_matchmaking=False)
@@ -217,8 +234,8 @@ async def lookup_player(npid: str) -> PlayerLookupResponse:
 			if lb_entry:
 				break
 
-	# 3. Usual playing hours from activity service
-	usual_hours = await activity_service.get_player_hours(npid)
+	# 3. Usual playing hours from history service
+	usual_hours = await history_service.get_player_hours(npid)
 
 	return PlayerLookupResponse(
 		npid=npid,
