@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass
 
 from shared.settings import get_settings
+from tekken_tt2.events import MatchmakingDetected, MatchmakingResolved, publish
 from tekken_tt2.models import Rank, RoomInfoDTO, RoomType
 
 
@@ -84,24 +85,32 @@ def update_and_get_matchmaking(current_rooms: list[RoomInfoDTO]) -> list[RoomInf
 				last_seen=now,
 				first_searching=existing.first_searching if existing else now,
 			)
+			if not existing:
+				publish(MatchmakingDetected(
+					npid=prev.owner_npid, online_name=prev.owner_online_name,
+					room_type=RoomType.RANK_MATCH, timestamp=now,
+				))
 
 	# Rooms that persisted gaming — owner found an opponent
 	for room_id in prev_keys & curr_keys:
 		cur = current[room_id]
-		if cur.is_gaming():
-			_matchmaking_players.pop(cur.owner_npid, None)
+		if cur.is_gaming() and cur.owner_npid in _matchmaking_players:
+			_matchmaking_players.pop(cur.owner_npid)
+			publish(MatchmakingResolved(npid=cur.owner_npid, reason="found_opponent", timestamp=now))
 
 	# Players currently in a room are not matchmaking
 	active_npids = {room.owner_npid for room in current.values()}
 	for npid in list(_matchmaking_players):
 		if npid in active_npids:
 			_matchmaking_players.pop(npid)
+			publish(MatchmakingResolved(npid=npid, reason="rejoined_room", timestamp=now))
 
 	# Evict stale entries
 	ttl = get_settings().matchmaking_ttl
 	for npid in list(_matchmaking_players):
 		if now - _matchmaking_players[npid].last_seen > ttl:
 			del _matchmaking_players[npid]
+			publish(MatchmakingResolved(npid=npid, reason="expired", timestamp=now))
 
 	_prev_rooms = current
 

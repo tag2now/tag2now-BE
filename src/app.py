@@ -21,9 +21,10 @@ from fastapi.responses import JSONResponse
 
 from shared.cache import redis_health_check
 from shared.exceptions import NotFoundError, ForbiddenError, ValidationError, ServiceUnavailableError
-from tekken_tt2.rpcn_lifecycle import shutdown_client
+from activity import init_activity_repo, close_activity_repo
+from activity.router import router as activity_router
 from tekken_tt2.router import router as ttt2_router
-from tekken_tt2 import activity_tracker
+from tekken_tt2.db import init_game_repo, close_game_repo
 from community import init_db, close_db
 from community.router import router as community_router
 from shared.settings import get_settings
@@ -45,11 +46,12 @@ except Exception:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    await activity_tracker.init()
+    await init_activity_repo()
+    await init_game_repo()
     yield
-    await activity_tracker.close()
+    await close_game_repo()
+    await close_activity_repo()
     await close_db()
-    shutdown_client()
 
 
 app = FastAPI(
@@ -66,6 +68,7 @@ app.add_middleware(
 )
 
 app.include_router(ttt2_router)
+app.include_router(activity_router)
 app.include_router(community_router, prefix="/community", tags=["community"])
 
 

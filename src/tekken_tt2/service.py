@@ -1,10 +1,17 @@
-"""TTT2 business logic functions."""
+"""TTT2 application service — orchestrates ports, caching, and domain logic."""
 
+import asyncio
+import logging
 import struct
 
-from rpcn_client import RpcnClient, RpcnError, ScoreEntry
-from shared.cache import cache_get
-from tekken_tt2 import activity_tracker
+from fastapi.encoders import jsonable_encoder
+from rpcn_client import ScoreEntry
+
+from activity import service as activity_service
+from shared.cache import cache_get, cache_set
+from shared.settings import get_settings
+from tekken_tt2.db import get_game_server_repo
+from tekken_tt2.matchmaking_tracker import update_and_get_matchmaking
 from tekken_tt2.models import (
 	CharInfo,
 	PlayerLookupResponse,
@@ -21,6 +28,12 @@ from tekken_tt2.models import (
 	_GAME_INFO_SIZE,
 )
 
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Pure domain functions
+# ---------------------------------------------------------------------------
 
 def parse_game_info(data: bytes) -> TTT2GameInfo | None:
 	"""Parse a 64-byte TTT2 game_info blob. Returns None if data is too short."""
@@ -45,15 +58,6 @@ def format_score_entry(entry: ScoreEntry) -> str:
 	return base
 
 
-def get_server_world_tree(client: RpcnClient, com_id: str) -> dict[int, list[int]]:
-	"""Fetch the server → world hierarchy.  Returns {server_id: [world_ids]}."""
-	servers = client.get_server_list(com_id)
-	tree = {}
-	for server_id in servers:
-		tree[server_id] = client.get_world_list(com_id, server_id)
-	return tree
-
-
 def _group_rooms_by_type(rooms: list[RoomInfoDTO]) -> dict[str, list[RoomInfoDTO]]:
 	grouped: dict[str, list[RoomInfoDTO]] = {RoomType.PLAYER_MATCH.value: [], RoomType.RANK_MATCH.value: []}
 	for room in rooms:
@@ -61,54 +65,90 @@ def _group_rooms_by_type(rooms: list[RoomInfoDTO]) -> dict[str, list[RoomInfoDTO
 	return grouped
 
 
-def get_rooms(client: RpcnClient, com_id: str, worlds: list[int]) -> dict[str, list[RoomInfoDTO]]:
-	"""Search active rooms across all worlds. Returns rooms grouped by type."""
-	all_rooms: list[RoomInfoDTO] = []
-	for world_id in worlds:
-		try:
-			resp = client.search_rooms(com_id, world_id=world_id, max_results=20)
-			if resp.total > 0:
-				all_rooms.extend(RoomInfoDTO(room) for room in resp.rooms)
-		except RpcnError:
-			pass
-	return _group_rooms_by_type(all_rooms)
+# ---------------------------------------------------------------------------
+# Cached application services
+# ---------------------------------------------------------------------------
+
+def get_server_world_tree(com_id: str) -> dict[str, list[int]]:
+	"""Return {server_id_str: [world_ids]}, cached."""
+	key = f"ttt2:servers:{com_id}"
+	if cached := cache_get(key):
+		return cached
+	repo = get_game_server_repo()
+	tree = repo.get_server_world_tree(com_id)
+	serializable = {str(k): v for k, v in tree.items()}
+	cache_set(key, serializable, get_settings().cache_ttl_servers)
+	return serializable
 
 
-def get_rooms_all(client: RpcnClient, com_id: str, worlds: list[int]) -> dict[str, list[RoomInfoDTO]]:
-	"""Search all rooms (including hidden) across all worlds. Returns rooms grouped by type."""
-	# TODO rpcs 에서 방 search 시 잠시 방 나가지는 현상을 고려해서 캐싱 해야함
-	all_rooms: list[RoomInfoDTO] = []
-	for world_id in worlds:
-		try:
-			resp = client.search_rooms_all(com_id, world_id=world_id)
-			if resp.total > 0:
-				all_rooms.extend(RoomInfoDTO(room) for room in resp.rooms)
-		except RpcnError:
-			pass
-	return _group_rooms_by_type(all_rooms)
+def _get_all_worlds(com_id: str) -> list[int]:
+	tree = get_server_world_tree(com_id)
+	return [w for worlds in tree.values() for w in worlds]
 
 
-def get_leaderboard(client: RpcnClient, com_id: str, board_id: int, num_ranks: int = 10) -> TTT2LeaderboardResult:
-	"""Fetch the top N leaderboard entries with parsed TTT2 game_info."""
-	result = client.get_score_range(
-		com_id, board_id,
-		start_rank=1, num_ranks=num_ranks,
-		with_comment=True, with_game_info=True,
-	)
-	entries = [
-		TTT2LeaderboardEntry(
-			rank=e.rank, np_id=e.np_id, online_name=e.online_name,
-			score=e.score, pc_id=e.pc_id, record_date=e.record_date,
-			has_game_data=e.has_game_data, comment=e.comment,
-			player_info=parse_game_info(e.game_info) if e.game_info else None,
-		)
-		for e in result.entries
-	]
-	return TTT2LeaderboardResult(
-		total_records=result.total_records,
-		last_sort_date=result.last_sort_date,
-		entries=entries,
-	)
+def get_rooms(com_id: str) -> dict:
+	"""Search active rooms, cached."""
+	key = f"ttt2:rooms:{com_id}"
+	if cached := cache_get(key):
+		return cached
+	repo = get_game_server_repo()
+	rooms = repo.search_rooms(com_id, _get_all_worlds(com_id))
+	result = jsonable_encoder(_group_rooms_by_type(rooms))
+	cache_set(key, result, get_settings().cache_ttl_rooms)
+	return result
+
+
+def _fetch_rooms_all(com_id: str):
+	"""Blocking: fetch all rooms and apply matchmaking detection."""
+	repo = get_game_server_repo()
+	rooms = repo.search_rooms_all(com_id, _get_all_worlds(com_id))
+	grouped = _group_rooms_by_type(rooms)
+
+	all_room_dtos = grouped[RoomType.PLAYER_MATCH.value] + grouped[RoomType.RANK_MATCH.value]
+	phantom_rooms = update_and_get_matchmaking(all_room_dtos)
+	grouped[RoomType.RANK_MATCH.value].extend(phantom_rooms)
+	return grouped, all_room_dtos
+
+
+async def get_rooms_all(com_id: str) -> dict:
+	"""Search all rooms including hidden, with matchmaking detection. Cached."""
+	key = f"ttt2:rooms_all:{com_id}"
+	if cached := cache_get(key):
+		return cached
+
+	result, all_room_dtos = await asyncio.to_thread(_fetch_rooms_all, com_id)
+
+	# Record activity (fire-and-forget on error)
+	try:
+		player_npids = []
+		total_players = 0
+		for room in all_room_dtos:
+			total_players += room.current_members
+			if room.owner_npid:
+				player_npids.append(room.owner_npid)
+			for user in room.users:
+				if hasattr(user, "user_id") and user.user_id != room.owner_npid:
+					player_npids.append(user.user_id)
+		await activity_service.record_activity(player_npids, total_players)
+	except Exception:
+		logger.warning("Failed to record activity", exc_info=True)
+
+	encoded = jsonable_encoder(result)
+	cache_set(key, encoded, get_settings().cache_ttl_rooms_all)
+	return encoded
+
+
+def get_leaderboard(com_id: str, board_id: int, num_ranks: int) -> dict:
+	"""Fetch leaderboard, cached."""
+	key = f"ttt2:leaderboard:{com_id}:{board_id}:{num_ranks}"
+	if cached := cache_get(key):
+		return cached
+	repo = get_game_server_repo()
+	lb = repo.get_leaderboard(com_id, board_id, num_ranks)
+	encoded = jsonable_encoder(lb)
+	cache_set(key, encoded, get_settings().cache_ttl_leaderboard)
+	return encoded
+
 
 
 async def lookup_player(npid: str) -> PlayerLookupResponse:
@@ -124,7 +164,6 @@ async def lookup_player(npid: str) -> PlayerLookupResponse:
 				owner = room.get("owner_npid", "")
 				members = [u.get("user_id", "") for u in room.get("users", [])]
 				if npid == owner or npid in members:
-					# Phantom rooms (matchmaking) have room_id=0
 					if room.get("room_id", 0) == 0:
 						online_status = PlayerOnlineStatus(
 							is_online=True,
@@ -178,8 +217,8 @@ async def lookup_player(npid: str) -> PlayerLookupResponse:
 			if lb_entry:
 				break
 
-	# 3. Usual playing hours from DynamoDB
-	usual_hours = await activity_tracker.get_player_hours(npid)
+	# 3. Usual playing hours from activity service
+	usual_hours = await activity_service.get_player_hours(npid)
 
 	return PlayerLookupResponse(
 		npid=npid,
