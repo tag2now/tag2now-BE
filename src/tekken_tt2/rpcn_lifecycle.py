@@ -6,8 +6,8 @@ from contextlib import contextmanager
 
 from rpcn_client import RpcnClient, RpcnError
 from tekken_tt2.exceptions import RpcnUnavailableError
-from shared.settings import get_settings
-from tekken_tt2.metrics import TrackedRpcnClient
+from shared.settings import get_settings, Settings
+from rpcn_client.metrics import TrackedRpcnClient
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +15,18 @@ _client_lock = threading.Lock()
 _shared_client: RpcnClient | None = None
 _RECONNECT_COOLDOWN = 5.0  # seconds
 _last_failure: float = 0.0
+
+settings = get_settings()
+
+def init_rpcn_client():
+    global _shared_client
+    client = RpcnClient(host=settings.rpcn_host, port=settings.rpcn_port)
+    if settings.rpcn_metric_enable:
+        client = TrackedRpcnClient(client)
+
+    client.connect()
+    client.login(settings.rpcn_user, settings.rpcn_password, settings.rpcn_token)
+    return client
 
 
 def shutdown_client():
@@ -34,7 +46,6 @@ def shutdown_client():
 @contextmanager
 def api_client():
     global _shared_client, _last_failure
-    settings = get_settings()
     with _client_lock:
         if _shared_client is None:
             elapsed = time.monotonic() - _last_failure
@@ -42,10 +53,7 @@ def api_client():
                 raise RpcnUnavailableError(f"RPCN reconnect cooldown ({_RECONNECT_COOLDOWN - elapsed:.1f}s remaining)")
         try:
             if _shared_client is None:
-                raw = RpcnClient(host=settings.rpcn_host, port=settings.rpcn_port)
-                _shared_client = TrackedRpcnClient(raw)
-                _shared_client.connect()
-                _shared_client.login(settings.rpcn_user, settings.rpcn_password, settings.rpcn_token)
+                _shared_client = init_rpcn_client()
             yield _shared_client
         except (RpcnError, OSError) as exc:
             logger.error("RPCN connection error: %s", exc)

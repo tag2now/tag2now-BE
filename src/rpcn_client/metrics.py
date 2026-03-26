@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("emf")
 
-_NAMESPACE = "TAG2NOW"
+_NAMESPACE = "RPCN"
 
 _TRACKED_METHODS = {
     "connect", "login", "disconnect",

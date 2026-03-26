@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     cache_ttl_leaderboard: int = 60
     cache_ttl_rooms: int = 10
     cache_ttl_rooms_all: int = 10
+    cache_ttl_community: int = 30
+    matchmaking_ttl: int = 60
 
     db_type: str = "postgresql"
     db_url: str = "postgresql://localhost:5432/tag2now-community"
@@ -31,9 +33,7 @@ class Settings(BaseSettings):
     aws_access_key_id: str | None = None
     aws_secret_access_key: str | None = None
 
-    matchmaking_ttl: int = 60
-
-    cache_ttl_community: int = 30
+    rpcn_metric_enable: bool = False
 
     cors_origins: list[str] = ["*"]
 
