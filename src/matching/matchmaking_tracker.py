@@ -10,7 +10,8 @@ import time
 from dataclasses import dataclass
 
 from shared.settings import get_settings
-from matching.events import MatchmakingDetected, MatchmakingResolved, publish
+from matching.events import MatchmakingDetected, MatchmakingResolved
+from shared.events import publish
 from matching.models import Rank, RoomInfoDTO, RoomType
 
 

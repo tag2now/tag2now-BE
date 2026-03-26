@@ -20,6 +20,10 @@ async def init_history_repo() -> None:
 	_repo = _create_repo()
 	await _repo.init()
 
+	# Subscribe to matching events
+	from history.event_handlers import subscribe_events
+	subscribe_events()
+
 
 async def close_history_repo() -> None:
 	global _repo
