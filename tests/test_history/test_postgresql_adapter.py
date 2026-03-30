@@ -6,10 +6,9 @@ Run with: pytest -m integration
 
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from history.models import RoomSnapshotRecord
-from shared.database import Base
+from shared.database import init_database, get_session_factory
 
 pytestmark = pytest.mark.integration
 
@@ -17,17 +16,8 @@ pytestmark = pytest.mark.integration
 @pytest_asyncio.fixture(scope="module")
 async def db_session_factory():
     """Create a test database engine and tables."""
-    engine = create_async_engine(
-        "postgresql+asyncpg://postgres:postgres@localhost:5432/tag2now_test",
-        pool_size=2,
-    )
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    yield factory
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
+    await init_database()
+    return get_session_factory()
 
 
 @pytest_asyncio.fixture
