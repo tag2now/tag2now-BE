@@ -22,7 +22,11 @@ async def init_database() -> None:
 	from shared.settings import get_settings
 
 	settings = get_settings()
-	dsn = settings.db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+	db_url = settings.db_url
+	db_user = settings.db_user
+	db_password = settings.db_password
+	db_name = settings.db_name
+	dsn = f"postgresql+asyncpg://{db_user}:{db_password}@{db_url}/{db_name}"
 
 	logger.info(
 		"Connecting to database at %s",

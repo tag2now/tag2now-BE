@@ -25,10 +25,14 @@ class Settings(BaseSettings):
     cache_ttl_activity: int = 300
     cache_ttl_player_hours: int = 300
     matchmaking_ttl: int = 60
+
+    db_url: str = "postgresql://localhost:5432/tag2now"
+    db_name: str = "tag2now"
+    db_user: str = "postgres"
+    db_password: str = "postgres"
+
     #community db_type. this should be removed
     db_type: str = "postgresql"
-    db_url: str = "postgresql://localhost:5432/tag2now"
-
     dynamodb_region: str = "ap-northeast-2"
     dynamodb_table_name: str = "tag2now-community"
 
