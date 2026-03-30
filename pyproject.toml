@@ -25,3 +25,5 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
+asyncio_mode = "auto"
+markers = ["integration: requires running PostgreSQL"]
