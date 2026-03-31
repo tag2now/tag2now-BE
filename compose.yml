@@ -45,6 +45,7 @@ services:
       - "8001:8000"
     volumes:
       - dynamodb-data:/home/dynamodblocal/data
+    user: root
     command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data"
 
 volumes:
