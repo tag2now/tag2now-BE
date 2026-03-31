@@ -3,7 +3,6 @@
 import logging
 
 from history.ports import HistoryPort
-from shared.database import get_session_factory
 
 logger = logging.getLogger(__name__)
 
@@ -12,24 +11,25 @@ _repo: HistoryPort | None = None
 
 def _create_repo() -> HistoryPort:
 	from history.adapters.postgresql import PostgresHistoryAdapter
-	return PostgresHistoryAdapter(session_factory=get_session_factory())
+	return PostgresHistoryAdapter()
 
 
 async def init_history_repo() -> None:
 	global _repo
 	_repo = _create_repo()
-	await _repo.init()
 
 	# Subscribe to matching events
 	from history.event_handlers import subscribe_events
 	subscribe_events()
 
+	logger.info("History repository ready")
+
 
 async def close_history_repo() -> None:
 	global _repo
 	if _repo:
-		await _repo.close()
 		_repo = None
+		logger.info("History repository closed")
 
 
 def get_history_repo() -> HistoryPort:

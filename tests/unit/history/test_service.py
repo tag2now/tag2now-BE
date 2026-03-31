@@ -1,29 +1,28 @@
 """Tests for history.service cached layer."""
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock
+from unittest.mock import ANY
 
 import pytest
 
-from history.models import DailySummary, HourlyActivity, PlayerStats, RoomSnapshotRecord
+from history.models import DailySummary, HourlyActivity, PlayerStats
 
 
 @pytest.mark.asyncio
-async def test_record_snapshot_delegates_to_repo(mock_history_repo, sample_snapshot_record):
+async def test_record_snapshot_delegates_to_repo(mock_history_repo, mock_session_factory, sample_snapshot_record):
     from history.service import record_snapshot
     records = [sample_snapshot_record()]
     await record_snapshot(records)
-    mock_history_repo.record_snapshot.assert_awaited_once_with(records)
+    mock_history_repo.record_snapshot.assert_awaited_once_with(ANY, records)
 
 
 @pytest.mark.asyncio
-async def test_get_hourly_activity_cache_miss(mock_history_repo, mock_cache):
+async def test_get_hourly_activity_cache_miss(mock_history_repo, mock_session_factory, mock_cache):
     from history.service import get_hourly_activity
     expected = [HourlyActivity(hour=0, avg_players=1.0, peak_players=2)]
     mock_history_repo.get_hourly_activity.return_value = expected
     result = await get_hourly_activity(7)
     assert result == expected
-    mock_history_repo.get_hourly_activity.assert_awaited_once_with(7)
+    mock_history_repo.get_hourly_activity.assert_awaited_once_with(ANY, 7)
 
 
 @pytest.mark.asyncio
@@ -38,7 +37,7 @@ async def test_get_hourly_activity_cache_hit(mock_history_repo, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_daily_summary_cache_miss(mock_history_repo, mock_cache):
+async def test_get_daily_summary_cache_miss(mock_history_repo, mock_session_factory, mock_cache):
     from history.service import get_daily_summary
     expected = [DailySummary(date="2026-03-30", peak_players=10, avg_players=5.0, peak_rooms=3)]
     mock_history_repo.get_daily_summary.return_value = expected
@@ -57,7 +56,7 @@ async def test_get_daily_summary_cache_hit(mock_history_repo, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_player_stats_cache_miss(mock_history_repo, mock_cache):
+async def test_get_player_stats_cache_miss(mock_history_repo, mock_session_factory, mock_cache):
     from history.service import get_player_stats
     expected = PlayerStats(npid="p1", days_active=3, times_seen=10, first_seen=None, last_seen=None)
     mock_history_repo.get_player_stats.return_value = expected
@@ -76,7 +75,7 @@ async def test_get_player_stats_cache_hit(mock_history_repo, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_player_hours_cache_miss_and_hit(mock_history_repo, monkeypatch):
+async def test_get_player_hours_cache_miss_and_hit(mock_history_repo, mock_session_factory, monkeypatch):
     from history.service import get_player_hours
 
     # Cache miss

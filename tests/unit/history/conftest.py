@@ -1,12 +1,39 @@
 """Fixtures for history unit tests."""
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from history.models import RoomSnapshotRecord
 from history.ports import HistoryPort
+
+
+@pytest.fixture
+def mock_session():
+    """A mock AsyncSession that supports 'async with session.begin()'."""
+    session = AsyncMock()
+
+    @asynccontextmanager
+    async def _fake_begin():
+        yield
+
+    session.begin = _fake_begin
+    return session
+
+
+@pytest.fixture
+def mock_session_factory(monkeypatch, mock_session):
+    """Mock get_session_factory so service doesn't need a real DB."""
+    @asynccontextmanager
+    async def _fake_session():
+        yield mock_session
+
+    def factory():
+        return _fake_session()
+
+    monkeypatch.setattr("history.service.get_session_factory", lambda: factory)
+    return factory
 
 
 @pytest.fixture
