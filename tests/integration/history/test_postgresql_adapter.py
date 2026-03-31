@@ -1,23 +1,22 @@
 """Integration tests for the PostgreSQL history adapter.
 
-These tests require a running PostgreSQL instance (docker-compose).
-Run with: pytest -m integration
+These tests require a running PostgreSQL instance.
+Run with: pytest tests/integration/history/ -v
 """
 
 import pytest
 import pytest_asyncio
 
 from history.models import RoomSnapshotRecord
-from shared.database import init_database, get_session_factory
-
-pytestmark = pytest.mark.integration
+from shared.database import init_database, close_database, get_session_factory
 
 
-@pytest_asyncio.fixture(scope="module")
+@pytest_asyncio.fixture
 async def db_session_factory():
-    """Create a test database engine and tables."""
+    """Create a test database engine and tables per test (avoids event-loop mismatch)."""
     await init_database()
-    return get_session_factory()
+    yield get_session_factory()
+    await close_database()
 
 
 @pytest_asyncio.fixture
@@ -63,8 +62,9 @@ async def test_record_snapshot_upserts_hourly_stats(adapter, db_session_factory)
         rows = (await session.execute(select(HourlyStatsRow))).scalars().all()
     # There should be exactly one row for the current hour key
     hour_keys = [r.hour_key for r in rows]
-    from history.adapters.postgresql import _kst_hour_key
-    assert hour_keys.count(_kst_hour_key()) == 1
+    from datetime import datetime, timedelta, timezone
+    expected_key = datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%dT%H")
+    assert hour_keys.count(expected_key) == 1
 
 
 @pytest.mark.asyncio

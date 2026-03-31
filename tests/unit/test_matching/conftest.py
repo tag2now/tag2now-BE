@@ -1,18 +1,9 @@
-"""Fixtures for the matching module tests."""
+"""Fixtures for matching unit tests."""
 
-import os
 from collections import defaultdict
 from unittest.mock import MagicMock
 
 import pytest
-
-os.environ.setdefault("RPCN_USER", "test")
-os.environ.setdefault("RPCN_PASSWORD", "test")
-os.environ.setdefault("RPCN_TOKEN", "test")
-os.environ.setdefault("RPCN_HOST", "localhost")
-os.environ.setdefault("RPCN_PORT", "31313")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("DB_URL", "localhost:5432")
 
 from matching.models import Rank, RoomInfoDTO, RoomType
 import matching.matchmaking_tracker as tracker_mod

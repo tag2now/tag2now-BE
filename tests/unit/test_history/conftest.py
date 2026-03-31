@@ -1,18 +1,9 @@
-"""Fixtures for the history module tests."""
+"""Fixtures for history unit tests."""
 
-import os
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 import pytest
-
-os.environ.setdefault("RPCN_USER", "test")
-os.environ.setdefault("RPCN_PASSWORD", "test")
-os.environ.setdefault("RPCN_TOKEN", "test")
-os.environ.setdefault("RPCN_HOST", "localhost")
-os.environ.setdefault("RPCN_PORT", "31313")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("DB_URL", "localhost:5432")
 
 from history.models import RoomSnapshotRecord
 from history.ports import HistoryPort

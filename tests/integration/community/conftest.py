@@ -1,16 +1,8 @@
-"""Fixtures for community board tests."""
+"""Fixtures for community board integration tests."""
 
 import asyncio
-import os
 
 import pytest
-
-# Provide required env vars before any settings import
-os.environ.setdefault("RPCN_USER", "test")
-os.environ.setdefault("RPCN_PASSWORD", "test")
-os.environ.setdefault("RPCN_TOKEN", "test")
-os.environ.setdefault("RPCN_HOST", "localhost")
-os.environ.setdefault("RPCN_PORT", "31313")
 
 
 def _truncate_postgresql(db_url: str):

@@ -1,7 +1,7 @@
 """Integration tests for matching service functions against the live RPCN server.
 
 Run with:
-    pytest tests/test_matching/test_service_integration.py -v -m integration
+    pytest tests/integration/matching/ -v
 
 Protobuf tests (get_rooms, get_leaderboard) require
 np2_structs_pb2.py to be generated first:
@@ -22,8 +22,6 @@ from matching import (
     get_leaderboard,
 )
 from matching.db import init_game_repo, close_game_repo
-
-pytestmark = pytest.mark.integration
 
 # ---------------------------------------------------------------------------
 # Game-specific constants
