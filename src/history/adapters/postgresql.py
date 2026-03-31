@@ -3,12 +3,12 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import DateTime, Integer, delete, func, or_, select, text
+from sqlalchemy import DateTime, Integer, delete, func, or_, select, text, union_all
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from history.entities import HourlyStatsRow, RoomSnapshotRow, SnapshotMemberRow
-from history.models import DailySummary, HourlyActivity, PlayerStats, RoomSnapshotRecord
+from history.models import CoPlayer, DailySummary, HourlyActivity, PlayerStats, RoomSnapshotRecord
 from history.ports import HistoryPort
 
 logger = logging.getLogger(__name__)
@@ -156,8 +156,38 @@ class PostgresHistoryAdapter(HistoryPort):
 			.group_by(player_snapshots.c.room_type)
 		)
 
+		co_members_q = (
+			select(SnapshotMemberRow.npid, SnapshotMemberRow.online_name)
+			.where(
+				SnapshotMemberRow.snapshot_id.in_(select(player_snapshots.c.id)),
+				SnapshotMemberRow.npid != npid,
+			)
+		)
+		co_owners_q = (
+			select(
+				RoomSnapshotRow.owner_npid.label("npid"),
+				RoomSnapshotRow.owner_online_name.label("online_name"),
+			)
+			.where(
+				RoomSnapshotRow.id.in_(select(player_snapshots.c.id)),
+				RoomSnapshotRow.owner_npid != npid,
+			)
+		)
+		co_union = union_all(co_members_q, co_owners_q).subquery()
+		top_stmt = (
+			select(
+				co_union.c.npid,
+				co_union.c.online_name,
+				func.count().label("times_together"),
+			)
+			.group_by(co_union.c.npid, co_union.c.online_name)
+			.order_by(func.count().desc())
+			.limit(5)
+		)
+
 		row = (await session.execute(stats_stmt)).one_or_none()
 		type_rows = (await session.execute(type_stmt)).all()
+		top_rows = (await session.execute(top_stmt)).all()
 
 		return PlayerStats(
 			npid=npid,
@@ -166,6 +196,10 @@ class PostgresHistoryAdapter(HistoryPort):
 			first_seen=row.first_seen if row else None,
 			last_seen=row.last_seen if row else None,
 			room_type_counts={r.room_type: r.cnt for r in type_rows},
+			top_played_with=[
+				CoPlayer(npid=r.npid, online_name=r.online_name, times_together=r.times_together)
+				for r in top_rows
+			],
 		)
 
 	async def get_player_hours(self, session: AsyncSession, npid: str, days: int = 7) -> list[int]:
