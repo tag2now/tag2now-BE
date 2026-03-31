@@ -40,7 +40,7 @@ def leaderboard(
     return service.get_leaderboard(TTT2_COM_ID, board, num_ranks=top)
 
 
-
+# is it necessary?
 @router.get("/players/{npid}", summary="Player lookup")
 async def player_lookup(npid: str = Path(description="Player NPID")):
     """Look up a player: online status, leaderboard stats, and usual playing hours."""
