@@ -20,9 +20,9 @@ async def db_session():
     factory = get_session_factory()
 
     # Truncate tables before the test transaction to clear leftover data
-    # async with factory() as cleanup_session:
-    #     async with cleanup_session.begin():
-    #         await cleanup_session.execute(text("TRUNCATE room_snapshots, room_snapshot_members, hourly_stats RESTART IDENTITY CASCADE"))
+    async with factory() as cleanup_session:
+        async with cleanup_session.begin():
+            await cleanup_session.execute(text("TRUNCATE room_snapshots, room_snapshot_members, hourly_stats RESTART IDENTITY CASCADE"))
 
     async with factory() as session:
         async with session.begin():
