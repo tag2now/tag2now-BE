@@ -2,13 +2,14 @@
 
 Players cycling through the TTT2 matchmaking loop (searchRoom → createRoom →
 wait → quit) are only visible while their solo room exists.  By comparing
-snapshots we can infer that a player whose 1-member room disappeared is still
-actively searching.
+snapshots we can infer that a player whose RANK_MATCH room (1 or 2 members)
+disappeared is actively searching for a match.
 """
 
 import time
 from dataclasses import dataclass
 
+from rpcn_client import UserInfo
 from shared.settings import get_settings
 from matching.events import MatchmakingDetected, MatchmakingResolved
 from shared.events import publish
@@ -27,6 +28,7 @@ class _SnapshotRoom:
 	current_members: int
 	room_type: str
 	rank_info: Rank | None
+	users: list[UserInfo]
 
 	def is_gaming(self) -> bool:
 		return self.room_type == RoomType.RANK_MATCH and self.current_members == 2
@@ -42,7 +44,7 @@ class _MatchmakingPlayer:
 
 
 _prev_rooms: dict[int, _SnapshotRoom] = {}
-_matchmaking_players: dict[str, _MatchmakingPlayer] = {}
+_matchmaking_players: dict[str, _MatchmakingPlayer] = {}  # keyed by online_name
 
 
 # ---------------------------------------------------------------------------
@@ -62,6 +64,7 @@ def update_and_get_matchmaking(current_rooms: list[RoomInfoDTO]) -> list[RoomInf
 			current_members=room.current_members,
 			room_type=room.room_type.value,
 			rank_info=room.rank_info,
+			users=room.users
 		)
 		for room in current_rooms
 	}
@@ -73,14 +76,17 @@ def update_and_get_matchmaking(current_rooms: list[RoomInfoDTO]) -> list[RoomInf
 	prev_keys = set(_prev_rooms)
 	curr_keys = set(current)
 
-	# Rooms that disappeared — if they had 1 member, owner was matchmaking
+	# Disappeared RANK_MATCH rooms — all users entered matchmaking
 	for room_id in prev_keys - curr_keys:
 		prev = _prev_rooms[room_id]
-		if prev.room_type == RoomType.RANK_MATCH and not prev.is_gaming():
-			existing = _matchmaking_players.get(prev.owner_npid)
-			_matchmaking_players[prev.owner_npid] = _MatchmakingPlayer(
-				npid=prev.owner_npid,
-				online_name=prev.owner_online_name,
+		if prev.room_type == RoomType.PLAYER_MATCH:
+			continue
+
+		for user in prev.users:
+			existing = _matchmaking_players.get(user.online_name)
+			_matchmaking_players[user.online_name] = _MatchmakingPlayer(
+				npid=user.online_name,
+				online_name=user.online_name,
 				room_type=RoomType.RANK_MATCH,
 				rank_info=prev.rank_info,
 				last_seen=now,
@@ -88,30 +94,30 @@ def update_and_get_matchmaking(current_rooms: list[RoomInfoDTO]) -> list[RoomInf
 			)
 			if not existing:
 				publish(MatchmakingDetected(
-					npid=prev.owner_npid, online_name=prev.owner_online_name,
+					online_name=user.online_name,
 					room_type=RoomType.RANK_MATCH, timestamp=now,
 				))
 
-	# Rooms that persisted gaming — owner found an opponent
-	for room_id in prev_keys & curr_keys:
+	# Gaming rooms (2-member) — owner found an opponent
+	for room_id in curr_keys:
 		cur = current[room_id]
-		if cur.is_gaming() and cur.owner_npid in _matchmaking_players:
-			_matchmaking_players.pop(cur.owner_npid)
-			publish(MatchmakingResolved(npid=cur.owner_npid, reason="found_opponent", timestamp=now))
+		if cur.owner_online_name in _matchmaking_players and cur.is_gaming():
+			_matchmaking_players.pop(cur.owner_online_name)
+			publish(MatchmakingResolved(online_name=cur.owner_online_name, reason="found_opponent", timestamp=now))
 
-	# Players currently in a room are not matchmaking
-	active_npids = {room.owner_npid for room in current.values()}
-	for npid in list(_matchmaking_players):
-		if npid in active_npids:
-			_matchmaking_players.pop(npid)
-			publish(MatchmakingResolved(npid=npid, reason="rejoined_room", timestamp=now))
+	# Players back in a non-gaming room are no longer matchmaking
+	active_online_names = {room.owner_online_name for room in current.values() if not room.is_gaming()}
+	for online_name in list(_matchmaking_players):
+		if online_name in active_online_names:
+			_matchmaking_players.pop(online_name)
+			publish(MatchmakingResolved(online_name=online_name, reason="rejoined_room", timestamp=now))
 
 	# Evict stale entries
 	ttl = get_settings().matchmaking_ttl
-	for npid in list(_matchmaking_players):
-		if now - _matchmaking_players[npid].last_seen > ttl:
-			del _matchmaking_players[npid]
-			publish(MatchmakingResolved(npid=npid, reason="expired", timestamp=now))
+	for online_name in list(_matchmaking_players):
+		if now - _matchmaking_players[online_name].last_seen > ttl:
+			del _matchmaking_players[online_name]
+			publish(MatchmakingResolved(online_name=online_name, reason="expired", timestamp=now))
 
 	_prev_rooms = current
 

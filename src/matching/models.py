@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
-from rpcn_client import RoomInfo
+from rpcn_client import RoomInfo, UserInfo
 from matching.constants import TEKKEN_RANKS, TTT2_CHARACTERS
 
 # ---------------------------------------------------------------------------
@@ -162,7 +162,7 @@ class RoomInfoDTO:
 	max_slots: int
 	room_type: RoomType
 	rank_info: Rank | None
-	users: list
+	users: list[UserInfo]
 
 	def __init__(self, room_info: RoomInfo):
 		self.room_id = room_info.room_id
@@ -189,3 +189,9 @@ class RoomInfoDTO:
 		obj.rank_info = rank_info
 		obj.users = []
 		return obj
+
+@dataclass
+class RoomUser:
+	user_id: str
+	online_name: str
+	avatar_url: str

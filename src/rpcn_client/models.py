@@ -43,7 +43,7 @@ class RoomInfo:
 	int_attrs: list  # list[RoomAttr]
 	bin_search_attrs: list  # list[RoomBinAttr]
 	bin_attrs: list  # list[RoomBinAttr]
-	users: list
+	users: list[UserInfo]
 
 	@classmethod
 	def from_response_room(cls, room):

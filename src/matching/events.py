@@ -7,8 +7,7 @@ from matching.models import RoomInfoDTO, RoomType
 
 @dataclass
 class MatchmakingDetected:
-	"""A player entered matchmaking (their solo room disappeared)."""
-	npid: str
+	"""A player entered matchmaking (their RANK_MATCH room disappeared)."""
 	online_name: str
 	room_type: RoomType
 	timestamp: float
@@ -17,7 +16,7 @@ class MatchmakingDetected:
 @dataclass
 class MatchmakingResolved:
 	"""A player left matchmaking."""
-	npid: str
+	online_name: str
 	reason: str  # "found_opponent" | "rejoined_room" | "expired"
 	timestamp: float
 
