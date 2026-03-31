@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master]
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Run unit tests
+        run: pytest tests/unit/ -v
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Start services
+        run: docker compose -f compose.test.yml up -d --wait
+
+      - name: Generate protobuf
+        run: python -m grpc_tools.protoc -I. --python_out=src/rpcn_client np2_structs.proto
+
+      - name: Run integration tests
+        env:
+          RPCN_USER: ${{ secrets.RPCN_USER }}
+          RPCN_PASSWORD: ${{ secrets.RPCN_PASSWORD }}
+          RPCN_TOKEN: ${{ secrets.RPCN_TOKEN }}
+          RPCN_HOST: ${{ vars.RPCN_HOST }}
+          RPCN_PORT: "31313"
+          REDIS_URL: redis://localhost:6379/0
+          DB_URL: postgresql://tag2now:tag2now@localhost:5432/tag2now
+          DB_USER: tag2now
+          DB_PASSWORD: tag2now
+        run: pytest tests/integration/ -v
+
+      - name: Stop services
+        if: always()
+        run: docker compose -f compose.test.yml down
