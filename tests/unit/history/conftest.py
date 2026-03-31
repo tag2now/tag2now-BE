@@ -24,7 +24,7 @@ def mock_session():
 
 @pytest.fixture
 def mock_session_factory(monkeypatch, mock_session):
-    """Mock get_session_factory so service doesn't need a real DB."""
+    """Mock get_session_factory so decorators don't need a real DB."""
     @asynccontextmanager
     async def _fake_session():
         yield mock_session
@@ -32,7 +32,7 @@ def mock_session_factory(monkeypatch, mock_session):
     def factory():
         return _fake_session()
 
-    monkeypatch.setattr("history.service.get_session_factory", lambda: factory)
+    monkeypatch.setattr("shared.database.get_session_factory", lambda: factory)
     return factory
 
 

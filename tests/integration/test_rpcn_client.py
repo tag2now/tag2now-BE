@@ -15,7 +15,7 @@ from rpcn_client import RpcnClient, RpcnError, PROTOCOL_VERSION, UserInfo, Searc
 # Credentials (imported from shared conftest) & game-specific constants
 # ---------------------------------------------------------------------------
 
-from conftest import HOST, PORT, USER
+from .conftest import HOST, PORT, USER
 
 COM_ID   = "NPWR02973_00"
 BOARD_ID = 0
