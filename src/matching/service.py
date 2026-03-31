@@ -2,11 +2,9 @@
 
 import asyncio
 import logging
-import struct
 from datetime import datetime, timedelta, timezone
 
 from fastapi.encoders import jsonable_encoder
-from rpcn_client import ScoreEntry
 
 from matching.events import ActivitySnapshot
 from shared.cache import cache_get, cache_set
@@ -15,18 +13,13 @@ from shared.settings import get_settings
 from matching.db import get_game_server_repo
 from matching.matchmaking_tracker import update_and_get_matchmaking
 from matching.models import (
-	CharInfo,
 	PlayerLookupResponse,
 	PlayerOnlineStatus,
-	Rank,
 	RoomInfoDTO,
 	RoomType,
 	TTT2_COM_ID,
 	TTT2_RANK_BOARD_ID,
-	TTT2GameInfo,
 	TTT2LeaderboardEntry,
-	_GAME_INFO_FMT,
-	_GAME_INFO_SIZE,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,29 +28,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Pure domain functions
 # ---------------------------------------------------------------------------
-
-def parse_game_info(data: bytes) -> TTT2GameInfo | None:
-	"""Parse a 64-byte TTT2 game_info blob. Returns None if data is too short."""
-	if len(data) < _GAME_INFO_SIZE:
-		return None
-	c1_id, c2_id, c1_rank, c2_rank, c1_w, c2_w, c1_l, c2_l = struct.unpack(
-		_GAME_INFO_FMT, data[:_GAME_INFO_SIZE]
-	)
-	return TTT2GameInfo(
-		main_char_info=CharInfo(char_id=c1_id, rank_info=Rank(id=c1_rank), wins=c1_w, losses=c1_l),
-		sub_char_info=CharInfo(char_id=c2_id, rank_info=Rank(id=c2_rank), wins=c2_w, losses=c2_l),
-	)
-
-
-def format_score_entry(entry: ScoreEntry) -> str:
-	"""Format a ScoreEntry with TTT2-specific game_info decoding."""
-	base = str(entry)
-	if entry.game_info:
-		info = parse_game_info(entry.game_info)
-		if info:
-			base += f"\n       >> {info}"
-	return base
-
 
 def _group_rooms_by_type(rooms: list[RoomInfoDTO]) -> dict[str, list[RoomInfoDTO]]:
 	grouped: dict[str, list[RoomInfoDTO]] = {RoomType.PLAYER_MATCH.value: [], RoomType.RANK_MATCH.value: []}
