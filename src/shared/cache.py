@@ -1,14 +1,25 @@
 """Redis cache helpers."""
 
+import dataclasses
 import json
 import logging
 import time
+from datetime import datetime
 from urllib.parse import urlparse
 
 import redis
 from shared.settings import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+class _DataclassEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+            return dataclasses.asdict(obj)
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 _redis_client = redis.from_url(get_settings().redis_url, decode_responses=True, socket_connect_timeout=5)
 
@@ -24,7 +35,7 @@ def cache_get(key: str):
 
 def cache_set(key: str, value, ttl: int):
     try:
-        _redis_client.setex(key, ttl, json.dumps(value))
+        _redis_client.setex(key, ttl, json.dumps(value, cls=_DataclassEncoder))
     except Exception as e:
         logger.warning("Redis set failed: %s", e)
 
