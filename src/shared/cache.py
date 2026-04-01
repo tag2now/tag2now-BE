@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 
 class _DataclassEncoder(json.JSONEncoder):
     def default(self, obj):
-        if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-            return dataclasses.asdict(obj)
         if isinstance(obj, datetime):
             return obj.isoformat()
+        if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+            return dataclasses.asdict(obj)
         return super().default(obj)
 
 _redis_client = redis.from_url(get_settings().redis_url, decode_responses=True, socket_connect_timeout=5)
