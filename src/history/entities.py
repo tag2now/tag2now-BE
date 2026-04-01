@@ -12,7 +12,7 @@ class RoomSnapshotRow(Base):
 	__tablename__ = "room_snapshots"
 
 	id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-	captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+	captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 	room_id: Mapped[int] = mapped_column(Integer, nullable=False)
 	room_type: Mapped[str] = mapped_column(String, nullable=False)
 	owner_npid: Mapped[str] = mapped_column(String, nullable=False)
