@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from history.entities import HourlyStatsRow, RoomSnapshotRow, SnapshotMemberRow
-from history.models import CoPlayer, DailySummary, HourlyActivity, PlayerStats, RoomSnapshotRecord
+from history.models import CoPlayer, DailySummary, HourlyActivity, PlayerStats, RoomSnapshotRecord, TopPlayer
 from history.ports import HistoryPort
 
 logger = logging.getLogger(__name__)
@@ -201,6 +201,39 @@ class PostgresHistoryAdapter(HistoryPort):
 				for r in top_rows
 			],
 		)
+
+	async def get_weekly_top_players(self, session: AsyncSession, limit: int = 10) -> list[TopPlayer]:
+		cutoff = func.now() - timedelta(days=7)
+
+		owners_q = select(
+			RoomSnapshotRow.owner_npid.label("npid"),
+			RoomSnapshotRow.owner_online_name.label("online_name"),
+		).where(RoomSnapshotRow.captured_at >= cutoff)
+
+		members_q = select(
+			SnapshotMemberRow.npid,
+			SnapshotMemberRow.online_name,
+		).join(RoomSnapshotRow, RoomSnapshotRow.id == SnapshotMemberRow.snapshot_id).where(
+			RoomSnapshotRow.captured_at >= cutoff
+		)
+
+		sub = union_all(owners_q, members_q).subquery()
+		stmt = (
+			select(
+				sub.c.npid,
+				func.max(sub.c.online_name).label("online_name"),
+				func.count().label("match_count"),
+			)
+			.group_by(sub.c.npid)
+			.order_by(func.count().desc())
+			.limit(limit)
+		)
+
+		result = await session.execute(stmt)
+		return [
+			TopPlayer(npid=row.npid, online_name=row.online_name, match_count=row.match_count)
+			for row in result
+		]
 
 	async def get_player_hours(self, session: AsyncSession, npid: str, days: int = 7) -> list[int]:
 		cutoff = func.now() - timedelta(days=days)

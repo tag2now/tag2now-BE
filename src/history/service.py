@@ -9,7 +9,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from history.db import get_history_repo
-from history.models import DailySummary, HourlyActivity, PlayerStats, RoomSnapshotRecord
+from history.models import DailySummary, HourlyActivity, PlayerStats, RoomSnapshotRecord, TopPlayer
 from shared.cache import cache_get, cache_set
 from shared.database import transactional, read_only
 from shared.settings import get_settings
@@ -53,6 +53,22 @@ async def get_daily_summary(days: int = 30) -> list[DailySummary]:
 @read_only
 async def _get_daily_summary(session: AsyncSession, days: int) -> list[DailySummary]:
 	return await get_history_repo().get_daily_summary(session, days)
+
+
+# -- Read: weekly top players ------------------------------------------------
+
+async def get_weekly_top_players(limit: int = 10) -> list[TopPlayer]:
+	key = f"history:weekly_top:{limit}"
+	if cached := cache_get(key):
+		return cached
+	result = await _get_weekly_top_players(limit)
+	cache_set(key, result, get_settings().cache_ttl_activity)
+	return result
+
+
+@read_only
+async def _get_weekly_top_players(session: AsyncSession, limit: int) -> list[TopPlayer]:
+	return await get_history_repo().get_weekly_top_players(session, limit)
 
 
 # -- Read: per-player stats --------------------------------------------------

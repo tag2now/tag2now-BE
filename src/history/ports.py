@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from history.models import DailySummary, HourlyActivity, PlayerStats, RoomSnapshotRecord
+from history.models import DailySummary, HourlyActivity, PlayerStats, RoomSnapshotRecord, TopPlayer
 
 
 class HistoryPort(ABC):
@@ -35,3 +35,7 @@ class HistoryPort(ABC):
 	@abstractmethod
 	async def get_player_hours(self, session: AsyncSession, npid: str, days: int = 7) -> list[int]:
 		"""Return KST hours when the player is typically online."""
+
+	@abstractmethod
+	async def get_weekly_top_players(self, session: AsyncSession, limit: int = 10) -> list[TopPlayer]:
+		"""Return the top N most frequently seen players in the last 7 days."""

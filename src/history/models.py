@@ -37,6 +37,14 @@ class DailySummary:
 
 
 @dataclass
+class TopPlayer:
+    """A player ranked by how often they appeared in snapshots."""
+    npid: str
+    online_name: str
+    match_count: int
+
+
+@dataclass
 class CoPlayer:
 	"""A player who frequently shared rooms with the queried player."""
 	npid: str
