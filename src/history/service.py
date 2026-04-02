@@ -87,15 +87,3 @@ async def _get_player_stats(session: AsyncSession, npid: str, days: int) -> Play
 	return await get_history_repo().get_player_stats(session, npid, days)
 
 
-async def get_player_hours(npid: str, days: int = 7) -> list[int]:
-	key = f"history:player_hours:{npid}:{days}"
-	if cached := cache_get(key):
-		return cached
-	result = await _get_player_hours(npid, days)
-	cache_set(key, result, get_settings().cache_ttl_player_hours)
-	return result
-
-
-@read_only
-async def _get_player_hours(session: AsyncSession, npid: str, days: int) -> list[int]:
-	return await get_history_repo().get_player_hours(session, npid, days)

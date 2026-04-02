@@ -33,9 +33,5 @@ class HistoryPort(ABC):
 		"""Return aggregated stats for a single player."""
 
 	@abstractmethod
-	async def get_player_hours(self, session: AsyncSession, npid: str, days: int = 7) -> list[int]:
-		"""Return KST hours when the player is typically online."""
-
-	@abstractmethod
 	async def get_weekly_top_players(self, session: AsyncSession, limit: int = 10) -> list[TopPlayer]:
 		"""Return the top N most frequently seen players in the last 7 days."""

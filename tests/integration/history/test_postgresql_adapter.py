@@ -92,6 +92,4 @@ async def test_get_player_stats_and_hours(adapter, db_session):
     stats = await adapter.get_player_stats(db_session, "test_player", days=1)
     assert stats.npid == "test_player"
     assert stats.times_seen >= 1
-
-    hours = await adapter.get_player_hours(db_session, "test_player", days=1)
-    assert isinstance(hours, list)
+    assert isinstance(stats.active_hours, list)

@@ -164,6 +164,21 @@ class PostgresHistoryAdapter(HistoryPort):
 		row = (await session.execute(stats_stmt)).one_or_none()
 		top_rows = (await session.execute(co_stmt)).all()
 
+		cutoff_hours = func.now() - timedelta(days=7)
+		hours_stmt = (
+			select(
+				func.extract("hour", func.timezone("Asia/Seoul", RankMatchSnapshotRow.created_dt)).cast(Integer).label("hour"),
+				func.count(func.distinct(func.cast(func.timezone("Asia/Seoul", RankMatchSnapshotRow.created_dt), DateTime))).label("day_count"),
+			)
+			.where(
+				or_(RankMatchSnapshotRow.user1_npid == npid, RankMatchSnapshotRow.user2_npid == npid),
+				RankMatchSnapshotRow.created_dt >= cutoff_hours,
+			)
+			.group_by("hour")
+		)
+		hours_result = await session.execute(hours_stmt)
+		active_hours = sorted(row.hour for row in hours_result if row.day_count >= 2)
+
 		return PlayerStats(
 			npid=npid,
 			days_active=row.days_active if row else 0,
@@ -175,6 +190,7 @@ class PostgresHistoryAdapter(HistoryPort):
 				CoPlayer(npid=r.npid, online_name=r.online_name, times_together=r.times_together)
 				for r in top_rows
 			],
+			active_hours=active_hours,
 		)
 
 	async def get_weekly_top_players(self, session: AsyncSession, limit: int = 10) -> list[TopPlayer]:
@@ -208,20 +224,3 @@ class PostgresHistoryAdapter(HistoryPort):
 			for row in result
 		]
 
-	async def get_player_hours(self, session: AsyncSession, npid: str, days: int = 7) -> list[int]:
-		cutoff = func.now() - timedelta(days=days)
-
-		stmt = (
-			select(
-				func.extract("hour", func.timezone("Asia/Seoul", RankMatchSnapshotRow.created_dt)).cast(Integer).label("hour"),
-				func.count(func.distinct(func.cast(func.timezone("Asia/Seoul", RankMatchSnapshotRow.created_dt), DateTime))).label("day_count"),
-			)
-			.where(
-				or_(RankMatchSnapshotRow.user1_npid == npid, RankMatchSnapshotRow.user2_npid == npid),
-				RankMatchSnapshotRow.created_dt >= cutoff,
-			)
-			.group_by("hour")
-		)
-
-		result = await session.execute(stmt)
-		return sorted(row.hour for row in result if row.day_count >= 2)

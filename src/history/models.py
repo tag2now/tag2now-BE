@@ -59,3 +59,4 @@ class PlayerStats:
 	last_seen: datetime | None
 	room_type_counts: dict[str, int] = field(default_factory=dict)
 	top_played_with: list[CoPlayer] = field(default_factory=list)
+	active_hours: list[int] = field(default_factory=list)

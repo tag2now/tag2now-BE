@@ -149,7 +149,7 @@ async def lookup_player(npid: str) -> PlayerLookupResponse:
 				break
 
 	# 3. Usual playing hours from history
-	usual_hours = await history_service.get_player_hours(npid)
+	usual_hours = player_stats.active_hours
 
 	return PlayerLookupResponse(
 		npid=npid,

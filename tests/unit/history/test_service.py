@@ -72,20 +72,3 @@ async def test_get_player_stats_cache_hit(mock_history_repo, monkeypatch):
     monkeypatch.setattr("history.service.cache_set", lambda key, value, ttl: None)
     result = await get_player_stats("p1")
     assert result == cached
-
-
-@pytest.mark.asyncio
-async def test_get_player_hours_cache_miss_and_hit(mock_history_repo, mock_session_factory, monkeypatch):
-    from history.service import get_player_hours
-
-    # Cache miss
-    monkeypatch.setattr("history.service.cache_get", lambda key: None)
-    monkeypatch.setattr("history.service.cache_set", lambda key, value, ttl: None)
-    mock_history_repo.get_player_hours.return_value = [14, 15, 16]
-    result = await get_player_hours("p1")
-    assert result == [14, 15, 16]
-
-    # Cache hit
-    monkeypatch.setattr("history.service.cache_get", lambda key: [20, 21])
-    result = await get_player_hours("p1")
-    assert result == [20, 21]
