@@ -3,12 +3,12 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import DateTime, Integer, delete, func, or_, select, text, union_all
+from sqlalchemy import DateTime, Integer, case, delete, func, or_, select, text, union_all
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from history.entities import HourlyStatsRow, RoomSnapshotRow, SnapshotMemberRow
-from history.models import CoPlayer, DailySummary, HourlyActivity, PlayerStats, RoomSnapshotRecord, TopPlayer
+from history.entities import HourlyStatsRow, RankMatchSnapshotRow
+from history.models import CoPlayer, DailySummary, HourlyActivity, PlayerStats, RankMatchSnapshotRecord, TopPlayer
 from history.ports import HistoryPort
 
 logger = logging.getLogger(__name__)
@@ -33,35 +33,31 @@ class PostgresHistoryAdapter(HistoryPort):
 
 	# -- Write ---------------------------------------------------------------
 
-	async def record_snapshot(self, session: AsyncSession, rooms: list[RoomSnapshotRecord]) -> None:
+	async def record_snapshot(self, session: AsyncSession, rooms: list[RankMatchSnapshotRecord]) -> None:
 		if not rooms:
 			return
 
-		total_players = sum(r.current_members for r in rooms)
-		total_rooms = len(rooms)
-
-		for room in rooms:
-			snapshot = RoomSnapshotRow(
+		stmt = pg_insert(RankMatchSnapshotRow).values([
+			dict(
 				room_id=room.room_id,
-				room_type=room.room_type,
-				owner_npid=room.owner_npid,
-				owner_online_name=room.owner_online_name,
-				current_members=room.current_members,
-				max_slots=room.max_slots,
-				is_matchmaking=room.is_matchmaking,
+				created_dt=room.created_dt,
+				rank_id=room.rank_id,
+				user1_npid=room.user1_npid,
+				user1_online_name=room.user1_online_name,
+				user2_npid=room.user2_npid,
+				user2_online_name=room.user2_online_name,
 			)
-			for npid, name in zip(room.member_npids, room.member_online_names):
-				snapshot.members.append(SnapshotMemberRow(npid=npid, online_name=name))
-			session.add(snapshot)
-
+			for room in rooms
+		]).on_conflict_do_nothing(index_elements=["room_id"])
+		await session.execute(stmt)
 		await session.flush()
 
 		# Upsert hourly stats
 		hour_key = _kst_hour_key()
 		stmt = pg_insert(HourlyStatsRow).values(
 			hour_key=hour_key,
-			total_players=total_players,
-			total_rooms=total_rooms,
+			total_players=len(rooms) * 2,
+			total_rooms=len(rooms),
 		)
 		stmt = stmt.on_conflict_do_update(
 			index_elements=["hour_key"],
@@ -130,64 +126,43 @@ class PostgresHistoryAdapter(HistoryPort):
 	async def get_player_stats(self, session: AsyncSession, npid: str, days: int = 30) -> PlayerStats:
 		cutoff = func.now() - timedelta(days=days)
 
-		# Build a subquery to find all snapshot IDs where the player appears
 		player_snapshots = (
-			select(RoomSnapshotRow.id, RoomSnapshotRow.captured_at, RoomSnapshotRow.room_type)
-			.outerjoin(SnapshotMemberRow, SnapshotMemberRow.snapshot_id == RoomSnapshotRow.id)
+			select(RankMatchSnapshotRow.room_id, RankMatchSnapshotRow.created_dt,
+				   RankMatchSnapshotRow.user1_npid, RankMatchSnapshotRow.user2_npid,
+				   RankMatchSnapshotRow.user1_online_name, RankMatchSnapshotRow.user2_online_name)
 			.where(
-				or_(RoomSnapshotRow.owner_npid == npid, SnapshotMemberRow.npid == npid),
-				RoomSnapshotRow.captured_at >= cutoff,
+				or_(RankMatchSnapshotRow.user1_npid == npid, RankMatchSnapshotRow.user2_npid == npid),
+				RankMatchSnapshotRow.created_dt >= cutoff,
 			)
 			.subquery()
 		)
 
 		stats_stmt = select(
-			func.count(func.distinct(func.cast(player_snapshots.c.captured_at, DateTime))).label("days_active"),
+			func.count(func.distinct(func.cast(player_snapshots.c.created_dt, DateTime))).label("days_active"),
 			func.count().label("times_seen"),
-			func.min(player_snapshots.c.captured_at).label("first_seen"),
-			func.max(player_snapshots.c.captured_at).label("last_seen"),
+			func.min(player_snapshots.c.created_dt).label("first_seen"),
+			func.max(player_snapshots.c.created_dt).label("last_seen"),
 		)
 
-		type_stmt = (
+		co_stmt = (
 			select(
-				player_snapshots.c.room_type,
-				func.count().label("cnt"),
-			)
-			.group_by(player_snapshots.c.room_type)
-		)
-
-		co_members_q = (
-			select(SnapshotMemberRow.npid, SnapshotMemberRow.online_name)
-			.where(
-				SnapshotMemberRow.snapshot_id.in_(select(player_snapshots.c.id)),
-				SnapshotMemberRow.npid != npid,
-			)
-		)
-		co_owners_q = (
-			select(
-				RoomSnapshotRow.owner_npid.label("npid"),
-				RoomSnapshotRow.owner_online_name.label("online_name"),
-			)
-			.where(
-				RoomSnapshotRow.id.in_(select(player_snapshots.c.id)),
-				RoomSnapshotRow.owner_npid != npid,
-			)
-		)
-		co_union = union_all(co_members_q, co_owners_q).subquery()
-		top_stmt = (
-			select(
-				co_union.c.npid,
-				co_union.c.online_name,
+				case(
+					(player_snapshots.c.user1_npid == npid, player_snapshots.c.user2_npid),
+					else_=player_snapshots.c.user1_npid,
+				).label("npid"),
+				case(
+					(player_snapshots.c.user1_npid == npid, player_snapshots.c.user2_online_name),
+					else_=player_snapshots.c.user1_online_name,
+				).label("online_name"),
 				func.count().label("times_together"),
 			)
-			.group_by(co_union.c.npid, co_union.c.online_name)
+			.group_by("npid","online_name")
 			.order_by(func.count().desc())
 			.limit(5)
 		)
 
 		row = (await session.execute(stats_stmt)).one_or_none()
-		type_rows = (await session.execute(type_stmt)).all()
-		top_rows = (await session.execute(top_stmt)).all()
+		top_rows = (await session.execute(co_stmt)).all()
 
 		return PlayerStats(
 			npid=npid,
@@ -195,7 +170,7 @@ class PostgresHistoryAdapter(HistoryPort):
 			times_seen=row.times_seen if row else 0,
 			first_seen=row.first_seen if row else None,
 			last_seen=row.last_seen if row else None,
-			room_type_counts={r.room_type: r.cnt for r in type_rows},
+			room_type_counts={},
 			top_played_with=[
 				CoPlayer(npid=r.npid, online_name=r.online_name, times_together=r.times_together)
 				for r in top_rows
@@ -205,19 +180,17 @@ class PostgresHistoryAdapter(HistoryPort):
 	async def get_weekly_top_players(self, session: AsyncSession, limit: int = 10) -> list[TopPlayer]:
 		cutoff = func.now() - timedelta(days=7)
 
-		owners_q = select(
-			RoomSnapshotRow.owner_npid.label("npid"),
-			RoomSnapshotRow.owner_online_name.label("online_name"),
-		).where(RoomSnapshotRow.captured_at >= cutoff)
+		user1_q = select(
+			RankMatchSnapshotRow.user1_npid.label("npid"),
+			RankMatchSnapshotRow.user1_online_name.label("online_name"),
+		).where(RankMatchSnapshotRow.created_dt >= cutoff)
 
-		members_q = select(
-			SnapshotMemberRow.npid,
-			SnapshotMemberRow.online_name,
-		).join(RoomSnapshotRow, RoomSnapshotRow.id == SnapshotMemberRow.snapshot_id).where(
-			RoomSnapshotRow.captured_at >= cutoff
-		)
+		user2_q = select(
+			RankMatchSnapshotRow.user2_npid.label("npid"),
+			RankMatchSnapshotRow.user2_online_name.label("online_name"),
+		).where(RankMatchSnapshotRow.created_dt >= cutoff)
 
-		sub = union_all(owners_q, members_q).subquery()
+		sub = union_all(user1_q, user2_q).subquery()
 		stmt = (
 			select(
 				sub.c.npid,
@@ -240,13 +213,12 @@ class PostgresHistoryAdapter(HistoryPort):
 
 		stmt = (
 			select(
-				func.extract("hour", func.timezone("Asia/Seoul", RoomSnapshotRow.captured_at)).cast(Integer).label("hour"),
-				func.count(func.distinct(func.cast(func.timezone("Asia/Seoul", RoomSnapshotRow.captured_at), DateTime))).label("day_count"),
+				func.extract("hour", func.timezone("Asia/Seoul", RankMatchSnapshotRow.created_dt)).cast(Integer).label("hour"),
+				func.count(func.distinct(func.cast(func.timezone("Asia/Seoul", RankMatchSnapshotRow.created_dt), DateTime))).label("day_count"),
 			)
-			.outerjoin(SnapshotMemberRow, SnapshotMemberRow.snapshot_id == RoomSnapshotRow.id)
 			.where(
-				or_(RoomSnapshotRow.owner_npid == npid, SnapshotMemberRow.npid == npid),
-				RoomSnapshotRow.captured_at >= cutoff,
+				or_(RankMatchSnapshotRow.user1_npid == npid, RankMatchSnapshotRow.user2_npid == npid),
+				RankMatchSnapshotRow.created_dt >= cutoff,
 			)
 			.group_by("hour")
 		)
