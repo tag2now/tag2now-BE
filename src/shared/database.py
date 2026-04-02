@@ -2,6 +2,7 @@
 
 import functools
 import logging
+from urllib.parse import quote
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -27,7 +28,7 @@ async def init_database() -> None:
 	db_user = settings.db_user
 	db_password = settings.db_password
 	db_name = settings.db_name
-	dsn = f"postgresql+asyncpg://{db_user}:{db_password}@{db_url}/{db_name}"
+	dsn = f"postgresql+asyncpg://{db_user}:{quote(db_password)}@{db_url}/{db_name}"
 
 	logger.info(
 		"Connecting to database at %s",
