@@ -2,30 +2,22 @@
 
 from datetime import datetime, timezone
 
-from history.models import DailySummary, HourlyActivity, PlayerStats, RoomSnapshotRecord
+from history.models import DailySummary, HourlyActivity, PlayerStats, RankMatchSnapshotRecord
 
 
-def test_room_snapshot_record_defaults():
-    record = RoomSnapshotRecord(
-        room_id=1, room_type="rank_match", owner_npid="p1",
-        owner_online_name="P1", current_members=1, max_slots=2,
-        is_matchmaking=False,
+def test_room_snapshot_record_fields():
+    now = datetime.now(timezone.utc)
+    record = RankMatchSnapshotRecord(
+        room_id=1, rank_id=10,
+        user1_npid="p1", user1_online_name="P1",
+        user2_npid="p2", user2_online_name="P2",
+        created_dt=now,
     )
-    assert record.member_npids == []
-    assert record.member_online_names == []
-
-
-def test_room_snapshot_record_with_members():
-    record = RoomSnapshotRecord(
-        room_id=1, room_type="player_match", owner_npid="p1",
-        owner_online_name="P1", current_members=2, max_slots=4,
-        is_matchmaking=False,
-        member_npids=["p1", "p2"],
-        member_online_names=["P1", "P2"],
-    )
-    assert record.member_npids == ["p1", "p2"]
-    assert record.member_online_names == ["P1", "P2"]
-    assert record.current_members == 2
+    assert record.room_id == 1
+    assert record.rank_id == 10
+    assert record.user1_npid == "p1"
+    assert record.user2_npid == "p2"
+    assert record.created_dt == now
 
 
 def test_hourly_activity_fields():

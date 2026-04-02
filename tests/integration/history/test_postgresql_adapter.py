@@ -7,9 +7,7 @@ Run with: pytest tests/integration/history/ -v
 import pytest
 import pytest_asyncio
 
-from sqlalchemy import text
-
-from history.models import RoomSnapshotRecord
+from history.models import RankMatchSnapshotRecord
 from shared.database import init_database, close_database, get_session_factory
 
 
@@ -19,15 +17,10 @@ async def db_session():
     await init_database()
     factory = get_session_factory()
 
-    # Truncate tables before the test transaction to clear leftover data
-    async with factory() as cleanup_session:
-        async with cleanup_session.begin():
-            await cleanup_session.execute(text("TRUNCATE room_snapshots, room_snapshot_members, hourly_stats RESTART IDENTITY CASCADE"))
-
     async with factory() as session:
-        async with session.begin():
-            yield session
-            await session.rollback()
+        transaction = await session.begin()
+        yield session
+        await transaction.rollback()
     await close_database()
 
 
@@ -38,29 +31,34 @@ def adapter():
 
 
 def _make_record(**overrides):
+    from datetime import datetime, timedelta, timezone
+    KST = timezone(timedelta(hours=9))
     defaults = dict(
-        room_id=100, room_type="rank_match", owner_npid="p1",
-        owner_online_name="P1", current_members=1, max_slots=2,
-        is_matchmaking=False, member_npids=["p1"], member_online_names=["P1"],
+        room_id=100, rank_id=10,
+        user1_npid="p1", user1_online_name="P1",
+        user2_npid="p2", user2_online_name="P2",
+        created_dt=datetime.now(KST),
     )
     defaults.update(overrides)
-    return RoomSnapshotRecord(**defaults)
+    return RankMatchSnapshotRecord(**defaults)
 
 
 @pytest.mark.asyncio
 async def test_record_snapshot_inserts_rows(adapter, db_session):
-    records = [_make_record(), _make_record(room_id=101, owner_npid="p2", owner_online_name="P2", member_npids=["p2"], member_online_names=["P2"])]
+    records = [_make_record(), _make_record(room_id=101, user1_npid="p3", user2_npid="p4")]
     await adapter.record_snapshot(db_session, records)
 
-    from history.entities import RoomSnapshotRow
+    from history.entities import RankMatchSnapshotRow
     from sqlalchemy import select
-    rows = (await db_session.execute(select(RoomSnapshotRow))).scalars().all()
+    rows = (await db_session.execute(
+        select(RankMatchSnapshotRow).where(RankMatchSnapshotRow.room_id.in_([100, 101]))
+    )).scalars().all()
     assert len(rows) == 2
 
 
 @pytest.mark.asyncio
 async def test_record_snapshot_upserts_hourly_stats(adapter, db_session):
-    records = [_make_record(current_members=3)]
+    records = [_make_record()]
     await adapter.record_snapshot(db_session, records)
     await adapter.record_snapshot(db_session, records)  # second call should upsert
 
@@ -88,7 +86,7 @@ async def test_get_hourly_activity_returns_24_hours(adapter, db_session):
 
 @pytest.mark.asyncio
 async def test_get_player_stats_and_hours(adapter, db_session):
-    records = [_make_record(owner_npid="test_player", member_npids=["test_player"], member_online_names=["TP"])]
+    records = [_make_record(user1_npid="test_player", user1_online_name="TP")]
     await adapter.record_snapshot(db_session, records)
 
     stats = await adapter.get_player_stats(db_session, "test_player", days=1)

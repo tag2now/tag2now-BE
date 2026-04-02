@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from history.models import RoomSnapshotRecord
+from history.models import RankMatchSnapshotRecord
 from history.ports import HistoryPort
 
 
@@ -51,18 +51,19 @@ def mock_cache(monkeypatch):
 
 @pytest.fixture
 def sample_snapshot_record():
+    from datetime import datetime, timedelta, timezone
+    KST = timezone(timedelta(hours=9))
+
     def _factory(**overrides):
         defaults = dict(
             room_id=100,
-            room_type="rank_match",
-            owner_npid="player1",
-            owner_online_name="Player1",
-            current_members=1,
-            max_slots=2,
-            is_matchmaking=False,
-            member_npids=["player1"],
-            member_online_names=["Player1"],
+            rank_id=10,
+            user1_npid="player1",
+            user1_online_name="Player1",
+            user2_npid="player2",
+            user2_online_name="Player2",
+            created_dt=datetime.now(KST),
         )
         defaults.update(overrides)
-        return RoomSnapshotRecord(**defaults)
+        return RankMatchSnapshotRecord(**defaults)
     return _factory
