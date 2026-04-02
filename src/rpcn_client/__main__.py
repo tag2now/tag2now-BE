@@ -21,7 +21,7 @@ def main():
 	info = client.login(args.user, args.password, args.token)
 	print(f"  online_name : {info.online_name}")
 	print(f"  avatar_url  : {info.avatar_url}")
-	print(f"  user_id     : {info.user_id}")
+	print(f"  user_id     : {info.npid}")
 
 	client.disconnect()
 	print("Done.")

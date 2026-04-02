@@ -16,10 +16,10 @@ def _format_epoch(epoch_us: int) -> str:
 class UserInfo:
 	online_name: str
 	avatar_url: str
-	user_id: int
+	npid: str
 
 	def __str__(self):
-		return f"online_name={self.online_name!r}, avatar_url={self.avatar_url!r}, user_id={self.user_id}"
+		return f"online_name={self.online_name!r}, avatar_url={self.avatar_url!r}, user_id={self.npid}"
 
 
 @dataclass
@@ -57,7 +57,7 @@ class RoomInfo:
 			int_attrs=[RoomAttr(id=a.id.value, value=a.num) for a in room.roomSearchableIntAttrExternal],
 			bin_search_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomSearchableBinAttrExternal],
 			bin_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomBinAttrExternal],
-			users=[UserInfo(user_id=ru.userInfo.npId,
+			users=[UserInfo(npid=ru.userInfo.npId,
 							online_name=ru.userInfo.onlineName,
 							avatar_url=ru.userInfo.avatarUrl)
 				   for ru in getattr(room, 'users', [])]

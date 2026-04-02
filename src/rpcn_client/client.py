@@ -127,9 +127,9 @@ class RpcnClient:
 		pos = 0
 		online_name, pos = _read_null_terminated_str(data, pos)
 		avatar_url, pos  = _read_null_terminated_str(data, pos)
-		(user_id,) = struct.unpack_from("<q", data, pos)
+		(npid,) = struct.unpack_from("<q", data, pos)
 		# The remainder is friend-list data which we don't need to parse here.
-		return UserInfo(online_name=online_name, avatar_url=avatar_url, user_id=user_id)
+		return UserInfo(online_name=online_name, avatar_url=avatar_url, npid=npid)
 
 	# ------------------------------------------------------------------
 	# Server / World list

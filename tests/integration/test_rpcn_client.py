@@ -39,7 +39,7 @@ def test_login_info(session):
         "online_name should be a non-empty string"
     assert isinstance(info.avatar_url, str), \
         "avatar_url should be a string"
-    assert isinstance(info.user_id, int), \
+    assert isinstance(info.npid, int), \
         "user_id should be an int"
 
 
