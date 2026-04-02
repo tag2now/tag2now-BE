@@ -1,44 +1,50 @@
 """Event handlers that connect the history module to domain events."""
 
 import logging
+from datetime import datetime, timedelta, timezone
 
-from history.models import RoomSnapshotRecord
+KST = timezone(timedelta(hours=9))
+
+from history.models import RankMatchSnapshotRecord
+from matching.models import RoomType
 from shared.events import subscribe
 
 logger = logging.getLogger(__name__)
 
+_prev_gaming_room_ids: set[int] = set()
 
-def _to_snapshot_record(room) -> RoomSnapshotRecord:
-	"""Convert a RoomInfoDTO to a RoomSnapshotRecord."""
-	member_npids = []
-	member_names = []
-	if room.owner_npid:
-		member_npids.append(room.owner_npid)
-		member_names.append(room.owner_online_name)
-	for user in room.users:
-		if hasattr(user, "npid") and user.npid != room.owner_npid:
-			member_npids.append(user.npid)
-			member_names.append(getattr(user, "online_name", ""))
-	return RoomSnapshotRecord(
+
+def _to_snapshot_record(room) -> RankMatchSnapshotRecord:
+	u1 = room.users[0] if len(room.users) > 0 else None
+	u2 = room.users[1] if len(room.users) > 1 else None
+	return RankMatchSnapshotRecord(
 		room_id=room.room_id,
-		room_type=room.room_type.value,
-		owner_npid=room.owner_npid,
-		owner_online_name=room.owner_online_name,
-		current_members=room.current_members,
-		max_slots=room.max_slots,
-		is_matchmaking=room.room_id == 0,
-		member_npids=member_npids,
-		member_online_names=member_names,
+		rank_id=room.rank_info.id,
+		user1_npid=u1.npid if u1 else "",
+		user1_online_name=u1.online_name if u1 else "",
+		user2_npid=u2.npid if u2 else "",
+		user2_online_name=u2.online_name if u2 else "",
+		created_dt=datetime.now(KST),
 	)
 
 
 async def _handle_activity_snapshot(event) -> None:
 	"""Handle ActivitySnapshot — convert room DTOs and persist."""
+	global _prev_gaming_room_ids
 	from history import service as history_service
 
+	gaming_rooms = {
+		r.room_id: r for r in event.rooms
+		if r.room_type == RoomType.RANK_MATCH and r.current_members == 2
+	}
+	new_rooms = [r for room_id, r in gaming_rooms.items() if room_id not in _prev_gaming_room_ids]
+	_prev_gaming_room_ids = set(gaming_rooms)
+
+	if not new_rooms:
+		return
+
 	try:
-		snapshots = [_to_snapshot_record(room) for room in event.rooms]
-		#todo only record gaming room and new room, not record duplicated room_id
+		snapshots = [_to_snapshot_record(room) for room in new_rooms]
 		await history_service.record_snapshot(snapshots)
 	except Exception:
 		logger.warning("Failed to record history snapshot", exc_info=True)
