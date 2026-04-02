@@ -78,6 +78,7 @@ def _fetch_rooms_all(com_id: str):
 	all_room_dtos = grouped[RoomType.PLAYER_MATCH.value] + grouped[RoomType.RANK_MATCH.value]
 	phantom_rooms = update_and_get_matchmaking(all_room_dtos)
 	grouped[RoomType.RANK_MATCH.value].extend(phantom_rooms)
+	grouped[RoomType.RANK_MATCH.value].sort(key=lambda r: r.rank_info.id)
 	return grouped, all_room_dtos
 
 
