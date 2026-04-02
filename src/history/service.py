@@ -9,7 +9,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from history.db import get_history_repo
-from history.models import DailySummary, HourlyActivity, PlayerStats, RoomSnapshotRecord, TopPlayer
+from history.models import DailySummary, HourlyActivity, PlayerStats, RankMatchSnapshotRecord, TopPlayer
 from shared.cache import cache_get, cache_set
 from shared.database import transactional, read_only
 from shared.settings import get_settings
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # -- Write -------------------------------------------------------------------
 
 @transactional
-async def record_snapshot(session: AsyncSession, rooms: list[RoomSnapshotRecord]) -> None:
+async def record_snapshot(session: AsyncSession, rooms: list[RankMatchSnapshotRecord]) -> None:
 	"""Persist a room snapshot (fire-and-forget safe)."""
 	await get_history_repo().record_snapshot(session, rooms)
 

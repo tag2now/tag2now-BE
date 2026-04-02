@@ -2,39 +2,22 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.database import Base
 
 
-class RoomSnapshotRow(Base):
-	__tablename__ = "room_snapshots"
+class RankMatchSnapshotRow(Base):
+	__tablename__ = "rank_match_snapshots"
 
-	id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-	captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
-	room_id: Mapped[int] = mapped_column(Integer, nullable=False)
-	room_type: Mapped[str] = mapped_column(String, nullable=False)
-	owner_npid: Mapped[str] = mapped_column(String, nullable=False)
-	owner_online_name: Mapped[str] = mapped_column(String, nullable=False)
-	current_members: Mapped[int] = mapped_column(Integer, nullable=False)
-	max_slots: Mapped[int] = mapped_column(Integer, nullable=False)
-	is_matchmaking: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
-
-	members: Mapped[list["SnapshotMemberRow"]] = relationship(
-		back_populates="snapshot", cascade="all, delete-orphan",
-	)
-
-
-class SnapshotMemberRow(Base):
-	__tablename__ = "room_snapshot_members"
-
-	id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-	snapshot_id: Mapped[int] = mapped_column(ForeignKey("room_snapshots.id", ondelete="CASCADE"), nullable=False, index=True)
-	npid: Mapped[str] = mapped_column(String, nullable=False, index=True)
-	online_name: Mapped[str] = mapped_column(String, nullable=False, server_default="")
-
-	snapshot: Mapped["RoomSnapshotRow"] = relationship(back_populates="members")
+	room_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+	created_dt: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+	rank_id: Mapped[int] = mapped_column(Integer, nullable=False)
+	user1_npid: Mapped[str] = mapped_column(String, nullable=False, index=True)
+	user1_online_name: Mapped[str] = mapped_column(String, nullable=False)
+	user2_npid: Mapped[str] = mapped_column(String, nullable=False, index=True)
+	user2_online_name: Mapped[str] = mapped_column(String, nullable=False)
 
 
 class HourlyStatsRow(Base):
