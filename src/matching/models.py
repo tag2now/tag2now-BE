@@ -187,7 +187,7 @@ class RoomInfoDTO:
 		obj.max_slots = 2
 		obj.room_type = room_type
 		obj.rank_info = rank_info
-		obj.users = []
+		obj.users = [UserInfo(npid=owner_npid, online_name=owner_online_name, avatar_url="")]
 		return obj
 
 @dataclass

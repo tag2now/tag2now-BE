@@ -16,8 +16,8 @@ def _to_snapshot_record(room) -> RoomSnapshotRecord:
 		member_npids.append(room.owner_npid)
 		member_names.append(room.owner_online_name)
 	for user in room.users:
-		if hasattr(user, "user_id") and user.user_id != room.owner_npid:
-			member_npids.append(user.user_id)
+		if hasattr(user, "npid") and user.npid != room.owner_npid:
+			member_npids.append(user.npid)
 			member_names.append(getattr(user, "online_name", ""))
 	return RoomSnapshotRecord(
 		room_id=room.room_id,
@@ -38,6 +38,7 @@ async def _handle_activity_snapshot(event) -> None:
 
 	try:
 		snapshots = [_to_snapshot_record(room) for room in event.rooms]
+		#todo only record gaming room and new room, not record duplicated room_id
 		await history_service.record_snapshot(snapshots)
 	except Exception:
 		logger.warning("Failed to record history snapshot", exc_info=True)

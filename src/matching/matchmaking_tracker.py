@@ -44,7 +44,7 @@ class _MatchmakingPlayer:
 
 
 _prev_rooms: dict[int, _SnapshotRoom] = {}
-_matchmaking_players: dict[str, _MatchmakingPlayer] = {}  # keyed by online_name
+_matchmaking_players: dict[str, _MatchmakingPlayer] = {}  # keyed by npid
 
 
 # ---------------------------------------------------------------------------
@@ -83,9 +83,9 @@ def update_and_get_matchmaking(current_rooms: list[RoomInfoDTO]) -> list[RoomInf
 			continue
 
 		for user in prev.users:
-			existing = _matchmaking_players.get(user.online_name)
-			_matchmaking_players[user.online_name] = _MatchmakingPlayer(
-				npid=user.online_name,
+			existing = _matchmaking_players.get(user.npid)
+			_matchmaking_players[user.npid] = _MatchmakingPlayer(
+				npid=user.npid,
 				online_name=user.online_name,
 				room_type=RoomType.RANK_MATCH,
 				rank_info=prev.rank_info,
@@ -93,31 +93,22 @@ def update_and_get_matchmaking(current_rooms: list[RoomInfoDTO]) -> list[RoomInf
 				first_searching=existing.first_searching if existing else now,
 			)
 			if not existing:
-				publish(MatchmakingDetected(
-					online_name=user.online_name,
-					room_type=RoomType.RANK_MATCH, timestamp=now,
-				))
+				publish(MatchmakingDetected(npid=user.npid, room_type=RoomType.RANK_MATCH, timestamp=now))
 
-	# Gaming rooms (2-member) — owner found an opponent
-	for room_id in curr_keys:
-		cur = current[room_id]
-		if cur.owner_online_name in _matchmaking_players and cur.is_gaming():
-			_matchmaking_players.pop(cur.owner_online_name)
-			publish(MatchmakingResolved(online_name=cur.owner_online_name, reason="found_opponent", timestamp=now))
-
-	# Players back in a non-gaming room are no longer matchmaking
-	active_online_names = {room.owner_online_name for room in current.values() if not room.is_gaming()}
-	for online_name in list(_matchmaking_players):
-		if online_name in active_online_names:
-			_matchmaking_players.pop(online_name)
-			publish(MatchmakingResolved(online_name=online_name, reason="rejoined_room", timestamp=now))
+	for room in current.values():
+		for user in room.users:
+			if user.npid in list(_matchmaking_players):
+				_matchmaking_players.pop(user.npid)
+				reason = "found_opponent" if room.is_gaming() else "rejoined_room"
+				publish(MatchmakingResolved(npid=user.npid, reason=reason, timestamp=now))
 
 	# Evict stale entries
 	ttl = get_settings().matchmaking_ttl
-	for online_name in list(_matchmaking_players):
-		if now - _matchmaking_players[online_name].last_seen > ttl:
-			del _matchmaking_players[online_name]
-			publish(MatchmakingResolved(online_name=online_name, reason="expired", timestamp=now))
+	for npid in list(_matchmaking_players):
+		mp = _matchmaking_players[npid]
+		if now - mp.last_seen > ttl:
+			del _matchmaking_players[npid]
+			publish(MatchmakingResolved(npid=npid, reason="expired", timestamp=now))
 
 	_prev_rooms = current
 
