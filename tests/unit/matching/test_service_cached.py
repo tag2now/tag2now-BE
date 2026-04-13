@@ -1,6 +1,6 @@
 """Tests for cached application services in matching.service."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -30,18 +30,6 @@ def test_get_server_world_tree_cache_hit(mock_game_repo, monkeypatch):
     result = get_server_world_tree("NPWR02973_00")
     assert result == cached
     mock_game_repo.get_server_world_tree.assert_not_called()
-
-
-def test_get_rooms_cache_miss(mock_cache, mock_game_repo, monkeypatch):
-    from matching.service import get_rooms
-    from matching.models import RoomInfoDTO
-    # Mock server_world_tree to avoid a second call
-    monkeypatch.setattr("matching.service.get_server_world_tree", lambda com_id: {"1": [10]})
-    room = RoomInfoDTO.phantom("p1", "P1", RoomType.RANK_MATCH, None)
-    mock_game_repo.search_rooms.return_value = [room]
-    result = get_rooms("NPWR02973_00")
-    assert "rank_match" in result
-    mock_game_repo.search_rooms.assert_called_once()
 
 
 @pytest.mark.asyncio

@@ -57,18 +57,6 @@ def _get_all_worlds(com_id: str) -> list[int]:
 	return [w for worlds in tree.values() for w in worlds]
 
 
-def get_rooms(com_id: str) -> dict:
-	"""Search active rooms, cached."""
-	key = f"ttt2:rooms:{com_id}"
-	if cached := cache_get(key):
-		return cached
-	repo = get_game_server_repo()
-	rooms = repo.search_rooms(com_id, _get_all_worlds(com_id))
-	result = jsonable_encoder(_group_rooms_by_type(rooms))
-	cache_set(key, result, get_settings().cache_ttl_rooms)
-	return result
-
-
 def _fetch_rooms_all(com_id: str):
 	"""Blocking: fetch all rooms and apply matchmaking detection."""
 	repo = get_game_server_repo()

@@ -18,7 +18,6 @@ from rpcn_client import SearchRoomsResult
 from matching import (
     TTT2_COM_ID,
     get_server_world_tree,
-    get_rooms,
     get_leaderboard,
 )
 from matching.db import init_game_repo, close_game_repo
@@ -58,17 +57,6 @@ def test_get_server_world_tree():
         assert all(isinstance(w, int) for w in worlds)
 
 
-def test_get_rooms():
-    """get_rooms returns rooms grouped by type."""
-    pytest.importorskip("rpcn_client.np2_structs_pb2")
-    results = get_rooms(COM_ID)
-    print(f"Returned rooms: {results}")
-    assert isinstance(results, dict)
-    for room_type, rooms in results.items():
-        assert isinstance(room_type, str)
-        assert isinstance(rooms, list)
-
-
 def test_search_rooms_all(session):
     """search_rooms_all returns all rooms including HIDDEN ones."""
     pytest.importorskip("rpcn_client.np2_structs_pb2")
@@ -87,6 +75,6 @@ def test_search_rooms_all(session):
 def test_get_leaderboard():
     """get_leaderboard returns parsed leaderboard dict."""
     pytest.importorskip("rpcn_client.np2_structs_pb2")
-    resp = get_leaderboard(COM_ID, BOARD_ID, 100)
+    resp = get_leaderboard(COM_ID, BOARD_ID, 200)
     print(f"Returned leaderboard: {resp}")
     assert isinstance(resp, dict)
