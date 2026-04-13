@@ -77,7 +77,7 @@ async def get_player_stats(npid: str, days: int = 30) -> PlayerStats:
 	key = f"history:player_stats:{npid}:{days}"
 	if cached := cache_get(key):
 		return cached
-	result = await _get_player_stats(npid, days)
+	result = await _get_player_stats(npid=npid, days=days)
 	cache_set(key, result, get_settings().cache_ttl_player_hours)
 	return result
 

@@ -158,7 +158,7 @@ class PostgresHistoryAdapter(HistoryPort):
 			)
 			.group_by("npid","online_name")
 			.order_by(func.count().desc())
-			.limit(5)
+			.limit(4)
 		)
 
 		row = (await session.execute(stats_stmt)).one_or_none()
