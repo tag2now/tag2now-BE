@@ -10,19 +10,19 @@ import pytest
 from rpcn_client import RpcnClient
 
 # Env defaults for local / CI integration testing
-os.environ.setdefault("RPCN_USER", "test")
-os.environ.setdefault("RPCN_PASSWORD", "test")
-os.environ.setdefault("RPCN_TOKEN", "test")
-os.environ.setdefault("RPCN_HOST", "localhost")
-os.environ.setdefault("RPCN_PORT", "31313")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("DB_URL", "localhost:5432")
-
-HOST = os.environ.get("RPCN_HOST", "rpcn.mynarco.xyz")
-PORT = int(os.environ.get("RPCN_PORT", "31313"))
-USER = os.environ.get("RPCN_USER", "doStudyForAPI")
-PASSWORD = os.environ.get("RPCN_PASSWORD", "")
-TOKEN = os.environ.get("RPCN_TOKEN", "")
+# os.environ.setdefault("RPCN_USER", "test")
+# os.environ.setdefault("RPCN_PASSWORD", "test")
+# os.environ.setdefault("RPCN_TOKEN", "test")
+# os.environ.setdefault("RPCN_HOST", "localhost")
+# os.environ.setdefault("RPCN_PORT", "31313")
+# os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+# os.environ.setdefault("DB_URL", "localhost:5432")
+#
+# HOST = os.environ.get("RPCN_HOST", "rpcn.mynarco.xyz")
+# PORT = int(os.environ.get("RPCN_PORT", "31313"))
+# USER = os.environ.get("RPCN_USER", "doStudyForAPI")
+# PASSWORD = os.environ.get("RPCN_PASSWORD", "")
+# TOKEN = os.environ.get("RPCN_TOKEN", "")
 
 
 @pytest.fixture(scope="session")
