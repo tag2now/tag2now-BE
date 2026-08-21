@@ -1,291 +1,192 @@
-# AWS Infrastructure Setup for TTT2 EKS Deployment
+# AWS Infrastructure for tag2now
 
-This guide covers the one-time AWS infrastructure provisioning needed before deploying the K8s manifests.
+Current production setup and the one-time AWS provisioning behind it.
 
-## Prerequisites
+## Architecture
 
-- AWS CLI v2 configured for `ap-northeast-2`
-- `eksctl`, `kubectl`, `helm`, Docker installed locally
+```
+Route 53 (tag2now.click)
+    │
+    ├── CloudFront ──────► Lightsail :80  (static assets only)
+    │                          nginx serves /dist
+    │
+    └── (direct) ────────► Lightsail :8000  (/api, not via CloudFront)
 
-## Step 1: Create ECR Repositories
-
-Two repos needed (backend + frontend):
-
-```bash
-aws ecr create-repository --repository-name ttt2-backend --region ap-northeast-2
-aws ecr create-repository --repository-name ttt2-frontend --region ap-northeast-2
+Lightsail single instance — docker compose
+    ├── fe    (nginx + built SPA)
+    ├── be    (FastAPI)
+    ├── redis
+    ├── postgres
+    └── dynamodb-local
 ```
 
-After creation, note the registry URI (e.g. `123456789.dkr.ecr.ap-northeast-2.amazonaws.com`) and update:
-- `k8s/backend/deployment.yaml` — replace `<account-id>` and `<region>` in the image field
-- `k8s/frontend/deployment.yaml` — same
+Only static assets go through CloudFront. `/api/` calls reach the instance
+directly, so they never appear in CloudFront logs — which is exactly what makes
+the access logs usable as a page-load counter (see [Analytics](#analytics)).
 
-## Step 2: Create EKS Cluster
+## Deployment
+
+**Images** are built and pushed to ECR by GitHub Actions
+(`.github/workflows/deploy.yml`, triggered on `v*` tags):
+
+| Repo | ECR repository |
+|------|----------------|
+| tag2now-BE | `tag2-now/be` |
+| tag2now-FE | `tag2-now/fe` |
+
+**Release to the instance is manual.** SSH into Lightsail and run, from the
+directory holding the instance's own `compose.yml` and `.env.prod`:
 
 ```bash
-eksctl create cluster \
-  --name ttt2-cluster \
+aws ecr get-login-password --region ap-northeast-2 \
+  | docker login --username AWS --password-stdin 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com
+docker compose pull
+docker compose up -d
+```
+
+> **Known issue — `deploy.yml` targets ECS.**
+> The `deploy` job in both repos calls `amazon-ecs-render-task-definition` /
+> `amazon-ecs-deploy-task-definition` against `vars.ECS_CLUSTER` etc. There is no
+> ECS cluster; that job cannot succeed. Only the `build` job (ECR push) is
+> meaningful today. Converting the deploy job to an SSH-based Lightsail release
+> is pending.
+
+## Secrets
+
+RPCN credentials live in **`.env.prod` on the instance** — not in Secrets
+Manager, not in the repo. The instance runs its own `compose.yml` (not the one
+in this repo, which is for local development) and pulls the file in via
+`env_file`:
+
+```yaml
+services:
+  be:
+    env_file:
+      - .env.prod
+```
+
+So a plain `docker compose up -d` picks the credentials up; no `--env-file`
+flag is needed.
+
+Required keys: `RPCN_USER`, `RPCN_PASSWORD` (see the module docstring in
+`src/app.py` for the full list).
+
+## Analytics
+
+Two independent sources. Both are effectively free; they cover each other's
+blind spots.
+
+| Source | Counts | Blind spot |
+|--------|--------|------------|
+| GA4 | real user sessions | ad blockers drop ~10–30% |
+| CloudFront logs | every page load | includes bots |
+
+### GA4
+
+Measurement ID `G-S4Y67MPNPR`, embedded in `tag2now-FE/index.html`. Device
+category (mobile/desktop/tablet) and OS (Android/iOS/Windows/macOS) are
+collected automatically by Enhanced Measurement — no per-event code.
+
+Reports → Tech → Tech details. Date range is freely selectable.
+
+Note: the SPA has no router, so GA4 records one `page_view` per load. Tab
+switches are not tracked.
+
+### CloudFront access logs → S3 → Athena
+
+One-time setup:
+
+```bash
+# 1. Log bucket (ACLs required — CloudFront standard logging writes via ACL)
+aws s3api create-bucket \
+  --bucket tag2now-cf-logs \
   --region ap-northeast-2 \
-  --version 1.29 \
-  --nodegroup-name ttt2-nodes \
-  --node-type t3.small \
-  --nodes 2 \
-  --managed
+  --create-bucket-configuration LocationConstraint=ap-northeast-2
+
+aws s3api put-bucket-ownership-controls \
+  --bucket tag2now-cf-logs \
+  --ownership-controls 'Rules=[{ObjectOwnership=BucketOwnerPreferred}]'
+
+# 2. Expire logs after 90 days
+aws s3api put-bucket-lifecycle-configuration \
+  --bucket tag2now-cf-logs \
+  --lifecycle-configuration '{
+    "Rules": [{
+      "ID": "expire-90d",
+      "Status": "Enabled",
+      "Filter": {"Prefix": "cf/"},
+      "Expiration": {"Days": 90}
+    }]
+  }'
 ```
 
-Takes ~15 minutes. Creates the VPC, subnets, and node group automatically.
+Then enable **standard logging** on the CloudFront distribution (console:
+Distribution → Settings → Edit → Standard logging → on), pointing at
+`tag2now-cf-logs` with prefix `cf/`.
 
-## Step 3: Enable IRSA (IAM Roles for Service Accounts)
+Create the Athena table once:
 
-Required by both the ALB Controller and External Secrets Operator:
-
-```bash
-eksctl utils associate-iam-oidc-provider \
-  --cluster ttt2-cluster \
-  --region ap-northeast-2 \
-  --approve
+```sql
+CREATE EXTERNAL TABLE IF NOT EXISTS cf_logs (
+  `date` DATE, time STRING, x_edge_location STRING, sc_bytes BIGINT,
+  c_ip STRING, cs_method STRING, cs_host STRING, cs_uri_stem STRING,
+  sc_status INT, cs_referer STRING, cs_user_agent STRING, cs_uri_query STRING,
+  cs_cookie STRING, x_edge_result_type STRING, x_edge_request_id STRING,
+  x_host_header STRING, cs_protocol STRING, cs_bytes BIGINT, time_taken FLOAT,
+  x_forwarded_for STRING, ssl_protocol STRING, ssl_cipher STRING,
+  x_edge_response_result_type STRING, cs_protocol_version STRING,
+  fle_status STRING, fle_encrypted_fields INT, c_port INT,
+  time_to_first_byte FLOAT, x_edge_detailed_result_type STRING,
+  sc_content_type STRING, sc_content_len BIGINT,
+  sc_range_start BIGINT, sc_range_end BIGINT
+)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t'
+LOCATION 's3://tag2now-cf-logs/cf/'
+TBLPROPERTIES ('skip.header.line.count'='2');
 ```
 
-## Step 4: Create ElastiCache Redis
+Platform breakdown over any period (Athena has no 30-day query limit):
 
-```bash
-# Get EKS VPC and private subnets
-VPC_ID=$(aws eks describe-cluster --name ttt2-cluster --region ap-northeast-2 \
-  --query 'cluster.resourcesVpcConfig.vpcId' --output text)
-
-PRIVATE_SUBNETS=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" \
-  "Name=tag:aws:cloudformation:logical-id,Values=SubnetPrivate*" \
-  --query 'Subnets[].SubnetId' --output text)
-
-# Create subnet group
-aws elasticache create-cache-subnet-group \
-  --cache-subnet-group-name ttt2-redis-subnets \
-  --cache-subnet-group-description "TTT2 Redis subnets" \
-  --subnet-ids $PRIVATE_SUBNETS \
-  --region ap-northeast-2
-
-# Get EKS cluster security group
-SG_ID=$(aws eks describe-cluster --name ttt2-cluster --region ap-northeast-2 \
-  --query 'cluster.resourcesVpcConfig.clusterSecurityGroupId' --output text)
-
-# Create Redis cluster
-aws elasticache create-cache-cluster \
-  --cache-cluster-id ttt2-redis \
-  --cache-node-type cache.t3.micro \
-  --engine redis \
-  --num-cache-nodes 1 \
-  --cache-subnet-group-name ttt2-redis-subnets \
-  --security-group-ids $SG_ID \
-  --region ap-northeast-2
+```sql
+SELECT
+  CASE
+    WHEN cs_user_agent LIKE '%Android%' THEN 'Android'
+    WHEN REGEXP_LIKE(cs_user_agent, 'iPhone|iPad|iPod') THEN 'iOS'
+    WHEN cs_user_agent LIKE '%Windows%' THEN 'Windows'
+    WHEN cs_user_agent LIKE '%Mac OS X%' THEN 'macOS'
+    WHEN cs_user_agent LIKE '%Linux%' THEN 'Linux'
+    ELSE 'Other'
+  END AS os,
+  COUNT(DISTINCT c_ip) AS unique_visitors,
+  COUNT(*)             AS page_loads
+FROM cf_logs
+WHERE "date" BETWEEN DATE '2026-06-01' AND DATE '2026-08-31'
+  AND cs_uri_stem IN ('/', '/index.html')
+GROUP BY 1
+ORDER BY 2 DESC;
 ```
 
-After creation, get the endpoint and update `k8s/configmap.yaml` (`REDIS_URL`):
+Two details make this number trustworthy:
 
-```bash
-aws elasticache describe-cache-clusters --cache-cluster-id ttt2-redis \
-  --show-cache-node-info --query 'CacheClusters[0].CacheNodes[0].Endpoint' \
-  --region ap-northeast-2
-```
+- **`cs_uri_stem IN ('/', '/index.html')`** — the rooms tab polls `/api/rooms/all`
+  every 10 s (`useRooms.ts`), so counting requests would massively over-weight
+  long-lived desktop sessions. Filtering to page loads sidesteps that entirely.
+- **`COUNT(DISTINCT c_ip)`** — visitors, not hits.
 
-## Step 5: Create Secrets Manager Secret
+Bots are not excluded; add a `cs_user_agent NOT LIKE '%bot%'` filter if the
+numbers look inflated.
 
-```bash
-aws secretsmanager create-secret \
-  --name rpcn-client/credentials \
-  --secret-string '{"RPCN_USER":"YOUR_USER","RPCN_PASSWORD":"YOUR_PASS"}' \
-  --region ap-northeast-2
-```
+### Cost
 
-## Step 6: Install AWS Load Balancer Controller
+| Item | ~Monthly |
+|------|----------|
+| GA4 | $0 |
+| CloudFront standard logging | $0 (feature is free) |
+| S3 storage (~0.5 GB, 90-day expiry) | ~$0.013 |
+| Athena (~1 query/month) | ~$0.003 |
+| **Total** | **< $0.02** |
 
-```bash
-# Download IAM policy
-curl -o alb-policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.7.1/docs/install/iam_policy.json
-
-# Create IAM policy
-aws iam create-policy \
-  --policy-name AWSLoadBalancerControllerIAMPolicy \
-  --policy-document file://alb-policy.json
-
-# Create IRSA service account
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-eksctl create iamserviceaccount \
-  --cluster ttt2-cluster \
-  --namespace kube-system \
-  --name aws-load-balancer-controller \
-  --attach-policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/AWSLoadBalancerControllerIAMPolicy \
-  --approve \
-  --region ap-northeast-2
-
-# Install via Helm
-helm repo add eks https://aws.github.io/eks-charts
-helm repo update
-helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
-  -n kube-system \
-  --set clusterName=ttt2-cluster \
-  --set serviceAccount.create=false \
-  --set serviceAccount.name=aws-load-balancer-controller
-```
-
-## Step 7: Install External Secrets Operator
-
-```bash
-# Create IAM policy for Secrets Manager read access
-cat > eso-policy.json << 'POLICY'
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "secretsmanager:GetSecretValue",
-        "secretsmanager:DescribeSecret"
-      ],
-      "Resource": "arn:aws:secretsmanager:ap-northeast-2:*:secret:rpcn-client/*"
-    }
-  ]
-}
-POLICY
-
-aws iam create-policy \
-  --policy-name ExternalSecretsPolicy \
-  --policy-document file://eso-policy.json
-
-# Create IRSA service account (matches cluster-secret-store.yaml)
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-eksctl create iamserviceaccount \
-  --cluster ttt2-cluster \
-  --namespace external-secrets \
-  --name external-secrets-sa \
-  --attach-policy-arn arn:aws:iam::${ACCOUNT_ID}:policy/ExternalSecretsPolicy \
-  --approve \
-  --region ap-northeast-2
-
-# Install via Helm
-helm repo add external-secrets https://charts.external-secrets.io
-helm repo update
-helm install external-secrets external-secrets/external-secrets \
-  -n external-secrets \
-  --create-namespace \
-  --set serviceAccount.create=false \
-  --set serviceAccount.name=external-secrets-sa
-```
-
-## Step 8: Setup GitHub OIDC for CI/CD
-
-```bash
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-
-# Create OIDC identity provider for GitHub Actions
-aws iam create-open-id-connect-provider \
-  --url https://token.actions.githubusercontent.com \
-  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1 \
-  --client-id-list sts.amazonaws.com
-
-# Create IAM role with trust policy for your repo
-cat > gh-trust-policy.json << POLICY
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Federated": "arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
-      },
-      "Action": "sts:AssumeRoleWithWebIdentity",
-      "Condition": {
-        "StringEquals": {
-          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
-        },
-        "StringLike": {
-          "token.actions.githubusercontent.com:sub": "repo:YOUR_ORG/rpcn-client:ref:refs/heads/master"
-        }
-      }
-    }
-  ]
-}
-POLICY
-
-aws iam create-role \
-  --role-name GitHubActions-TTT2-Deploy \
-  --assume-role-policy-document file://gh-trust-policy.json
-
-# Attach permissions: ECR push + EKS access
-aws iam attach-role-policy --role-name GitHubActions-TTT2-Deploy \
-  --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser
-aws iam attach-role-policy --role-name GitHubActions-TTT2-Deploy \
-  --policy-arn arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
-```
-
-Then add the role ARN as a GitHub repository secret:
-- **Name:** `AWS_ROLE_ARN`
-- **Value:** `arn:aws:iam::<ACCOUNT_ID>:role/GitHubActions-TTT2-Deploy`
-
-> Replace `YOUR_ORG/rpcn-client` in the trust policy with your actual GitHub repo path.
-
-## Step 9: Build & Push Initial Image
-
-```bash
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-REGISTRY=${ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com
-
-aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin $REGISTRY
-
-docker build -t $REGISTRY/ttt2-backend:latest .
-docker push $REGISTRY/ttt2-backend:latest
-```
-
-## Step 10: Deploy K8s Manifests
-
-Apply in this order:
-
-```bash
-kubectl apply -f k8s/cluster-secret-store.yaml
-kubectl apply -f k8s/external-secret.yaml
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/backend/deployment.yaml
-kubectl apply -f k8s/backend/service.yaml
-kubectl apply -f k8s/frontend/deployment.yaml
-kubectl apply -f k8s/frontend/service.yaml
-kubectl apply -f k8s/ingress.yaml
-```
-
-## Verification
-
-```bash
-# Check pods are running
-kubectl get pods
-
-# Check external secret synced
-kubectl get externalsecret rpcn-credentials
-kubectl get secret rpcn-credentials
-
-# Check ingress got an ALB address
-kubectl get ingress ttt2-ingress
-
-# Test backend health
-ALB=$(kubectl get ingress ttt2-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-curl http://$ALB/api/health
-```
-
-## Cost Estimate (ap-northeast-2)
-
-| Resource | Type | ~Monthly Cost |
-|----------|------|--------------|
-| EKS control plane | — | $73 |
-| EC2 nodes (2x t3.small) | On-demand | ~$38 |
-| ElastiCache | cache.t3.micro | ~$13 |
-| ALB | — | ~$18 + traffic |
-| ECR | Storage | < $1 |
-| Secrets Manager | 1 secret | < $1 |
-| **Total** | | **~$143/mo** |
-
-## Placeholders to Fill After Provisioning
-
-| File | Placeholder | Replaced With |
-|------|------------|---------------|
-| `k8s/backend/deployment.yaml` | `<account-id>`, `<region>` | ECR registry URI (Step 1) |
-| `k8s/frontend/deployment.yaml` | `<account-id>`, `<region>` | ECR registry URI (Step 1) |
-| `k8s/configmap.yaml` | `<elasticache-endpoint>` | Redis endpoint (Step 4) |
-| GitHub Secret `AWS_ROLE_ARN` | — | IAM role ARN (Step 8) |
-| Step 8 trust policy | `YOUR_ORG/rpcn-client` | Actual GitHub repo path |
+CloudWatch custom metrics were considered and rejected: ~$0.30 per
+metric-dimension combination per month (~$4 here), with cardinality risk as
+dimensions grow, in exchange for real-time dashboards that platform stats do not
+need.
