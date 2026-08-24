@@ -1,0 +1,74 @@
+"""Reservation use cases depend only on repository, clock, and credentials ports."""
+
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
+from shared.security.credentials import CredentialManager, TokenCredentialManager, hash_credential
+from reservation.domain import MatchType, Reservation
+from reservation.exceptions import ReservationStateError
+from reservation.ports import Clock, ReservationRepository
+
+KST = ZoneInfo("Asia/Seoul")
+_repo: ReservationRepository | None = None
+class SystemClock(Clock):
+    def now(self) -> datetime:
+        from datetime import timezone
+        return datetime.now(timezone.utc)
+
+
+_clock: Clock = SystemClock()
+_credentials: CredentialManager = TokenCredentialManager()
+
+
+def configure(repository: ReservationRepository, clock: Clock | None = None, credentials: CredentialManager | None = None) -> None:
+    global _repo, _clock, _credentials
+    _repo = repository
+    if clock is not None: _clock = clock
+    if credentials is not None: _credentials = credentials
+
+
+def _repository() -> ReservationRepository:
+    if _repo is None: raise RuntimeError("Reservation repository not initialized")
+    return _repo
+
+
+def _validate_conditions(match_type: MatchType, ranks: list[str], capacity: int) -> None:
+    if match_type is MatchType.RANK and not ranks:
+        raise ReservationStateError("Rank matches require at least one rank")
+    if match_type is MatchType.RANK and capacity != 1:
+        raise ReservationStateError("Rank matches have a capacity of one")
+    if match_type is MatchType.PLAYER and ranks:
+        raise ReservationStateError("Player matches do not use ranks")
+
+
+async def list_reservations(day: date) -> list[Reservation]:
+    return await _repository().list_for_date(day)
+
+
+async def create_reservation(*, start_time: time, duration_minutes: int, display_name: str, ranks: list[str], match_type: MatchType, capacity: int, memo: str) -> tuple[Reservation, str]:
+    _validate_conditions(match_type, ranks, capacity)
+    now = _clock.now()
+    start_at = datetime.combine(now.astimezone(KST).date(), start_time, tzinfo=KST).astimezone(now.tzinfo)
+    if start_at < now + timedelta(minutes=10):
+        raise ReservationStateError("Start time must be at least 10 minutes from now")
+    token, token_hash = _credentials.issue()
+    reservation = await _repository().create(start_at=start_at, duration_minutes=duration_minutes, host_display_name=display_name.strip(), host_ranks=ranks, match_type=match_type, capacity=capacity, memo=memo.strip(), host_token_hash=token_hash)
+    return reservation, token
+
+
+async def get_reservation(reservation_id: int) -> Reservation:
+    return await _repository().get(reservation_id)
+
+
+async def join_reservation(reservation_id: int, *, display_name: str, ranks: list[str]) -> tuple[Reservation, str]:
+    token, token_hash = _credentials.issue()
+    reservation, _ = await _repository().join(reservation_id, display_name=display_name.strip(), ranks=ranks, participant_token_hash=token_hash, now=_clock.now())
+    return reservation, token
+
+
+async def cancel_participation(reservation_id: int, token: str) -> Reservation:
+    return await _repository().cancel_participation(reservation_id, hash_credential(token), _clock.now())
+
+
+async def cancel_reservation(reservation_id: int, token: str) -> None:
+    await _repository().cancel(reservation_id, hash_credential(token), _clock.now())

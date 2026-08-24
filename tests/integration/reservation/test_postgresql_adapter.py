@@ -1,0 +1,68 @@
+"""PostgreSQL reservation tests. Requires the test compose stack to be running."""
+
+import asyncio
+from datetime import datetime, timedelta, timezone
+
+import pytest
+import pytest_asyncio
+
+from reservation.domain import MatchType, ReservationStatus
+from reservation.exceptions import ReservationStateError
+
+
+@pytest_asyncio.fixture
+async def repository():
+    from reservation.adapters.postgresql import PostgresReservationRepository
+    from shared.settings import get_settings
+
+    repo = PostgresReservationRepository(get_settings().db_url)
+    await repo.init()
+    await repo._db.execute("TRUNCATE reservation_participants, reservations RESTART IDENTITY CASCADE")
+    yield repo
+    await repo._db.execute("TRUNCATE reservation_participants, reservations RESTART IDENTITY CASCADE")
+    await repo.close()
+
+
+async def _create_open_reservation(repo, capacity: int = 1):
+    return await repo.create(
+        start_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        duration_minutes=60,
+        host_display_name="Host",
+        host_ranks=["Brawler"],
+        match_type=MatchType.RANK if capacity == 1 else MatchType.PLAYER,
+        capacity=capacity,
+        memo="",
+        host_token_hash="owner",
+    )
+
+
+@pytest.mark.asyncio
+async def test_concurrent_join_never_exceeds_capacity(repository):
+    reservation = await _create_open_reservation(repository)
+    now = datetime.now(timezone.utc)
+
+    async def join(token):
+        return await repository.join(reservation.id, display_name=token, ranks=[], participant_token_hash=token, now=now)
+
+    outcomes = await asyncio.gather(join("participant-a"), join("participant-b"), return_exceptions=True)
+
+    successes = [outcome for outcome in outcomes if not isinstance(outcome, Exception)]
+    failures = [outcome for outcome in outcomes if isinstance(outcome, Exception)]
+    assert len(successes) == 1
+    assert len(failures) == 1
+    assert isinstance(failures[0], ReservationStateError)
+    current = await repository.get(reservation.id)
+    assert current.participant_count == 1
+    assert current.status is ReservationStatus.MATCHED
+
+
+@pytest.mark.asyncio
+async def test_participant_cancellation_reopens_a_matched_reservation(repository):
+    reservation = await _create_open_reservation(repository)
+    now = datetime.now(timezone.utc)
+    await repository.join(reservation.id, display_name="Joiner", ranks=[], participant_token_hash="participant", now=now)
+
+    reopened = await repository.cancel_participation(reservation.id, "participant", now)
+
+    assert reopened.status is ReservationStatus.OPEN
+    assert reopened.participant_count == 0

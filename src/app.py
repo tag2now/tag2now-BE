@@ -28,6 +28,8 @@ from matching.router import router as ttt2_router
 from matching.db import init_game_repo, close_game_repo
 from community import init_db, close_db
 from community.router import router as community_router
+from reservation.db import init_db as init_reservation_db, close_db as close_reservation_db
+from reservation.router import router as reservation_router
 from shared.settings import get_settings
 
 logging.basicConfig(
@@ -48,11 +50,13 @@ except Exception:
 async def lifespan(app: FastAPI):
     await init_database()
     await init_db()
+    await init_reservation_db()
     await init_history_repo()
     await init_game_repo()
     yield
     await close_game_repo()
     await close_history_repo()
+    await close_reservation_db()
     await close_db()
     await close_database()
 
@@ -73,6 +77,7 @@ app.add_middleware(
 app.include_router(ttt2_router)
 app.include_router(history_router)
 app.include_router(community_router, prefix="/community", tags=["community"])
+app.include_router(reservation_router)
 
 
 @app.exception_handler(NotFoundError)
