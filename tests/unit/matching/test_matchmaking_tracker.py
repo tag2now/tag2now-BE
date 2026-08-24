@@ -3,6 +3,8 @@
 import time
 from types import SimpleNamespace
 
+from rpcn_client import UserInfo
+
 import pytest
 
 from matching.events import MatchmakingDetected, MatchmakingResolved
@@ -10,15 +12,15 @@ from matching.matchmaking_tracker import update_and_get_matchmaking
 from matching.models import Rank, RoomInfoDTO, RoomType
 
 
-def _make_user(name):
-    return SimpleNamespace(online_name=name)
+def _make_user(name, npid=None):
+    return UserInfo(npid=npid or name, online_name=name, avatar_url="")
 
 
 def _make_room(room_id, npid, name=None, members=1, room_type_val=1, users=None):
     """Create a RoomInfoDTO. name defaults to npid. users defaults to [owner]."""
     name = name or npid
     if users is None:
-        users = [_make_user(name)]
+        users = [_make_user(name, npid)]
     ri = SimpleNamespace(
         room_id=room_id, owner_npid=npid, owner_online_name=name,
         current_members=members, max_slots=4,
@@ -41,7 +43,7 @@ def test_disappearing_solo_rank_room_starts_matchmaking(mock_settings, mock_publ
     assert "p1" in matchmaking_names
     detected = [e for e in mock_publish if isinstance(e, MatchmakingDetected)]
     assert len(detected) == 1
-    assert detected[0].online_name == "p1"
+    assert detected[0].npid == "p1"
 
 
 def test_disappearing_2member_rank_room_starts_matchmaking(mock_settings, mock_publish):

@@ -25,9 +25,11 @@ def client():
     """Create a TestClient backed by the configured DB backend and Redis."""
     from fastapi.testclient import TestClient
     from app import app
+    from shared.cache import cache_delete_pattern
     from shared.settings import get_settings
 
     settings = get_settings()
+    cache_delete_pattern("community:*")
 
     with TestClient(app) as tc:
         yield tc
@@ -35,3 +37,4 @@ def client():
     # Clean up after the app pool is closed
     if settings.db_type == "postgresql":
         _truncate_postgresql(settings.db_url)
+    cache_delete_pattern("community:*")

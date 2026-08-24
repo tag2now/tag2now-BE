@@ -37,7 +37,8 @@ async def test_get_rooms_all_publishes_activity_snapshot(mock_cache, mock_game_r
     from matching.service import get_rooms_all
     from matching.models import RoomInfoDTO
     monkeypatch.setattr("matching.service.get_server_world_tree", lambda com_id: {"1": [10]})
-    room = RoomInfoDTO.phantom("p1", "P1", RoomType.RANK_MATCH, None)
+    from matching.models import Rank
+    room = RoomInfoDTO.phantom("p1", "P1", RoomType.RANK_MATCH, Rank(id=1))
     mock_game_repo.search_rooms_all.return_value = [room]
 
     published = []
@@ -69,7 +70,6 @@ async def test_lookup_player_aggregates_sources(mock_cache, monkeypatch):
     # Mock history service
     mock_stats = PlayerStats(npid="p1", days_active=5, times_seen=20, first_seen=None, last_seen=None)
     monkeypatch.setattr("history.service.get_player_stats", AsyncMock(return_value=mock_stats))
-    monkeypatch.setattr("history.service.get_player_hours", AsyncMock(return_value=[14, 15]))
 
     # No cached rooms
     monkeypatch.setattr("matching.service.cache_get", lambda key: None)
@@ -77,5 +77,5 @@ async def test_lookup_player_aggregates_sources(mock_cache, monkeypatch):
 
     result = await lookup_player("p1")
     assert result.npid == "p1"
-    assert result.usual_playing_hours_kst == [14, 15]
+    assert result.usual_playing_hours_kst == []
     assert result.online_status.is_online is False

@@ -8,6 +8,14 @@ import os
 
 import pytest
 from rpcn_client import RpcnClient
+from shared.settings import get_settings
+
+_settings = get_settings()
+HOST = _settings.rpcn_host
+PORT = _settings.rpcn_port
+USER = _settings.rpcn_user
+PASSWORD = _settings.rpcn_password
+TOKEN = _settings.rpcn_token
 
 # Env defaults for local / CI integration testing
 # os.environ.setdefault("RPCN_USER", "test")
@@ -18,13 +26,6 @@ from rpcn_client import RpcnClient
 # os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 # os.environ.setdefault("DB_URL", "localhost:5432")
 #
-# HOST = os.environ.get("RPCN_HOST", "rpcn.mynarco.xyz")
-# PORT = int(os.environ.get("RPCN_PORT", "31313"))
-# USER = os.environ.get("RPCN_USER", "doStudyForAPI")
-# PASSWORD = os.environ.get("RPCN_PASSWORD", "")
-# TOKEN = os.environ.get("RPCN_TOKEN", "")
-
-
 @pytest.fixture(scope="session")
 def session():
     c = RpcnClient(HOST, PORT)

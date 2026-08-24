@@ -85,7 +85,8 @@ def test_room_info_dto_phantom():
     assert room.owner_npid == "p1"
     assert room.room_type == RoomType.RANK_MATCH
     assert room.rank_info.name == "Berserker"
-    assert room.users == []
+    assert room.users[0].npid == "p1"
+    assert room.users[0].online_name == "P1"
 
 
 def test_player_online_status_defaults():

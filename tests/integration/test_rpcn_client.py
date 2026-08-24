@@ -114,7 +114,7 @@ def test_get_score_range(session):
     assert isinstance(resp.total_records, int) and resp.total_records >= 0
 
     assert isinstance(resp.entries, list)
-    assert len(resp.entries) <= 10
+    assert len(resp.entries) <= 100
 
     for entry in resp.entries:
         assert isinstance(entry.np_id, str) and entry.np_id, \

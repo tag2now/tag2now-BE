@@ -21,6 +21,7 @@ from matching import (
     get_leaderboard,
 )
 from matching.db import init_game_repo, close_game_repo
+from matching.rpcn_lifecycle import api_client, shutdown_client
 
 # ---------------------------------------------------------------------------
 # Game-specific constants
@@ -40,6 +41,7 @@ def _init_repo():
     asyncio.run(init_game_repo())
     yield
     asyncio.run(close_game_repo())
+    shutdown_client()
 
 
 # ---------------------------------------------------------------------------
@@ -57,19 +59,19 @@ def test_get_server_world_tree():
         assert all(isinstance(w, int) for w in worlds)
 
 
-def test_search_rooms_all(session):
+def test_search_rooms_all():
     """search_rooms_all returns all rooms including HIDDEN ones."""
     pytest.importorskip("rpcn_client.np2_structs_pb2")
-    client = session["client"]
     tree = get_server_world_tree(COM_ID)
     all_worlds = [w for worlds in tree.values() for w in worlds]
-    for world_id in all_worlds:
-        resp = client.search_rooms_all(COM_ID, world_id=world_id)
-        print(f"SearchRoomAll world {world_id}: total={resp.total}, rooms={len(resp.rooms)}")
-        assert isinstance(resp, SearchRoomsResult)
-        assert resp.total >= 0
-        for room in resp.rooms:
-            assert room.room_id > 0
+    with api_client() as client:
+        for world_id in all_worlds:
+            resp = client.search_rooms_all(COM_ID, world_id=world_id)
+            print(f"SearchRoomAll world {world_id}: total={resp.total}, rooms={len(resp.rooms)}")
+            assert isinstance(resp, SearchRoomsResult)
+            assert resp.total >= 0
+            for room in resp.rooms:
+                assert room.room_id > 0
 
 
 def test_get_leaderboard():
