@@ -16,7 +16,7 @@ def _create_repo() -> CommunityRepository:
 
     if db_type == "postgresql":
         from community.adapters.postgresql import PostgresCommunityRepository
-        return PostgresCommunityRepository(dsn=settings.db_url)
+        return PostgresCommunityRepository()
 
     if db_type == "dynamodb":
         from community.adapters.dynamodb import DynamoCommunityRepository

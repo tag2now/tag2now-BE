@@ -19,13 +19,9 @@ class Base(DeclarativeBase):
 
 
 async def init_database() -> None:
-	"""Create the async engine, session factory, and all tables."""
+	"""Create the async engine and session factory for an Alembic-managed schema."""
 	global _engine, _session_factory
 	from shared.settings import get_settings
-	# Register every ORM model before metadata is used by migrations or tests.
-	import community.entities  # noqa: F401
-	import history.entities  # noqa: F401
-	import reservation.entities  # noqa: F401
 
 	settings = get_settings()
 	db_url = settings.db_url
@@ -43,9 +39,6 @@ async def init_database() -> None:
 	)
 	_engine = create_async_engine(dsn, pool_size=10, max_overflow=5)
 	_session_factory = async_sessionmaker(_engine, expire_on_commit=False)
-
-	async with _engine.begin() as conn:
-		await conn.run_sync(Base.metadata.create_all)
 
 	logger.info("Database ready")
 

@@ -30,6 +30,25 @@ python -m venv .venv
 
 ## TTT2 API server
 
+### Database migrations
+
+PostgreSQL schema changes are managed exclusively by Alembic; application
+startup does not create tables. Run migrations before starting the API.
+
+```bash
+# New database
+DATABASE_URL=postgresql://user:password@host:5432/tag2now \
+  .venv/Scripts/python.exe -m alembic upgrade head
+
+# Existing database that already matches the baseline schema (run once)
+DATABASE_URL=postgresql://user:password@host:5432/tag2now \
+  .venv/Scripts/python.exe -m alembic stamp head
+```
+
+Use `stamp` only after confirming the existing schema matches the baseline;
+it records the revision without applying DDL. Verify later changes with
+`python -m alembic check`.
+
 ### Requirements
 
 - Redis (for caching)

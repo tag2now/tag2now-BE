@@ -41,8 +41,20 @@ directory holding the instance's own `compose.yml` and `.env.prod`:
 aws ecr get-login-password --region ap-northeast-2 \
   | docker login --username AWS --password-stdin 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com
 docker compose pull
+docker compose run --rm be python -m alembic upgrade head
 docker compose up -d
 ```
+
+For the first release after Alembic adoption, an already-provisioned database
+must be recorded at the baseline instead of recreated:
+
+```bash
+docker compose run --rm be python -m alembic stamp head
+```
+
+Run `stamp` exactly once, only after confirming the existing schema matches
+the baseline migration. All later releases use `upgrade head` before starting
+the new application container.
 
 > **Known issue — `deploy.yml` targets ECS.**
 > The `deploy` job in both repos calls `amazon-ecs-render-task-definition` /
