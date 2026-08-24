@@ -5,22 +5,28 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 import pytest_asyncio
+from sqlalchemy import delete
 
 from reservation.domain import MatchType, ReservationStatus
+from reservation.entities import Reservation as ReservationRow
+from reservation.entities import ReservationParticipant as ReservationParticipantRow
 from reservation.exceptions import ReservationStateError
+from shared.database import close_database, get_session_factory, init_database
 
 
 @pytest_asyncio.fixture
 async def repository():
     from reservation.adapters.postgresql import PostgresReservationRepository
-    from shared.settings import get_settings
 
-    repo = PostgresReservationRepository(get_settings().db_url)
+    await init_database()
+    repo = PostgresReservationRepository()
     await repo.init()
-    await repo._db.execute("TRUNCATE reservation_participants, reservations RESTART IDENTITY CASCADE")
+    async with get_session_factory()() as session, session.begin():
+        await session.execute(delete(ReservationParticipantRow))
+        await session.execute(delete(ReservationRow))
     yield repo
-    await repo._db.execute("TRUNCATE reservation_participants, reservations RESTART IDENTITY CASCADE")
     await repo.close()
+    await close_database()
 
 
 async def _create_open_reservation(repo, capacity: int = 1):
