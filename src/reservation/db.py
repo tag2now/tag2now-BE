@@ -9,7 +9,10 @@ async def init_db() -> None:
     global _repo
     settings = get_settings()
     if settings.db_type != "postgresql": raise ValueError("Reservations require PostgreSQL")
-    _repo = PostgresReservationRepository(settings.db_url)
+    dsn = settings.db_url
+    if not dsn.startswith("postgresql://"):
+        dsn = f"postgresql://{settings.db_user}:{settings.db_password}@{settings.db_url}/{settings.db_name}"
+    _repo = PostgresReservationRepository(dsn)
     await _repo.init()
     service.configure(_repo)
 

@@ -25,10 +25,13 @@ async def init_database() -> None:
 
 	settings = get_settings()
 	db_url = settings.db_url
-	db_user = settings.db_user
-	db_password = settings.db_password
-	db_name = settings.db_name
-	dsn = f"postgresql+asyncpg://{db_user}:{quote(db_password)}@{db_url}/{db_name}"
+	if db_url.startswith("postgresql://"):
+		dsn = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+	else:
+		db_user = settings.db_user
+		db_password = settings.db_password
+		db_name = settings.db_name
+		dsn = f"postgresql+asyncpg://{db_user}:{quote(db_password)}@{db_url}/{db_name}"
 
 	logger.info(
 		"Connecting to database at %s",
