@@ -12,3 +12,5 @@ aioboto3>=12.0
 pydantic
 pytest-asyncio
 tzdata>=2024.1
+alembic>=1.13
+psycopg[binary]>=3.2

@@ -22,6 +22,10 @@ async def init_database() -> None:
 	"""Create the async engine, session factory, and all tables."""
 	global _engine, _session_factory
 	from shared.settings import get_settings
+	# Register every ORM model before metadata is used by migrations or tests.
+	import community.entities  # noqa: F401
+	import history.entities  # noqa: F401
+	import reservation.entities  # noqa: F401
 
 	settings = get_settings()
 	db_url = settings.db_url
