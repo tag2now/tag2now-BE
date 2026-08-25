@@ -6,7 +6,10 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from reservation.domain import MatchType, Participant, Reservation, ReservationStatus
+from reservation.domain import (
+    LIVE_STATUSES, MatchType, Participant, Reservation, ReservationStatus,
+    ensure_joinable, ensure_participation_cancellable, status_for,
+)
 from reservation.entities import Reservation as ReservationRow
 from reservation.entities import ReservationParticipant as ReservationParticipantRow
 from reservation.exceptions import ReservationAccessError, ReservationNotFoundError, ReservationStateError
@@ -105,23 +108,20 @@ class PostgresReservationRepository(ReservationRepository):
             row = await session.scalar(select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update())
             if row is None:
                 raise ReservationNotFoundError("Reservation not found")
-            if row.status != "open" or row.start_at <= now:
-                raise ReservationStateError("Reservation is not open for joining")
             count = await session.scalar(
                 select(func.count()).select_from(ReservationParticipantRow).where(
                     ReservationParticipantRow.reservation_id == reservation_id,
                     ReservationParticipantRow.cancelled_at.is_(None),
                 )
             )
-            if count >= row.capacity:
-                raise ReservationStateError("Reservation is full")
+            ensure_joinable(ReservationStatus(row.status), row.start_at, count, row.capacity, now)
             participant = ReservationParticipantRow(
                 reservation_id=reservation_id, display_name=display_name, ranks=ranks,
                 participant_token_hash=participant_token_hash,
             )
             session.add(participant)
             count += 1
-            row.status = "matched" if count == row.capacity else "open"
+            row.status = status_for(count, row.capacity).value
             row.updated_at = now
             await session.flush()
             await session.refresh(participant)
@@ -136,8 +136,7 @@ class PostgresReservationRepository(ReservationRepository):
             row = await session.scalar(select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update())
             if row is None:
                 raise ReservationNotFoundError("Reservation not found")
-            if row.start_at <= now:
-                raise ReservationStateError("Reservation has started")
+            ensure_participation_cancellable(ReservationStatus(row.status), row.start_at, now)
             participant = await session.scalar(
                 select(ReservationParticipantRow).where(
                     ReservationParticipantRow.reservation_id == reservation_id,
@@ -148,13 +147,14 @@ class PostgresReservationRepository(ReservationRepository):
             if participant is None:
                 raise ReservationAccessError("Active participation not found")
             participant.cancelled_at = now
-            row.status, row.updated_at = "open", now
+            await session.flush()
             count = await session.scalar(
                 select(func.count()).select_from(ReservationParticipantRow).where(
                     ReservationParticipantRow.reservation_id == reservation_id,
                     ReservationParticipantRow.cancelled_at.is_(None),
                 )
             )
+            row.status, row.updated_at = status_for(count, row.capacity).value, now
             return _reservation(row, count)
 
     async def cancel(self, reservation_id: int, host_token_hash: str, now: datetime) -> None:
@@ -162,6 +162,6 @@ class PostgresReservationRepository(ReservationRepository):
             row = await session.scalar(select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update())
             if row is None:
                 raise ReservationNotFoundError("Reservation not found")
-            if row.host_token_hash != host_token_hash or row.status not in ("open", "matched") or row.start_at <= now:
+            if row.host_token_hash != host_token_hash or row.status not in LIVE_STATUSES or row.start_at <= now:
                 raise ReservationAccessError("Reservation cannot be cancelled with this credential")
             row.status, row.cancelled_at, row.updated_at = "cancelled", now, now

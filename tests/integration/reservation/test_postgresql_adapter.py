@@ -72,3 +72,17 @@ async def test_participant_cancellation_reopens_a_matched_reservation(repository
 
     assert reopened.status is ReservationStatus.OPEN
     assert reopened.participant_count == 0
+
+
+@pytest.mark.asyncio
+async def test_participant_cancellation_does_not_revive_a_cancelled_reservation(repository):
+    reservation = await _create_open_reservation(repository)
+    now = datetime.now(timezone.utc)
+    await repository.join(reservation.id, display_name="Joiner", ranks=[], participant_token_hash="participant", now=now)
+    await repository.cancel(reservation.id, "owner", now)
+
+    with pytest.raises(ReservationStateError):
+        await repository.cancel_participation(reservation.id, "participant", now)
+
+    current = await repository.get(reservation.id)
+    assert current.status is ReservationStatus.CANCELLED
