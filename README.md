@@ -2,20 +2,29 @@
 
 A Python client for [RPCN](https://github.com/RPCS3/rpcn), the PSN-compatible multiplayer server used by the [RPCS3](https://rpcs3.net) emulator.
 
-Implements the RPCN binary protocol over TLS to query server/world lists, active rooms, and leaderboards. Includes a FastAPI application that exposes Tekken Tag Tournament 2 RPCN data as a REST API.
+Implements the RPCN binary protocol over TLS to query server/world lists, active rooms, and leaderboards. Includes a FastAPI application that exposes Tekken Tag Tournament 2 RPCN data as a REST API, along with player history, a community board, and match reservations.
 
 ## Structure
 
 ```
-src/rpcn_client/       # Core library — RPCN TCP transport
-src/tekken_tt2/        # TTT2 REST API server (FastAPI + Redis cache)
-  app.py               # FastAPI endpoints
-  data.py              # TTT2 character ID → name table
-  __main__.py          # python -m tekken_tt2 entry point
+src/
+  app.py               # FastAPI app — mounts all routers, exception handlers, lifespan
+  __main__.py          # `python -m src` entry point (uvicorn launcher)
+  rpcn_client/         # Core library — RPCN TLS transport and protocol
+  matching/            # Live RPCN data: servers, rooms, leaderboard, player lookup
+  history/             # Player activity statistics and match history
+  community/           # Community board (PostgreSQL or DynamoDB backed)
+  reservation/         # Match reservations
+  shared/              # Settings, Redis cache, SQLAlchemy engine, events, exceptions
+alembic/               # PostgreSQL migrations
+env/                   # Per-profile .env files (see Configuration)
 tests/
-  test_rpcn_client.py  # Integration tests for the core client
-  test_tekken_tt2.py   # Integration tests for TTT2 query functions
+  unit/
+  integration/
 ```
+
+Each domain package follows the same hexagonal layout: `router.py` (HTTP) →
+`service.py` (logic) → `ports.py` (interfaces) → `adapters/` (implementations).
 
 ## Setup
 
@@ -28,12 +37,172 @@ python -m venv .venv
 .venv/Scripts/python.exe -m grpc_tools.protoc -I. --python_out=src/rpcn_client np2_structs.proto
 ```
 
-## TTT2 API server
+The editable install (`pip install -e .`) is what puts `src/` on `sys.path` —
+without it the server cannot be started by module name. See [Running](#running).
+
+`src/rpcn_client/np2_structs_pb2.py` is gitignored — regenerate it after every
+clean checkout.
+
+## Configuration
+
+### Choosing an env file
+
+Settings are loaded by `pydantic-settings` in [`src/shared/settings.py`](src/shared/settings.py).
+The **`FAST_API_PROFILE`** environment variable selects which file under `env/`
+is loaded:
+
+```
+env/.env             loaded first, if present  (not in the repo — create it for local overrides)
+env/.env.$PROFILE    loaded second, overrides the above
+```
+
+`FAST_API_PROFILE` defaults to **`local`** when unset.
+
+| `FAST_API_PROFILE` | File | Used by |
+|--------------------|------|---------|
+| `local` *(default)* | `env/.env.local` | Local development. Gitignored — create it yourself. |
+| `dev` | `env/.env.dev` | `compose.yml`, which sets `FAST_API_PROFILE: dev` |
+| `prod` | `env/.env.prod` | Lightsail production instance |
+
+Precedence is the usual pydantic-settings order — **real environment variables
+beat both files**, and `.env.$PROFILE` beats `.env`. This is how `compose.yml`
+supplies `DB_URL` and the DynamoDB settings on top of `.env.dev`.
+
+To start with a different profile:
+
+```bash
+FAST_API_PROFILE=dev .venv/Scripts/python.exe -m src --reload
+```
+
+A missing env file is not an error — pydantic-settings skips it silently. If
+`RPCN_USER`, `RPCN_PASSWORD`, `RPCN_TOKEN`, or `REDIS_URL` end up unset from
+every source, startup fails with a pydantic `ValidationError`, because those
+fields have no defaults.
+
+> **Note:** `env/.env.dev` and `env/.env.prod` deliberately omit the RPCN
+> credentials. They are supplied as real environment variables on the instance
+> (from its own `.env.prod`), never committed. `env/.env.example` shows the full
+> set of keys. Loading either profile without those variables set raises
+> `ValidationError: rpcn_user / rpcn_password / rpcn_token — Field required`.
+
+`REDIS_URL` must be a real URL with a `redis://`, `rediss://`, or `unix://`
+scheme. An empty value fails at import time with
+`ValueError: Redis URL must specify one of the following schemes` — before
+FastAPI even starts.
+
+### Environment variables
+
+**RPCN** — `RPCN_USER`, `RPCN_PASSWORD`, and `RPCN_TOKEN` are required and have no defaults.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FAST_API_PROFILE` | `local` | Selects `env/.env.$PROFILE` |
+| `RPCN_USER` | *(required)* | RPCN username |
+| `RPCN_PASSWORD` | *(required)* | RPCN password |
+| `RPCN_TOKEN` | *(required)* | RPCN token |
+| `RPCN_HOST` | `rpcn.mynarco.xyz` | RPCN server host |
+| `RPCN_PORT` | `31313` | RPCN server port |
+| `RPCN_METRIC_ENABLE` | `false` | Enable RPCN client metrics collection |
+
+**Cache** — Redis is mandatory; the app calls `os._exit(1)` at import time if it is unreachable.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `REDIS_URL` | *(required)* | Redis connection URL |
+| `CACHE_TTL_SERVERS` | `3600` | Server list cache TTL (seconds) |
+| `CACHE_TTL_LEADERBOARD` | `60` | Leaderboard cache TTL |
+| `CACHE_TTL_ROOMS` | `10` | Rooms cache TTL |
+| `CACHE_TTL_ROOMS_ALL` | `10` | `/rooms/all` cache TTL |
+| `CACHE_TTL_COMMUNITY` | `30` | Community board cache TTL |
+| `CACHE_TTL_ACTIVITY` | `300` | Activity statistics cache TTL |
+| `CACHE_TTL_PLAYER_HOURS` | `300` | Per-player hourly stats cache TTL |
+| `MATCHMAKING_TTL` | `60` | Matchmaking tracker entry TTL |
+
+**Database** — `DB_URL` is read two different ways. If it starts with `postgresql://`
+it is used as a complete DSN and `DB_USER`/`DB_PASSWORD`/`DB_NAME` are ignored;
+otherwise it is treated as a bare `host:port` and the DSN is assembled from the
+other three (see [`shared/database.py`](src/shared/database.py)).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_URL` | `postgresql://localhost:5432/tag2now` | Full DSN, or bare `host:port` |
+| `DB_NAME` | `tag2now` | Database name (bare-host form only) |
+| `DB_USER` | `postgres` | Database user (bare-host form only) |
+| `DB_PASSWORD` | `postgres` | Database password (bare-host form only) |
+| `DB_TYPE` | `postgresql` | Community board backend: `postgresql` or `dynamodb` |
+| `DYNAMODB_REGION` | `ap-northeast-2` | DynamoDB region (`DB_TYPE=dynamodb`) |
+| `DYNAMODB_TABLE_NAME` | `tag2now-community` | DynamoDB table |
+| `DYNAMODB_ENDPOINT_URL` | *(none)* | Override for DynamoDB Local |
+| `AWS_ACCESS_KEY_ID` | *(none)* | AWS credentials for DynamoDB |
+| `AWS_SECRET_ACCESS_KEY` | *(none)* | AWS credentials for DynamoDB |
+
+**HTTP**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CORS_ORIGINS` | `["*"]` | Allowed CORS origins (JSON list) |
+
+`DB_TYPE` selects the community backend only. History and reservations always
+use PostgreSQL, so a working `DB_URL` is required regardless.
+
+## Running
+
+### With docker compose (recommended)
+
+Brings up the backend, frontend, Redis, PostgreSQL, and DynamoDB Local. Runs
+with `FAST_API_PROFILE=dev`.
+
+```bash
+docker compose up
+```
+
+### Locally
+
+Requires Redis and PostgreSQL. The minimum is Redis:
+
+```bash
+docker run -d -p 6379:6379 redis
+```
+
+Run migrations first (see below), then start the server:
+
+```bash
+.venv/Scripts/python.exe -m uvicorn app:app --reload
+```
+
+Equivalently, `python -m src` takes `--host` (default `0.0.0.0`), `--port`
+(default `8000`), and `--reload`, and wraps the same uvicorn call.
+
+Interactive docs at `http://localhost:8000/docs`.
+
+Both commands rely on `pip install -e .` from [Setup](#setup). The editable
+install drops a `.pth` file pointing at `src/`, which puts every application
+module — including the non-package `app.py` — on `sys.path`. Without the
+editable install, pass `--app-dir src` to supply that path manually:
+
+```bash
+.venv/Scripts/python.exe -m uvicorn app:app --app-dir src --reload
+```
+
+This is what the Docker image does: it runs `pip install .` (non-editable), so
+no `.pth` is created and `app.py` is not part of the installed distribution.
+
+`zoneinfo` needs the IANA database for the `Asia/Seoul` timezone used by the
+history module. It is present on most Linux images but not on Windows — install
+`tzdata` there, or startup fails with `ZoneInfoNotFoundError`.
+
+> **Known-broken entry point.** The `tekken-tt2` console script in
+> `pyproject.toml` points at `matching.__main__:main`, but `src/matching/__main__.py`
+> does not exist; running it fails with
+> `ModuleNotFoundError: No module named 'matching.__main__'`.
 
 ### Database migrations
 
 PostgreSQL schema changes are managed exclusively by Alembic; application
 startup does not create tables. Run migrations before starting the API.
+
+Alembic reads **`DATABASE_URL`** — a separate variable from the application's
+`DB_URL`, and it is not read from the `env/` files.
 
 ```bash
 # New database
@@ -49,53 +218,61 @@ Use `stamp` only after confirming the existing schema matches the baseline;
 it records the revision without applying DDL. Verify later changes with
 `python -m alembic check`.
 
-### Requirements
+## Endpoints
 
-- Redis (for caching)
-
-```bash
-docker run -d -p 6379:6379 redis
-```
-
-### Run
-
-```bash
-RPCN_USER=you RPCN_PASSWORD=secret RPCN_TOKEN=yourtoken \
-  .venv/Scripts/python.exe -m tekken_tt2 --reload
-```
-
-### Endpoints
+### Matching — live RPCN data
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/servers` | Server and world hierarchy |
-| GET | `/rooms` | Active rooms across all worlds |
 | GET | `/rooms/all` | All rooms including hidden ones |
 | GET | `/leaderboard` | Top N leaderboard entries with character info |
+| GET | `/players/{npid}` | Player lookup by NPID |
 
-Interactive docs available at `http://localhost:8000/docs`.
+### History & statistics
 
-### Environment variables
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/history/stats` | Hourly player activity (KST) |
+| GET | `/history/stats/daily` | Daily summary |
+| GET | `/history/stats/weekly-top` | Weekly top players |
+| GET | `/history/players/{npid}` | Per-player history |
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RPCN_USER` | *(required)* | RPCN username |
-| `RPCN_PASSWORD` | *(required)* | RPCN password |
-| `RPCN_TOKEN` | `""` | RPCN token |
-| `RPCN_HOST` | `np.rpcs3.net` | RPCN server host |
-| `RPCN_PORT` | `31313` | RPCN server port |
-| `REDIS_URL` | `redis://localhost:6379` | Redis connection URL |
-| `CACHE_TTL_SERVERS` | `3600` | Server list cache TTL (seconds) |
-| `CACHE_TTL_ROOMS` | `60` | Rooms cache TTL (seconds) |
-| `CACHE_TTL_ROOMS_ALL` | `60` | Rooms/all cache TTL (seconds) |
-| `CACHE_TTL_LEADERBOARD` | `300` | Leaderboard cache TTL (seconds) |
+### Community board
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/community/identity` | Set the caller's identity cookie |
+| GET | `/community/posts` | List posts |
+| POST | `/community/posts` | Create a post |
+| GET | `/community/posts/{post_id}` | Post detail with comments |
+| DELETE | `/community/posts/{post_id}` | Delete a post |
+| POST | `/community/posts/{post_id}/comments` | Add a comment |
+| POST | `/community/posts/{post_id}/thumb` | Thumb a post up or down |
+
+### Reservations
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/reservations?date=` | Reservations for a date |
+| POST | `/reservations` | Create a reservation |
+| GET | `/reservations/{id}` | Reservation detail |
+| POST | `/reservations/{id}/participants` | Join a reservation |
+| DELETE | `/reservations/{id}/participants/me` | Leave (requires `X-Reservation-Token`) |
+| DELETE | `/reservations/{id}` | Cancel (requires `X-Reservation-Token`) |
+
+### Health
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Liveness probe (hidden from the schema) |
 
 ## Library usage
 
 ```python
 from rpcn_client import RpcnClient
 
-with RpcnClient(host="np.rpcs3.net", port=31313) as client:
+with RpcnClient(host="rpcn.mynarco.xyz", port=31313) as client:
     client.connect()
     client.login("username", "password")
 
@@ -105,13 +282,24 @@ with RpcnClient(host="np.rpcs3.net", port=31313) as client:
     scores  = client.get_score_range("NPWR02973_00", board_id=0, num_ranks=10)
 ```
 
-## Tests
-
-Tests connect to a live RPCN server. Edit the credentials at the top of each test file before running.
+A standalone smoke test against a live server:
 
 ```bash
+.venv/Scripts/python.exe -m rpcn_client --user you --password secret --token yourtoken
+```
+
+## Tests
+
+`tests/unit/` runs without external services. `tests/integration/` needs
+PostgreSQL and Redis — `compose.test.yml` provides both:
+
+```bash
+docker compose -f compose.test.yml up -d
 .venv/Scripts/python.exe -m pytest tests/ -v
 ```
+
+Some integration tests connect to a live RPCN server and need valid credentials
+in the environment.
 
 ## Protocol
 
