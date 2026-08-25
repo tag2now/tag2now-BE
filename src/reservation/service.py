@@ -4,7 +4,7 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from shared.security.credentials import CredentialManager, TokenCredentialManager, hash_credential
-from reservation.domain import MatchType, Reservation
+from reservation.domain import MatchType, Reservation, ensure_conditions_valid
 from reservation.exceptions import ReservationStateError
 from reservation.ports import Clock, ReservationRepository
 
@@ -32,21 +32,12 @@ def _repository() -> ReservationRepository:
     return _repo
 
 
-def _validate_conditions(match_type: MatchType, ranks: list[str], capacity: int) -> None:
-    if match_type is MatchType.RANK and not ranks:
-        raise ReservationStateError("Rank matches require at least one rank")
-    if match_type is MatchType.RANK and capacity != 1:
-        raise ReservationStateError("Rank matches have a capacity of one")
-    if match_type is MatchType.PLAYER and ranks:
-        raise ReservationStateError("Player matches do not use ranks")
-
-
 async def list_reservations(day: date) -> list[Reservation]:
     return await _repository().list_for_date(day)
 
 
 async def create_reservation(*, start_time: time, duration_minutes: int, display_name: str, ranks: list[str], match_type: MatchType, capacity: int, memo: str) -> tuple[Reservation, str]:
-    _validate_conditions(match_type, ranks, capacity)
+    ensure_conditions_valid(match_type, ranks, capacity)
     now = _clock.now()
     start_at = datetime.combine(now.astimezone(KST).date(), start_time, tzinfo=KST).astimezone(now.tzinfo)
     if start_at < now + timedelta(minutes=10):

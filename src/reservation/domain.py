@@ -46,6 +46,17 @@ class Participant:
 LIVE_STATUSES = (ReservationStatus.OPEN, ReservationStatus.MATCHED)
 
 
+def ensure_conditions_valid(match_type: MatchType, ranks: list[str], capacity: int) -> None:
+    """Rank matches are one-on-one and rank-scoped; player matches are neither."""
+    if match_type is MatchType.RANK:
+        if not ranks:
+            raise ReservationStateError("Rank matches require at least one rank")
+        if capacity != 1:
+            raise ReservationStateError("Rank matches have a capacity of one")
+    elif ranks:
+        raise ReservationStateError("Player matches do not use ranks")
+
+
 def status_for(participant_count: int, capacity: int) -> ReservationStatus:
     """A live reservation is matched once its participants fill the capacity."""
     return ReservationStatus.MATCHED if participant_count >= capacity else ReservationStatus.OPEN
