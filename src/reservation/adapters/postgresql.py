@@ -59,6 +59,37 @@ class PostgresReservationRepository(ReservationRepository):
         )
 
     @staticmethod
+    def _finished(now: datetime):
+        """Rows whose start plus duration has already passed."""
+        elapsed = ReservationRow.start_at + func.make_interval(0, 0, 0, 0, 0, ReservationRow.duration_minutes)
+        return (ReservationRow.status.in_(LIVE_STATUSES), elapsed <= now)
+
+    @classmethod
+    async def _expire_finished(cls, session: AsyncSession, now: datetime) -> None:
+        """Retire reservations whose time has passed, in two statements.
+
+        Deliberately unbounded by the requested date — a reservation from any
+        day must be retired once it ends. Doing it per row would make a listing
+        cost grow with the table, and the rooms tab polls this every 10s.
+        """
+        finished = cls._finished(now)
+        await session.execute(
+            update(ReservationParticipantRow)
+            .where(
+                ReservationParticipantRow.cancelled_at.is_(None),
+                ReservationParticipantRow.reservation_id.in_(
+                    select(ReservationRow.id).where(*finished)
+                ),
+            )
+            .values(cancelled_at=now)
+        )
+        await session.execute(
+            update(ReservationRow)
+            .where(*finished)
+            .values(status=ReservationStatus.ENDED.value, ended_at=now, updated_at=now)
+        )
+
+    @staticmethod
     async def _release_participants(session: AsyncSession, reservation_id: int, now: datetime) -> None:
         """A reservation that stops being live carries no active participants."""
         await session.execute(
@@ -75,13 +106,7 @@ class PostgresReservationRepository(ReservationRepository):
         end = start + timedelta(days=1)
         now = datetime.now(timezone.utc)
         async with self._sessions() as session, session.begin():
-            stale = await session.scalars(
-                select(ReservationRow).where(ReservationRow.status.in_(("open", "matched")))
-            )
-            for row in stale:
-                if row.start_at + timedelta(minutes=row.duration_minutes) <= now:
-                    row.status, row.ended_at, row.updated_at = "ended", now, now
-                    await self._release_participants(session, row.id, now)
+            await self._expire_finished(session, now)
             result = await session.execute(
                 self._with_participant_count()
                 .where(

@@ -5,7 +5,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, event, func, select
+from sqlalchemy.engine import Engine
 
 from reservation.domain import MatchType, ReservationStatus
 from reservation.entities import Reservation as ReservationRow
@@ -122,3 +123,52 @@ async def test_expiring_a_reservation_also_releases_its_participants(repository)
 
     assert (await repository.get(reservation.id)).status is ReservationStatus.ENDED
     assert await _active_participant_count(reservation.id) == 0
+
+
+async def _expired_reservation(repo, token: str):
+    past = datetime.now(timezone.utc) - timedelta(hours=3)
+    reservation = await repo.create(
+        start_at=past, duration_minutes=60, host_display_name="Host", host_ranks=["Brawler"],
+        match_type=MatchType.RANK, capacity=1, memo="", host_token_hash=token,
+    )
+    await repo.join(reservation.id, display_name="Joiner", ranks=[], participant_token_hash=token, now=past - timedelta(minutes=1))
+    return reservation
+
+
+@pytest.mark.asyncio
+async def test_the_expiry_sweep_costs_the_same_no_matter_how_many_expired(repository):
+    """Cost must not grow with the table: the sweep is two statements, always."""
+    def updates_during_listing(day):
+        statements = []
+
+        def record(conn, cursor, statement, *_):
+            if statement.lstrip().upper().startswith("UPDATE"):
+                statements.append(statement)
+
+        async def run():
+            event.listen(Engine, "before_cursor_execute", record)
+            try:
+                await repository.list_for_date(day)
+            finally:
+                event.remove(Engine, "before_cursor_execute", record)
+            return statements
+
+        return run()
+
+    one = await _expired_reservation(repository, "owner-1")
+    assert len(await updates_during_listing(one.start_at.date())) == 2
+
+    for index in range(2, 6):
+        await _expired_reservation(repository, f"owner-{index}")
+    assert len(await updates_during_listing(one.start_at.date())) == 2
+
+
+@pytest.mark.asyncio
+async def test_the_sweep_expires_reservations_outside_the_requested_day(repository):
+    """A stale reservation is retired even when nobody asks about its date."""
+    old = await _expired_reservation(repository, "owner")
+
+    await repository.list_for_date(datetime.now(timezone.utc).date() + timedelta(days=7))
+
+    assert (await repository.get(old.id)).status is ReservationStatus.ENDED
+    assert await _active_participant_count(old.id) == 0
