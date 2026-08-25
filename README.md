@@ -115,8 +115,8 @@ FastAPI even starts.
 | `REDIS_URL` | *(required)* | Redis connection URL |
 | `CACHE_TTL_SERVERS` | `3600` | Server list cache TTL (seconds) |
 | `CACHE_TTL_LEADERBOARD` | `60` | Leaderboard cache TTL |
-| `CACHE_TTL_ROOMS` | `10` | Rooms cache TTL |
-| `CACHE_TTL_ROOMS_ALL` | `10` | `/rooms/all` cache TTL |
+| `CACHE_TTL_ROOMS` | `5` | Rooms cache TTL |
+| `CACHE_TTL_ROOMS_ALL` | `5` | `/rooms/all` cache TTL |
 | `CACHE_TTL_COMMUNITY` | `30` | Community board cache TTL |
 | `CACHE_TTL_ACTIVITY` | `300` | Activity statistics cache TTL |
 | `CACHE_TTL_PLAYER_HOURS` | `300` | Per-player hourly stats cache TTL |

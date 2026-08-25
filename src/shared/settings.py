@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     redis_url: str
     cache_ttl_servers: int = 3600
     cache_ttl_leaderboard: int = 60
-    cache_ttl_rooms: int = 10
-    cache_ttl_rooms_all: int = 10
+    cache_ttl_rooms: int = 5
+    cache_ttl_rooms_all: int = 5
     cache_ttl_community: int = 30
     cache_ttl_activity: int = 300
     cache_ttl_player_hours: int = 300
