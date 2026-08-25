@@ -5,11 +5,12 @@ import asyncio
 import pytest
 
 
-def _truncate_postgresql(db_url: str):
+def _truncate_postgresql():
     import asyncpg
+    from shared.database import build_dsn
 
     async def _run():
-        conn = await asyncpg.connect(db_url)
+        conn = await asyncpg.connect(build_dsn(driver=""))
         try:
             await conn.execute(
                 "TRUNCATE posts, comments, thumbs RESTART IDENTITY CASCADE"
@@ -36,5 +37,5 @@ def client():
 
     # Clean up after the app pool is closed
     if settings.db_type == "postgresql":
-        _truncate_postgresql(settings.db_url)
+        _truncate_postgresql()
     cache_delete_pattern("community:*")

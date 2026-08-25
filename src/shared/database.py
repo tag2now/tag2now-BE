@@ -18,20 +18,24 @@ class Base(DeclarativeBase):
 	pass
 
 
-async def init_database() -> None:
-	"""Create the async engine and session factory for an Alembic-managed schema."""
-	global _engine, _session_factory
+def build_dsn(driver: str = "asyncpg") -> str:
+	"""Assemble a PostgreSQL DSN for a driver. db_url carries host:port only.
+
+	The scheme cannot be fixed: SQLAlchemy wants postgresql+asyncpg://, plain
+	asyncpg rejects that and wants postgresql://, and Alembic uses psycopg.
+	"""
 	from shared.settings import get_settings
 
 	settings = get_settings()
-	db_url = settings.db_url
-	if db_url.startswith("postgresql://"):
-		dsn = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-	else:
-		db_user = settings.db_user
-		db_password = settings.db_password
-		db_name = settings.db_name
-		dsn = f"postgresql+asyncpg://{db_user}:{quote(db_password)}@{db_url}/{db_name}"
+	scheme = f"postgresql+{driver}" if driver else "postgresql"
+	return f"{scheme}://{settings.db_user}:{quote(settings.db_password)}@{settings.db_url}/{settings.db_name}"
+
+
+async def init_database() -> None:
+	"""Create the async engine and session factory for an Alembic-managed schema."""
+	global _engine, _session_factory
+
+	dsn = build_dsn()
 
 	logger.info(
 		"Connecting to database at %s",

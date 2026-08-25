@@ -26,7 +26,8 @@ class Settings(BaseSettings):
     cache_ttl_player_hours: int = 300
     matchmaking_ttl: int = 60
 
-    db_url: str = "postgresql://localhost:5432/tag2now"
+    # host:port only — shared.database.build_dsn() adds scheme and credentials
+    db_url: str = "localhost:5432"
     db_name: str = "tag2now"
     db_user: str = "postgres"
     db_password: str = "postgres"
