@@ -1,8 +1,9 @@
 """Framework-independent reservation domain types and rules."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, time, timedelta
 from enum import StrEnum
+from zoneinfo import ZoneInfo
 
 from reservation.exceptions import ReservationStateError
 
@@ -43,7 +44,22 @@ class Participant:
     joined_at: datetime
 
 
+KST = ZoneInfo("Asia/Seoul")
 LIVE_STATUSES = (ReservationStatus.OPEN, ReservationStatus.MATCHED)
+LEAD_TIME = timedelta(minutes=10)
+
+
+def start_at_from(start_time: time, now: datetime) -> datetime:
+    """Resolve a wall-clock KST time to the instant it denotes today.
+
+    Hosts pick a time of day, not a date: 21:00 means 21:00 KST on whatever day
+    it currently is in Seoul. The result is returned in the clock's own zone so
+    that callers compare like with like.
+    """
+    start_at = datetime.combine(now.astimezone(KST).date(), start_time, tzinfo=KST).astimezone(now.tzinfo)
+    if start_at < now + LEAD_TIME:
+        raise ReservationStateError("Start time must be at least 10 minutes from now")
+    return start_at
 
 
 def ensure_conditions_valid(match_type: MatchType, ranks: list[str], capacity: int) -> None:

@@ -1,13 +1,12 @@
 """SQLAlchemy ORM adapter. Row locking keeps participant capacity atomic."""
 
 from datetime import date, datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from reservation.domain import (
-    LIVE_STATUSES, MatchType, Participant, Reservation, ReservationStatus,
+    KST, LIVE_STATUSES, MatchType, Participant, Reservation, ReservationStatus,
     ensure_joinable, ensure_participation_cancellable, status_for,
 )
 from reservation.entities import Reservation as ReservationRow
@@ -16,7 +15,6 @@ from reservation.exceptions import ReservationAccessError, ReservationNotFoundEr
 from reservation.ports import ReservationRepository
 from shared.database import get_session_factory
 
-KST = ZoneInfo("Asia/Seoul")
 
 
 def _reservation(row: ReservationRow, participant_count: int) -> Reservation:

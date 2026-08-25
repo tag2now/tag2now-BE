@@ -1,14 +1,11 @@
 """Reservation use cases depend only on repository, clock, and credentials ports."""
 
-from datetime import date, datetime, time, timedelta
-from zoneinfo import ZoneInfo
+from datetime import date, datetime, time
 
 from shared.security.credentials import CredentialManager, TokenCredentialManager, hash_credential
-from reservation.domain import MatchType, Reservation, ensure_conditions_valid
-from reservation.exceptions import ReservationStateError
+from reservation.domain import MatchType, Reservation, ensure_conditions_valid, start_at_from
 from reservation.ports import Clock, ReservationRepository
 
-KST = ZoneInfo("Asia/Seoul")
 _repo: ReservationRepository | None = None
 class SystemClock(Clock):
     def now(self) -> datetime:
@@ -38,10 +35,7 @@ async def list_reservations(day: date) -> list[Reservation]:
 
 async def create_reservation(*, start_time: time, duration_minutes: int, display_name: str, ranks: list[str], match_type: MatchType, capacity: int, memo: str) -> tuple[Reservation, str]:
     ensure_conditions_valid(match_type, ranks, capacity)
-    now = _clock.now()
-    start_at = datetime.combine(now.astimezone(KST).date(), start_time, tzinfo=KST).astimezone(now.tzinfo)
-    if start_at < now + timedelta(minutes=10):
-        raise ReservationStateError("Start time must be at least 10 minutes from now")
+    start_at = start_at_from(start_time, _clock.now())
     token, token_hash = _credentials.issue()
     reservation = await _repository().create(start_at=start_at, duration_minutes=duration_minutes, host_display_name=display_name.strip(), host_ranks=ranks, match_type=match_type, capacity=capacity, memo=memo.strip(), host_token_hash=token_hash)
     return reservation, token

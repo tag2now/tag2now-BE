@@ -1,12 +1,12 @@
 """Reservation state rules are pure — they need no database."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 
 import pytest
 
 from reservation.domain import (
     MatchType, ReservationStatus, ensure_conditions_valid, ensure_joinable,
-    ensure_participation_cancellable, status_for,
+    ensure_participation_cancellable, start_at_from, status_for,
 )
 from reservation.exceptions import ReservationStateError
 
@@ -81,3 +81,47 @@ def test_a_player_match_carries_no_ranks_at_any_capacity(capacity):
 def test_a_player_match_with_ranks_is_rejected():
     with pytest.raises(ReservationStateError, match="do not use ranks"):
         ensure_conditions_valid(MatchType.PLAYER, ["Brawler"], 2)
+
+
+def test_a_start_time_resolves_against_todays_date_in_seoul():
+    # 10:00 UTC is 19:00 KST on the same day
+    now = datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)
+
+    start_at = start_at_from(time(21, 0), now)
+
+    assert start_at == datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc)  # 21:00 KST
+
+
+def test_seoul_today_is_already_tomorrow_late_in_the_utc_day():
+    # 16:00 UTC is 01:00 KST the next day, so "today" in Seoul is the 25th
+    now = datetime(2026, 8, 24, 16, 0, tzinfo=timezone.utc)
+
+    start_at = start_at_from(time(21, 0), now)
+
+    assert start_at == datetime(2026, 8, 25, 12, 0, tzinfo=timezone.utc)
+
+
+def test_the_result_keeps_the_clocks_own_timezone():
+    now = datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)
+
+    assert start_at_from(time(21, 0), now).tzinfo is timezone.utc
+
+
+def test_a_start_time_exactly_ten_minutes_away_is_accepted():
+    now = datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)  # 19:00 KST
+
+    assert start_at_from(time(19, 10), now) == now + timedelta(minutes=10)
+
+
+def test_a_start_time_inside_the_lead_time_is_rejected():
+    now = datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)  # 19:00 KST
+
+    with pytest.raises(ReservationStateError, match="at least 10 minutes"):
+        start_at_from(time(19, 9), now)
+
+
+def test_a_start_time_already_past_in_seoul_is_rejected():
+    now = datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)  # 19:00 KST
+
+    with pytest.raises(ReservationStateError, match="at least 10 minutes"):
+        start_at_from(time(9, 0), now)
