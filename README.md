@@ -45,45 +45,49 @@ clean checkout.
 
 ## Configuration
 
-### Choosing an env file
+### Creating your env file
 
-Settings are loaded by `pydantic-settings` in [`src/shared/settings.py`](src/shared/settings.py).
-The **`FAST_API_PROFILE`** environment variable selects which file under `env/`
-is loaded:
+Configuration is supplied by the runtime and is **never baked into the image**.
+Only `env/.env.example` is tracked; every other `env/.env*` is gitignored, and
+the Dockerfile does not copy `env/` at all.
 
-```
-env/.env             loaded first, if present  (not in the repo — create it for local overrides)
-env/.env.$PROFILE    loaded second, overrides the above
-```
-
-`FAST_API_PROFILE` defaults to **`local`** when unset.
-
-| `FAST_API_PROFILE` | File | Used by |
-|--------------------|------|---------|
-| `local` *(default)* | `env/.env.local` | Local development. Gitignored — create it yourself. |
-| `dev` | `env/.env.dev` | `compose.yml`, which sets `FAST_API_PROFILE: dev` |
-| `prod` | `env/.env.prod` | Lightsail production instance |
-
-Precedence is the usual pydantic-settings order — **real environment variables
-beat both files**, and `.env.$PROFILE` beats `.env`. This is how `compose.yml`
-supplies `DB_URL` and the DynamoDB settings on top of `.env.dev`.
-
-To start with a different profile:
+Start from the template:
 
 ```bash
-FAST_API_PROFILE=dev .venv/Scripts/python.exe -m src --reload
+cp env/.env.example env/.env.dev     # docker compose stack
+cp env/.env.example env/.env.local   # local venv run
+```
+
+Then fill in `RPCN_USER`, `RPCN_PASSWORD`, and `RPCN_TOKEN` — they have no
+defaults and are not distributed with the repository. The remaining values in
+the template already match the compose stack.
+
+### How each environment gets its config
+
+| Environment | Mechanism |
+|-------------|-----------|
+| Local venv | `env/.env.local`, read by pydantic-settings |
+| `docker compose` | `env_file: env/.env.dev` in `compose.yml`, injected as real environment variables |
+| Production | the instance's own `env_file`, holding the real credentials |
+
+### `FAST_API_PROFILE`
+
+[`src/shared/settings.py`](src/shared/settings.py) loads `env/.env` plus
+`env/.env.$PROFILE`, where `FAST_API_PROFILE` selects the profile and defaults
+to **`local`**.
+
+This only matters for **local venv runs**. In a container the image has no
+`env/` directory, so there is no file for a profile to select — values arrive as
+real environment variables, which take precedence over env files anyway.
+
+```bash
+FAST_API_PROFILE=dev .venv/Scripts/python.exe -m uvicorn app:app --reload
 ```
 
 A missing env file is not an error — pydantic-settings skips it silently. If
 `RPCN_USER`, `RPCN_PASSWORD`, `RPCN_TOKEN`, or `REDIS_URL` end up unset from
-every source, startup fails with a pydantic `ValidationError`, because those
-fields have no defaults.
-
-> **Note:** `env/.env.dev` and `env/.env.prod` deliberately omit the RPCN
-> credentials. They are supplied as real environment variables on the instance
-> (from its own `.env.prod`), never committed. `env/.env.example` shows the full
-> set of keys. Loading either profile without those variables set raises
-> `ValidationError: rpcn_user / rpcn_password / rpcn_token — Field required`.
+every source, startup fails with
+`ValidationError: ... Field required`, because those fields have no defaults.
 
 `REDIS_URL` must be a real URL with a `redis://`, `rediss://`, or `unix://`
 scheme. An empty value fails at import time with
@@ -96,7 +100,7 @@ FastAPI even starts.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `FAST_API_PROFILE` | `local` | Selects `env/.env.$PROFILE` |
+| `FAST_API_PROFILE` | `local` | Selects `env/.env.$PROFILE` (local venv runs only) |
 | `RPCN_USER` | *(required)* | RPCN username |
 | `RPCN_PASSWORD` | *(required)* | RPCN password |
 | `RPCN_TOKEN` | *(required)* | RPCN token |
@@ -149,10 +153,11 @@ use PostgreSQL, so a working `DB_URL` is required regardless.
 
 ### With docker compose (recommended)
 
-Brings up the backend, frontend, Redis, PostgreSQL, and DynamoDB Local. Runs
-with `FAST_API_PROFILE=dev`.
+Brings up the backend, frontend, Redis, PostgreSQL, and DynamoDB Local. Reads
+its configuration from `env/.env.dev`, so create that file first:
 
 ```bash
+cp env/.env.example env/.env.dev
 docker compose up
 ```
 

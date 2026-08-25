@@ -62,7 +62,26 @@ docker compose -f compose.test.yml up -d --wait            # Redis + PostgreSQL
 
 `shared/settings.py` defines a pydantic-settings `Settings` model loaded from `env/.env` plus `env/.env.{profile}`, where profile comes from the `FAST_API_PROFILE` environment variable (default `local`). `get_settings()` is `@lru_cache`d — settings are read once per process.
 
-Profiles present: `local`, `dev`, `prod` (plus `.env.example` as the template).
+**Env files are runtime config, never baked into the image.** Only
+`env/.env.example` is tracked; `env/.env*` is otherwise gitignored and the
+Dockerfile does not copy `env/`. Create your own from the template:
+
+```bash
+cp env/.env.example env/.env.dev     # docker compose stack
+cp env/.env.example env/.env.local   # local venv run
+```
+
+How each environment supplies config:
+
+| Environment | Mechanism | Profile |
+|-------------|-----------|---------|
+| Local venv | `env/.env.local` read by pydantic-settings | `local` (default) |
+| `docker compose` | `env_file: env/.env.dev` injects real env vars | unused |
+| Production | instance's own `env_file` | unused |
+
+`FAST_API_PROFILE` therefore only matters for local venv runs. In containers the
+image has no `env/` directory, so there is no file for a profile to select —
+values arrive as real environment variables, which take precedence anyway.
 
 Required with no default: `rpcn_user`, `rpcn_password`, `rpcn_token`, `redis_url`.
 

@@ -3,15 +3,9 @@ services:
     image: 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com/tag2-now/be
     ports:
       - "8000:8000"
-    environment:
-      FAST_API_PROFILE: dev
-      DB_TYPE: dynamodb
-      DB_URL: postgresql://tag2now:tag2now@postgres:5432/tag2now
-      DYNAMODB_REGION: ap-northeast-2
-      DYNAMODB_TABLE_NAME: tag2now-community
-      DYNAMODB_ENDPOINT_URL: http://dynamodb-local:8000
-      AWS_ACCESS_KEY_ID: local
-      AWS_SECRET_ACCESS_KEY: local
+    # Config is supplied at runtime, not baked into the image.
+    # Create it once with: cp env/.env.example env/.env.dev
+    env_file: env/.env.dev
     depends_on:
       - redis
       - postgres

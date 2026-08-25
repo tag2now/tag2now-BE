@@ -2,7 +2,11 @@
 .idea
 .venv
 
-.env.local
+# Environment files hold per-deployment config and credentials, and are
+# supplied by the runtime — never baked into the image. Only the template
+# is tracked.
+env/.env*
+!env/.env.example
 # Python build artifacts
 __pycache__/
 *.pyc
