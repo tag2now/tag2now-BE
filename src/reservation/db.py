@@ -1,14 +1,11 @@
 from reservation.adapters.postgresql import PostgresReservationRepository
 from reservation import service
 from reservation.ports import ReservationRepository
-from shared.settings import get_settings
 
 _repo: ReservationRepository | None = None
 
 async def init_db() -> None:
     global _repo
-    settings = get_settings()
-    if settings.db_type != "postgresql": raise ValueError("Reservations require PostgreSQL")
     _repo = PostgresReservationRepository()
     await _repo.init()
     service.configure(_repo)
