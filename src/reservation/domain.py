@@ -58,7 +58,7 @@ def start_at_from(start_time: time, now: datetime) -> datetime:
     """
     start_at = datetime.combine(now.astimezone(KST).date(), start_time, tzinfo=KST).astimezone(now.tzinfo)
     if start_at < now + LEAD_TIME:
-        raise ReservationStateError("Start time must be at least 10 minutes from now")
+        raise ReservationStateError("지금부터 10분 이후 시각으로 예약할 수 있습니다.")
     return start_at
 
 
@@ -66,11 +66,11 @@ def ensure_conditions_valid(match_type: MatchType, ranks: list[str], capacity: i
     """Rank matches are one-on-one and rank-scoped; player matches are neither."""
     if match_type is MatchType.RANK:
         if not ranks:
-            raise ReservationStateError("Rank matches require at least one rank")
+            raise ReservationStateError("랭크매치는 보유 계급을 하나 이상 선택해야 합니다.")
         if capacity != 1:
-            raise ReservationStateError("Rank matches have a capacity of one")
+            raise ReservationStateError("랭크매치는 1명만 모집할 수 있습니다.")
     elif ranks:
-        raise ReservationStateError("Player matches do not use ranks")
+        raise ReservationStateError("플레이어 매치는 계급을 선택하지 않습니다.")
 
 
 def status_for(participant_count: int, capacity: int) -> ReservationStatus:
@@ -80,13 +80,13 @@ def status_for(participant_count: int, capacity: int) -> ReservationStatus:
 
 def ensure_joinable(status: ReservationStatus, start_at: datetime, participant_count: int, capacity: int, now: datetime) -> None:
     if status is not ReservationStatus.OPEN or start_at <= now:
-        raise ReservationStateError("Reservation is not open for joining")
+        raise ReservationStateError("지금은 참가할 수 없는 예약입니다.")
     if participant_count >= capacity:
-        raise ReservationStateError("Reservation is full")
+        raise ReservationStateError("모집이 마감된 예약입니다.")
 
 
 def ensure_participation_cancellable(status: ReservationStatus, start_at: datetime, now: datetime) -> None:
     if status not in LIVE_STATUSES:
-        raise ReservationStateError("Reservation is no longer active")
+        raise ReservationStateError("이미 취소되었거나 종료된 예약입니다.")
     if start_at <= now:
-        raise ReservationStateError("Reservation has started")
+        raise ReservationStateError("이미 시작된 예약은 변경할 수 없습니다.")

@@ -57,25 +57,25 @@ async def test_create_rank_reservation_uses_kst_today_and_issues_owner_token(dep
 
 @pytest.mark.asyncio
 async def test_create_rank_reservation_requires_rank(dependencies):
-    with pytest.raises(ReservationStateError, match="require at least one rank"):
+    with pytest.raises(ReservationStateError, match="계급을 하나 이상"):
         await service.create_reservation(start_time=time(20, 30), duration_minutes=60, display_name="Host", ranks=[], match_type=MatchType.RANK, capacity=1, memo="")
 
 
 @pytest.mark.asyncio
 async def test_create_player_reservation_rejects_ranks(dependencies):
-    with pytest.raises(ReservationStateError, match="do not use ranks"):
+    with pytest.raises(ReservationStateError, match="계급을 선택하지 않습니다"):
         await service.create_reservation(start_time=time(20, 30), duration_minutes=60, display_name="Host", ranks=["Brawler"], match_type=MatchType.PLAYER, capacity=2, memo="")
 
 
 @pytest.mark.asyncio
 async def test_create_rejects_start_time_less_than_ten_minutes_away(dependencies):
-    with pytest.raises(ReservationStateError, match="at least 10 minutes"):
+    with pytest.raises(ReservationStateError, match="10분 이후"):
         await service.create_reservation(start_time=time(19, 5), duration_minutes=60, display_name="Host", ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="")
 
 
 @pytest.mark.asyncio
 async def test_create_rank_reservation_rejects_capacity_other_than_one(dependencies):
-    with pytest.raises(ReservationStateError, match="capacity of one"):
+    with pytest.raises(ReservationStateError, match="1명만 모집"):
         await service.create_reservation(start_time=time(20, 30), duration_minutes=60, display_name="Host", ranks=["Brawler"], match_type=MatchType.RANK, capacity=2, memo="")
 
 

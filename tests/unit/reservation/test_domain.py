@@ -28,17 +28,17 @@ def test_an_open_future_reservation_with_room_is_joinable():
 
 @pytest.mark.parametrize("status", [ReservationStatus.MATCHED, ReservationStatus.CANCELLED, ReservationStatus.ENDED])
 def test_only_open_reservations_accept_participants(status):
-    with pytest.raises(ReservationStateError, match="not open"):
+    with pytest.raises(ReservationStateError, match="참가할 수 없는"):
         ensure_joinable(status, FUTURE, 0, 1, NOW)
 
 
 def test_a_started_reservation_rejects_participants():
-    with pytest.raises(ReservationStateError, match="not open"):
+    with pytest.raises(ReservationStateError, match="참가할 수 없는"):
         ensure_joinable(ReservationStatus.OPEN, PAST, 0, 1, NOW)
 
 
 def test_a_reservation_at_capacity_rejects_participants():
-    with pytest.raises(ReservationStateError, match="full"):
+    with pytest.raises(ReservationStateError, match="모집이 마감된"):
         ensure_joinable(ReservationStatus.OPEN, FUTURE, 1, 1, NOW)
 
 
@@ -49,12 +49,12 @@ def test_participation_in_a_live_future_reservation_is_cancellable(status):
 
 @pytest.mark.parametrize("status", [ReservationStatus.CANCELLED, ReservationStatus.ENDED])
 def test_participation_in_a_dead_reservation_is_not_cancellable(status):
-    with pytest.raises(ReservationStateError, match="no longer active"):
+    with pytest.raises(ReservationStateError, match="취소되었거나 종료된"):
         ensure_participation_cancellable(status, FUTURE, NOW)
 
 
 def test_participation_in_a_started_reservation_is_not_cancellable():
-    with pytest.raises(ReservationStateError, match="has started"):
+    with pytest.raises(ReservationStateError, match="이미 시작된"):
         ensure_participation_cancellable(ReservationStatus.OPEN, PAST, NOW)
 
 
@@ -63,13 +63,13 @@ def test_a_rank_match_needs_ranks_and_a_capacity_of_one():
 
 
 def test_a_rank_match_without_ranks_is_rejected():
-    with pytest.raises(ReservationStateError, match="require at least one rank"):
+    with pytest.raises(ReservationStateError, match="계급을 하나 이상"):
         ensure_conditions_valid(MatchType.RANK, [], 1)
 
 
 @pytest.mark.parametrize("capacity", [2, 3])
 def test_a_rank_match_beyond_one_participant_is_rejected(capacity):
-    with pytest.raises(ReservationStateError, match="capacity of one"):
+    with pytest.raises(ReservationStateError, match="1명만 모집"):
         ensure_conditions_valid(MatchType.RANK, ["Brawler"], capacity)
 
 
@@ -79,7 +79,7 @@ def test_a_player_match_carries_no_ranks_at_any_capacity(capacity):
 
 
 def test_a_player_match_with_ranks_is_rejected():
-    with pytest.raises(ReservationStateError, match="do not use ranks"):
+    with pytest.raises(ReservationStateError, match="계급을 선택하지 않습니다"):
         ensure_conditions_valid(MatchType.PLAYER, ["Brawler"], 2)
 
 
@@ -116,12 +116,12 @@ def test_a_start_time_exactly_ten_minutes_away_is_accepted():
 def test_a_start_time_inside_the_lead_time_is_rejected():
     now = datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)  # 19:00 KST
 
-    with pytest.raises(ReservationStateError, match="at least 10 minutes"):
+    with pytest.raises(ReservationStateError, match="10분 이후"):
         start_at_from(time(19, 9), now)
 
 
 def test_a_start_time_already_past_in_seoul_is_rejected():
     now = datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)  # 19:00 KST
 
-    with pytest.raises(ReservationStateError, match="at least 10 minutes"):
+    with pytest.raises(ReservationStateError, match="10분 이후"):
         start_at_from(time(9, 0), now)
