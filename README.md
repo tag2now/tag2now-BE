@@ -192,14 +192,10 @@ editable install, pass `--app-dir src` to supply that path manually:
 This is what the Docker image does: it runs `pip install .` (non-editable), so
 no `.pth` is created and `app.py` is not part of the installed distribution.
 
-`zoneinfo` needs the IANA database for the `Asia/Seoul` timezone used by the
-history module. It is present on most Linux images but not on Windows — install
-`tzdata` there, or startup fails with `ZoneInfoNotFoundError`.
-
-> **Known-broken entry point.** The `tekken-tt2` console script in
-> `pyproject.toml` points at `matching.__main__:main`, but `src/matching/__main__.py`
-> does not exist; running it fails with
-> `ModuleNotFoundError: No module named 'matching.__main__'`.
+The history module uses the `Asia/Seoul` timezone, which needs the IANA database
+that Windows does not ship. `requirements.txt` pulls in `tzdata` for this — if
+startup fails with `ZoneInfoNotFoundError`, the requirements are not fully
+installed.
 
 ### Database migrations
 
