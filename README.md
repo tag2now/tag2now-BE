@@ -203,21 +203,27 @@ PostgreSQL schema changes are managed exclusively by Alembic; application
 startup does not create tables. Run migrations before starting the API.
 
 Alembic reads **`DATABASE_URL`** — a separate variable from the application's
-`DB_URL`, and it is not read from the `env/` files.
+`DB_URL`, and it is not read from the `env/` files. Spell the driver out as
+`postgresql+psycopg://`: a bare `postgresql://` selects psycopg2, which is not
+installed, while `alembic/env.py` builds its own fallback DSN with psycopg 3.
+
+Invoke the `alembic` console script, **not** `python -m alembic` — `-m` puts the
+working directory first on `sys.path`, so from the repository root the `alembic/`
+migrations directory shadows the installed package.
 
 ```bash
 # New database
-DATABASE_URL=postgresql://user:password@host:5432/tag2now \
-  .venv/Scripts/python.exe -m alembic upgrade head
+DATABASE_URL=postgresql+psycopg://user:password@host:5432/tag2now \
+  .venv/Scripts/alembic.exe upgrade head
 
 # Existing database that already matches the baseline schema (run once)
-DATABASE_URL=postgresql://user:password@host:5432/tag2now \
-  .venv/Scripts/python.exe -m alembic stamp head
+DATABASE_URL=postgresql+psycopg://user:password@host:5432/tag2now \
+  .venv/Scripts/alembic.exe stamp head
 ```
 
 Use `stamp` only after confirming the existing schema matches the baseline;
 it records the revision without applying DDL. Verify later changes with
-`python -m alembic check`.
+`alembic check`.
 
 ## Endpoints
 
