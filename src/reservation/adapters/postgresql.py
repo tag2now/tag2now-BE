@@ -3,7 +3,7 @@
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from reservation.domain import (
@@ -60,6 +60,18 @@ class PostgresReservationRepository(ReservationRepository):
             .group_by(ReservationRow.id)
         )
 
+    @staticmethod
+    async def _release_participants(session: AsyncSession, reservation_id: int, now: datetime) -> None:
+        """A reservation that stops being live carries no active participants."""
+        await session.execute(
+            update(ReservationParticipantRow)
+            .where(
+                ReservationParticipantRow.reservation_id == reservation_id,
+                ReservationParticipantRow.cancelled_at.is_(None),
+            )
+            .values(cancelled_at=now)
+        )
+
     async def list_for_date(self, day: date) -> list[Reservation]:
         start = datetime.combine(day, datetime.min.time(), tzinfo=KST)
         end = start + timedelta(days=1)
@@ -71,6 +83,7 @@ class PostgresReservationRepository(ReservationRepository):
             for row in stale:
                 if row.start_at + timedelta(minutes=row.duration_minutes) <= now:
                     row.status, row.ended_at, row.updated_at = "ended", now, now
+                    await self._release_participants(session, row.id, now)
             result = await session.execute(
                 self._with_participant_count()
                 .where(
@@ -165,3 +178,4 @@ class PostgresReservationRepository(ReservationRepository):
             if row.host_token_hash != host_token_hash or row.status not in LIVE_STATUSES or row.start_at <= now:
                 raise ReservationAccessError("Reservation cannot be cancelled with this credential")
             row.status, row.cancelled_at, row.updated_at = "cancelled", now, now
+            await self._release_participants(session, reservation_id, now)
