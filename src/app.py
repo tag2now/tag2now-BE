@@ -16,6 +16,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -93,6 +94,28 @@ async def forbidden_handler(request, exc):
 @app.exception_handler(ValidationError)
 async def validation_handler(request, exc):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+# Field labels for request-schema violations, so a 422 names the input a user
+# can actually see rather than the wire field.
+_FIELD_LABELS = {
+    "display_name": "유저명",
+    "duration_minutes": "예상 시간",
+    "start_time": "시작 시각",
+    "match_type": "매치 종류",
+    "capacity": "모집 인원",
+    "ranks": "보유 계급",
+    "memo": "메모",
+}
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_handler(request, exc):
+    """Keep FastAPI's 422 but answer with one message instead of an error array."""
+    fields = {loc for error in exc.errors() for loc in error["loc"] if isinstance(loc, str)}
+    labels = [label for field, label in _FIELD_LABELS.items() if field in fields]
+    detail = f"{', '.join(labels)} 값을 확인해 주세요." if labels else "입력값을 확인해 주세요."
+    return JSONResponse(status_code=422, content={"detail": detail})
 
 
 @app.exception_handler(ServiceUnavailableError)
