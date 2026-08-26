@@ -205,9 +205,8 @@ installed.
 
 The Lightsail instance runs `compose.prod.yml` from a clone of this repository,
 alongside a `.env.prod` that it keeps to itself — it holds the RPCN credentials
-and is never committed. It also sets `POSTGRES_DATA_DIR` to the host path
-holding the database, which must already exist; compose refuses to start
-without it rather than silently binding the wrong directory.
+and is never committed. The database is bind-mounted from the host, so run
+compose as the user that owns that directory.
 
 There is no Redis service in production: `REDIS_URL` is left empty, so the
 backend caches in-process.

@@ -63,8 +63,7 @@ volumes:
   postgres-data:
     driver: local
     driver_opts:
-      # Bind mount, so the data survives `docker compose down -v`.
-      # POSTGRES_DATA_DIR is set in .env.prod and the path must already exist.
-      device: ${POSTGRES_DATA_DIR:?set it in .env.prod, e.g. /home/ubuntu/postgres-data}
+      # Use your preferred storage path here, it must already exist
+      device: /home/$USER/postgres-data
       o: bind
       type: none
