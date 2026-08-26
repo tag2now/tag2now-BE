@@ -1,0 +1,16 @@
+// Project tasks configuration. See https://zed.dev/docs/tasks for documentation.
+[
+  {
+    "label": "BE dev server",
+    "command": ".venv/Scripts/python.exe",
+    "args": ["-m", "uvicorn", "app:app", "--reload", "--app-dir", "src"],
+    "env": { "FAST_API_PROFILE": "local" },
+    "use_new_terminal": true
+  },
+  {
+    "label": "BE unit tests",
+    "command": ".venv/Scripts/python.exe",
+    "args": ["-m", "pytest", "tests/unit", "-q"],
+    "use_new_terminal": false
+  }
+]
