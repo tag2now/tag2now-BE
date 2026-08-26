@@ -7,6 +7,7 @@ from fastapi.encoders import jsonable_encoder
 
 from matching.models import TTT2_COM_ID, TTT2_RANK_BOARD_ID
 from matching import service
+from matching.service import LEADERBOARD_CACHE_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ async def rooms_all():
 @router.get("/leaderboard", summary="Leaderboard entries")
 def leaderboard(
     board: int = Query(default=TTT2_RANK_BOARD_ID, description="Score board ID"),
-    top: int = Query(default=10, ge=1),
+    top: int = Query(default=10, ge=1, le=LEADERBOARD_CACHE_SIZE),
 ):
     """Return the top N leaderboard entries with TTT2 character info decoded."""
     return service.get_leaderboard(TTT2_COM_ID, board, num_ranks=top)

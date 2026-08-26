@@ -62,6 +62,48 @@ def test_get_leaderboard_cache_miss(mock_cache, mock_game_repo):
     mock_game_repo.get_leaderboard.assert_called_once()
 
 
+def test_get_leaderboard_fetches_full_size_and_slices(mock_cache, mock_game_repo):
+    """A small top-N request still caches the full leaderboard, then slices it."""
+    from matching.service import get_leaderboard, LEADERBOARD_CACHE_SIZE
+    from matching.models import TTT2LeaderboardResult, TTT2LeaderboardEntry
+
+    entries = [
+        TTT2LeaderboardEntry(
+            rank=i, np_id=f"p{i}", online_name=f"P{i}", score=1000 - i,
+            pc_id=0, record_date=0, has_game_data=False, comment="", player_info=None,
+        )
+        for i in range(1, 21)
+    ]
+    mock_game_repo.get_leaderboard.return_value = TTT2LeaderboardResult(
+        total_records=20, last_sort_date=0, entries=entries,
+    )
+
+    result = get_leaderboard("NPWR02973_00", 4, 5)
+
+    assert [e["rank"] for e in result["entries"]] == [1, 2, 3, 4, 5]
+    assert result["total_records"] == 20
+    assert mock_game_repo.get_leaderboard.call_args.args[2] == LEADERBOARD_CACHE_SIZE
+
+
+def test_get_leaderboard_slices_from_cache_without_refetching(mock_game_repo, monkeypatch):
+    """A cache hit serves any top-N without calling the repository."""
+    from matching.service import get_leaderboard
+
+    cached = {
+        "total_records": 3,
+        "last_sort_date": 0,
+        "entries": [{"rank": 1}, {"rank": 2}, {"rank": 3}],
+    }
+    monkeypatch.setattr("matching.service.cache_get", lambda key: cached)
+    monkeypatch.setattr("matching.service.cache_set", lambda key, value, ttl: None)
+
+    result = get_leaderboard("NPWR02973_00", 4, 2)
+
+    assert result["entries"] == [{"rank": 1}, {"rank": 2}]
+    assert cached["entries"] == [{"rank": 1}, {"rank": 2}, {"rank": 3}]
+    mock_game_repo.get_leaderboard.assert_not_called()
+
+
 @pytest.mark.asyncio
 async def test_lookup_player_aggregates_sources(mock_cache, monkeypatch):
     from matching.service import lookup_player
