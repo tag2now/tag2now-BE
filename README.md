@@ -108,11 +108,14 @@ FastAPI even starts.
 | `RPCN_PORT` | `31313` | RPCN server port |
 | `RPCN_METRIC_ENABLE` | `false` | Enable RPCN client metrics collection |
 
-**Cache** — Redis is mandatory; the app calls `os._exit(1)` at import time if it is unreachable.
+**Cache** — `REDIS_URL` is optional. Leave it empty to cache in-process instead; that
+cache is per-process and is emptied whenever the container restarts, so it only suits a
+single-process deployment. When `REDIS_URL` *is* set, an unreachable Redis is a broken
+deployment, not a reason to degrade: the app calls `os._exit(1)` at import time.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `REDIS_URL` | *(required)* | Redis connection URL |
+| `REDIS_URL` | `""` | Redis connection URL; empty means in-process caching |
 | `CACHE_TTL_SERVERS` | `3600` | Server list cache TTL (seconds) |
 | `CACHE_TTL_LEADERBOARD` | `60` | Leaderboard cache TTL |
 | `CACHE_TTL_ROOMS` | `10` | Rooms cache TTL |
@@ -163,7 +166,8 @@ docker compose up
 
 ### Locally
 
-Requires Redis and PostgreSQL. The minimum is Redis:
+Requires PostgreSQL. Redis is optional — with `REDIS_URL` empty the app caches
+in-process. To run with Redis anyway:
 
 ```bash
 docker run -d -p 6379:6379 redis
@@ -196,6 +200,28 @@ The history module uses the `Asia/Seoul` timezone, which needs the IANA database
 that Windows does not ship. `requirements.txt` pulls in `tzdata` for this — if
 startup fails with `ZoneInfoNotFoundError`, the requirements are not fully
 installed.
+
+### In production
+
+The Lightsail instance runs `compose.prod.yml` from a clone of this repository,
+alongside a `.env.prod` that it keeps to itself — it holds the RPCN credentials
+and is never committed. It also sets `POSTGRES_DATA_DIR` to the host path
+holding the database, which must already exist; compose refuses to start
+without it rather than silently binding the wrong directory.
+
+There is no Redis service in production: `REDIS_URL` is left empty, so the
+backend caches in-process.
+
+Release a new image:
+
+```bash
+git pull
+docker compose -f compose.prod.yml pull
+docker compose -f compose.prod.yml up -d
+```
+
+Pushing a `v*` tag builds and pushes images to ECR, but does **not** deploy —
+the commands above are still a manual step.
 
 ### Database migrations
 
