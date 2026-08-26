@@ -16,11 +16,11 @@ class Settings(BaseSettings):
     rpcn_host: str = "rpcn.mynarco.xyz"
     rpcn_port: int = 31313
 
-    redis_url: str
+    redis_url: str = ""
     cache_ttl_servers: int = 3600
-    cache_ttl_leaderboard: int = 60
-    cache_ttl_rooms: int = 5
-    cache_ttl_rooms_all: int = 5
+    cache_ttl_leaderboard: int = 300
+    cache_ttl_rooms: int = 10
+    cache_ttl_rooms_all: int = 10
     cache_ttl_community: int = 30
     cache_ttl_activity: int = 300
     cache_ttl_player_hours: int = 300

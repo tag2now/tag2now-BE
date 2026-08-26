@@ -24,6 +24,9 @@ from matching.models import (
 
 logger = logging.getLogger(__name__)
 
+# The leaderboard is fetched once at this size and cached; every request slices from it.
+LEADERBOARD_CACHE_SIZE = 500
+
 
 # ---------------------------------------------------------------------------
 # Pure domain functions
@@ -87,16 +90,36 @@ async def get_rooms_all(com_id: str) -> dict:
 
 
 def get_leaderboard(com_id: str, board_id: int, num_ranks: int) -> dict:
-	"""Fetch leaderboard, cached."""
-	key = f"ttt2:leaderboard:{com_id}:{board_id}:{num_ranks}"
+	"""Return the top N entries, sliced from the single cached full leaderboard."""
+	full = _get_full_leaderboard(com_id, board_id)
+	return {**full, "entries": full["entries"][:num_ranks]}
+
+
+def _leaderboard_cache_key(com_id: str, board_id: int) -> str:
+	return f"ttt2:leaderboard:{com_id}:{board_id}"
+
+
+def _get_full_leaderboard(com_id: str, board_id: int) -> dict:
+	"""Fetch the full leaderboard, cached under one key regardless of requested size."""
+	key = _leaderboard_cache_key(com_id, board_id)
 	if cached := cache_get(key):
 		return cached
 	repo = get_game_server_repo()
-	lb = repo.get_leaderboard(com_id, board_id, num_ranks)
+	lb = repo.get_leaderboard(com_id, board_id, LEADERBOARD_CACHE_SIZE)
 	encoded = jsonable_encoder(lb)
 	cache_set(key, encoded, get_settings().cache_ttl_leaderboard)
 	return encoded
 
+
+def _find_leaderboard_entry(npid: str) -> TTT2LeaderboardEntry | None:
+	"""Locate a player in the cached leaderboard. Cache-only: never triggers an RPCN fetch."""
+	lb = cache_get(_leaderboard_cache_key(TTT2_COM_ID, TTT2_RANK_BOARD_ID))
+	if not lb:
+		return None
+	for entry in lb.get("entries", []):
+		if entry.get("np_id") == npid:
+			return TTT2LeaderboardEntry.from_cache(entry)
+	return None
 
 
 async def lookup_player(npid: str) -> PlayerLookupResponse:
@@ -124,17 +147,8 @@ async def lookup_player(npid: str) -> PlayerLookupResponse:
 		last_seen=last_seen,
 	)
 
-	# 2. Leaderboard from cache (search across common top-N caches)
-	lb_entry = None
-	for top in (100, 50, 10):
-		lb_cached = cache_get(f"ttt2:leaderboard:{TTT2_COM_ID}:{TTT2_RANK_BOARD_ID}:{top}")
-		if lb_cached and lb_cached.get("entries"):
-			for entry in lb_cached["entries"]:
-				if entry.get("np_id") == npid:
-					lb_entry = TTT2LeaderboardEntry.from_cache(entry)
-					break
-			if lb_entry:
-				break
+	# 2. Leaderboard entry from the cached full leaderboard
+	lb_entry = _find_leaderboard_entry(npid)
 
 	# 3. Usual playing hours from history
 	usual_hours = player_stats.active_hours
