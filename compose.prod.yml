@@ -1,10 +1,12 @@
 # Production stack for the Lightsail instance.
 #
 # The instance keeps its own .env.prod next to this file — it holds the RPCN
-# credentials and is never committed. Release with:
+# credentials and is never committed. This file itself is deployed here by the
+# BE repo's deploy workflow (scp), so edit it in the repo, not on the instance.
 #
-#   docker compose -f compose.prod.yml pull
-#   docker compose -f compose.prod.yml up -d
+# Each repo releases only its own service and pins only its own tag, so a BE
+# release never rolls fe and vice versa. The deploy workflows write
+# BE_IMAGE_TAG / FE_IMAGE_TAG into .env.prod; they default to latest when unset.
 #
 # There is no redis service: REDIS_URL is left empty in .env.prod, so the
 # backend caches in-process (see src/shared/cache.py). That cache lives and
@@ -20,7 +22,7 @@ x-logging: &default-logging
 
 services:
   be:
-    image: 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com/tag2-now/be
+    image: 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com/tag2-now/be:${BE_IMAGE_TAG:-latest}
     restart: unless-stopped
     logging: *default-logging
     ports:
@@ -34,7 +36,7 @@ services:
         condition: service_healthy
 
   fe:
-    image: 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com/tag2-now/fe
+    image: 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com/tag2-now/fe:${FE_IMAGE_TAG:-latest}
     restart: unless-stopped
     logging: *default-logging
     ports:

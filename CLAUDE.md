@@ -242,11 +242,22 @@ Docker image built from `python:3.12-alpine`; protobuf is generated during the b
 Production is a **single AWS Lightsail instance** running docker compose — `fe`, `be`, `redis`, `postgres`, `dynamodb-local`. Not ECS. Because there is one process, module-level state (the matchmaking tracker, the shared RPCN client) is safe here but would break under horizontal scaling.
 
 - `.github/workflows/ci.yml` — on PRs to `master`: unit tests, then integration tests against `compose.test.yml`.
-- `.github/workflows/deploy.yml` — on `v*` tags: build and push to ECR.
+- `.github/workflows/deploy.yml` — on `v*` tags: build and push to ECR, then deploy to production over SSH.
 
-**Release is manual.** SSH into Lightsail and run `docker compose pull && docker compose up -d`, from the directory holding the *instance's own* `compose.yml` and `.env.prod` (not the ones in this repo, which are for local development). RPCN credentials live only in that `.env.prod`.
+**Release is automatic on a `v*` tag.** The `deploy` job SSHes into Lightsail,
+writes `BE_IMAGE_TAG` into the instance's `.env.prod`, pulls, runs
+`alembic upgrade head` against the new image, and restarts **only `be`** —
+`fe` is released independently by the frontend repo, which pins `FE_IMAGE_TAG`.
 
-> **Note:** `deploy.yml` still carries a `deploy` job targeting ECS (`amazon-ecs-render-task-definition` / `amazon-ecs-deploy-task-definition` against `vars.ECS_CLUSTER`). There is no ECS cluster, so the job is gated with `if: false` and never runs; it is kept only so the configuration survives a possible move back to ECS. Only the `build` job is live — **a tag push is not a deploy.**
+This repo owns `compose.prod.yml` for the whole stack; the deploy job scp's it
+to the instance, so edit it here rather than on the box. RPCN credentials live
+only in the instance's `.env.prod`, which is never touched by the workflow apart
+from the `BE_IMAGE_TAG` line.
+
+The SSH and ECR settings are **org-level** secrets/variables on the `tag2now`
+org, shared with tag2now-FE; this repo defines only `ECR_REPOSITORY`
+(`tag2-now/be`) and its own `production` environment. See the
+[Actions configuration](docs/aws-setup.md#actions-configuration) table.
 
 Full infrastructure notes, including the Athena analytics setup, live in [docs/aws-setup.md](docs/aws-setup.md). The RPCN reference server source is at `C:/project/rpcn`.
 

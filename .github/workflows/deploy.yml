@@ -1,9 +1,7 @@
-name: Deploy to AWS ECS
+name: Build and deploy to production
 
 on:
   push:
-#    branches:
-#      - master
     tags:
       - 'v*'
 
@@ -35,44 +33,76 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.sha }}
+          IMAGE_TAG: ${{ github.ref_name }}
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
 
-  # Disabled: there is no ECS cluster. Production is a single Lightsail instance
-  # running docker compose, released manually over SSH:
-  #   docker compose pull && docker compose up -d
-  # Kept so the configuration survives if we move back to ECS. See docs/aws-setup.md.
+  # Production is a single Lightsail instance running docker compose, released
+  # over SSH. This job owns compose.prod.yml for the whole stack (both repos'
+  # services), but only ever restarts `be` — see docs/aws-setup.md.
   deploy:
-    if: false
+    name: Deploy to production
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
+    environment: production
 
     steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
+      - name: Checkout deployment configuration
+        uses: actions/checkout@v6
 
-      - name: Update ECS task definition with new image
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition-family: ${{ vars.ECS_TASK_DEFINITION_FAMILY }}
-          container-name: ${{ vars.ECS_TASK_CONTAINER_NAME }}
-          image: ${{ needs.build.outputs.image }}
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.PROD_SSH_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
-      - name: Deploy ECS task definition
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          cluster: ${{ vars.ECS_CLUSTER }}
-          service: ${{ vars.ECS_SERVICE }}
-          wait-for-service-stability: true
+      - name: Upload production compose file
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+          PROD_DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH }}
+        run: |
+          scp -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
+            compose.prod.yml \
+            "$PROD_USER@$PROD_HOST:$PROD_DEPLOY_PATH/"
+
+      - name: Pin the backend image tag
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+          PROD_DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH }}
+          IMAGE_TAG: ${{ github.ref_name }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes "$PROD_USER@$PROD_HOST" \
+            "cd '$PROD_DEPLOY_PATH' && \
+             test -f .env.prod && \
+             if grep -q '^BE_IMAGE_TAG=' .env.prod; then \
+               sed -i 's/^BE_IMAGE_TAG=.*/BE_IMAGE_TAG=$IMAGE_TAG/' .env.prod; \
+             else \
+               printf '\nBE_IMAGE_TAG=%s\n' '$IMAGE_TAG' >> .env.prod; \
+             fi"
+
+      # Migrations run against the new image before the serving container is
+      # replaced, so a failed migration leaves the old container up.
+      - name: Migrate and release the backend
+        env:
+          PROD_HOST: ${{ secrets.PROD_HOST }}
+          PROD_USER: ${{ secrets.PROD_USER }}
+          PROD_DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes "$PROD_USER@$PROD_HOST" \
+            "cd '$PROD_DEPLOY_PATH' && \
+             aws ecr get-login-password --region '$AWS_REGION' | docker login --username AWS --password-stdin '$ECR_REGISTRY' && \
+             docker compose --env-file .env.prod -f compose.prod.yml pull be && \
+             docker compose --env-file .env.prod -f compose.prod.yml run --rm be python -m alembic upgrade head && \
+             docker compose --env-file .env.prod -f compose.prod.yml up -d be"
