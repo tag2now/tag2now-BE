@@ -73,12 +73,14 @@ class DictCache(CacheBackend):
             self._store[key] = (serialised, expire_at)
 
     def delete_pattern(self, pattern: str):
+        # Match outside the lock: fnmatch over every key dominates the cost, and
+        # holding the lock across it stalls readers for as long as it takes.
         with self._lock:
-            keys = list(self._store.keys())
-        for key in keys:
-            if fnmatch.fnmatch(key, pattern):
-                with self._lock:
-                    self._store.pop(key, None)
+            keys = list(self._store)
+        doomed = [key for key in keys if fnmatch.fnmatch(key, pattern)]
+        with self._lock:
+            for key in doomed:
+                self._store.pop(key, None)
 
 
 # ---------------------------------------------------------------------------
