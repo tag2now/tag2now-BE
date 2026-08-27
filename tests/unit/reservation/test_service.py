@@ -41,9 +41,16 @@ class FakeRepository:
 
 @pytest.fixture(autouse=True)
 def dependencies():
+    """Swap the module-level ports for fakes, then put the real ones back.
+
+    service.configure() writes to module globals, so a fake clock left behind
+    here would still be answering when the integration tests run.
+    """
+    previous = (service._repo, service._clock, service._credentials)
     repo = FakeRepository()
     service.configure(repo, FixedClock(), FakeCredentials())
-    return repo
+    yield repo
+    service._repo, service._clock, service._credentials = previous
 
 
 @pytest.mark.asyncio
