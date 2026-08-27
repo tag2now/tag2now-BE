@@ -5,7 +5,8 @@
     "command": ".venv/Scripts/python.exe",
     "args": ["-m", "uvicorn", "app:app", "--reload", "--app-dir", "src"],
     "env": { "FAST_API_PROFILE": "local" },
-    "use_new_terminal": true
+    "use_new_terminal": true,
+    "cwd": "$ZED_WORKTREE_ROOT/tag2now-BE"
   },
   {
     "label": "BE unit tests",
