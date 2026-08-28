@@ -71,7 +71,6 @@ anyone later creates in the org.
 | `PROD_HOST` | secret | instance IP or hostname |
 | `PROD_USER` | secret | SSH user |
 | `PROD_DEPLOY_PATH` | secret | directory holding `compose.prod.yml` and `.env.prod` |
-| `ECR_REGISTRY` | variable | `864573346741.dkr.ecr.ap-northeast-2.amazonaws.com` |
 | `AWS_REGION` | variable | `ap-northeast-2` |
 
 **Repo-level** (each repo, because the values genuinely differ):
@@ -103,6 +102,12 @@ correct or the job fails rather than trusting an unknown host.
 The **instance** performs its own `aws ecr get-login-password`, so its IAM role
 (or on-box credentials) needs `ecr:GetAuthorizationToken` and pull permissions —
 the workflow's `AWS_ROLE_ARN` is only used by the `build` job on the runner.
+
+The registry hostname itself is **not** configured anywhere. The `deploy` job
+derives it from the image reference the `build` job actually pushed
+(`needs.build.outputs.image`), so the registry it logs in to cannot drift away
+from the one holding the image. Both repos do this, which is why there is no
+`ECR_REGISTRY` variable in the tables above.
 
 To release by hand — a rollback, or when Actions is unavailable:
 

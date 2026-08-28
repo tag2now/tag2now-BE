@@ -98,8 +98,11 @@ jobs:
           PROD_USER: ${{ secrets.PROD_USER }}
           PROD_DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH }}
           AWS_REGION: ${{ vars.AWS_REGION }}
-          ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+          IMAGE: ${{ needs.build.outputs.image }}
         run: |
+          # The registry is whatever `build` actually pushed to, rather than a
+          # separately maintained variable that could drift away from it.
+          ECR_REGISTRY="${IMAGE%%/*}"
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes "$PROD_USER@$PROD_HOST" \
             "cd '$PROD_DEPLOY_PATH' && \
              aws ecr get-login-password --region '$AWS_REGION' | docker login --username AWS --password-stdin '$ECR_REGISTRY' && \
