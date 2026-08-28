@@ -191,6 +191,7 @@ Domain code raises the exceptions in `shared/exceptions.py`; `app.py` registers 
 | *(none)* | `matching/router.py` — `/servers`, `/rooms/all`, `/leaderboard`, `/players/{npid}` |
 | `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/stats/weekly-top`, `/players/{npid}` |
 | `/community` | `community/router.py` — posts, comments, thumbs, identity |
+| `/reservations` | `reservation/router.py` — list, create, edit (`PATCH`), join, cancel |
 | *(none)* | `/health` in `app.py`, excluded from the schema |
 
 Community identity is not authentication: `_get_user` reads the `X-Community-User` header or the `community_user` cookie, truncated to 50 characters. There is no verification of who the caller claims to be.

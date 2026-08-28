@@ -45,6 +45,28 @@ async def get_reservation(reservation_id: int) -> Reservation:
     return await _repository().get(reservation_id)
 
 
+async def update_reservation(reservation_id: int, token: str, *, start_time: time | None = None, duration_minutes: int | None = None, ranks: list[str] | None = None, match_type: MatchType | None = None, capacity: int | None = None, memo: str | None = None) -> Reservation:
+    """Apply a partial edit, validating the reservation as it will end up.
+
+    A patch is only coherent against the rest of the reservation: switching to a
+    player match while leaving the old ranks in place would pass field-level
+    validation and still produce a state the domain forbids. The current values
+    are therefore merged in before the conditions are checked.
+    """
+    current = await _repository().get(reservation_id)
+    ensure_conditions_valid(
+        match_type if match_type is not None else current.match_type,
+        ranks if ranks is not None else current.host_ranks,
+        capacity if capacity is not None else current.capacity,
+    )
+    start_at = start_at_from(start_time, _clock.now()) if start_time is not None else None
+    return await _repository().update(
+        reservation_id, hash_credential(token), _clock.now(),
+        start_at=start_at, duration_minutes=duration_minutes, ranks=ranks,
+        match_type=match_type, capacity=capacity, memo=memo.strip() if memo is not None else None,
+    )
+
+
 async def join_reservation(reservation_id: int, *, display_name: str, ranks: list[str]) -> tuple[Reservation, str]:
     token, token_hash = _credentials.issue()
     reservation, _ = await _repository().join(reservation_id, display_name=display_name.strip(), ranks=ranks, participant_token_hash=token_hash, now=_clock.now())

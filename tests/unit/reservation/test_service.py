@@ -26,6 +26,8 @@ class FakeRepository:
         self.joined = None
         self.cancelled_participation = None
         self.cancelled = None
+        self.updated = None
+        self.existing = Reservation(1, datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc), 60, "Host", ["Yaksa"], MatchType.RANK, 1, "", ReservationStatus.OPEN, 0, datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc))
     async def create(self, **values):
         self.created = values
         return Reservation(1, values["start_at"], values["duration_minutes"], values["host_display_name"], values["host_ranks"], values["match_type"], values["capacity"], values["memo"], ReservationStatus.OPEN, 0, values["start_at"])
@@ -37,6 +39,11 @@ class FakeRepository:
         return Reservation(reservation_id, now, 60, "Host", [], MatchType.RANK, 1, "", ReservationStatus.OPEN, 0, now)
     async def cancel(self, reservation_id, token_hash, now):
         self.cancelled = (reservation_id, token_hash, now)
+    async def get(self, reservation_id):
+        return self.existing
+    async def update(self, reservation_id, token_hash, now, **changes):
+        self.updated = (reservation_id, token_hash, changes)
+        return self.existing
 
 
 @pytest.fixture(autouse=True)
@@ -104,3 +111,57 @@ async def test_cancellation_hashes_client_tokens_before_repository_access(depend
 
     assert dependencies.cancelled_participation[1] == hash_credential("participant-token")
     assert dependencies.cancelled[1] == hash_credential("owner-token")
+
+
+@pytest.mark.asyncio
+async def test_editing_only_the_memo_leaves_the_other_fields_untouched(dependencies):
+    await service.update_reservation(1, "token-1", memo="  자리 하나 남음  ")
+
+    _, _, changes = dependencies.updated
+    assert changes["memo"] == "자리 하나 남음"
+    assert changes["start_at"] is None
+    assert changes["match_type"] is None
+
+
+@pytest.mark.asyncio
+async def test_switching_to_a_player_match_rejects_the_ranks_left_behind():
+    """The patch is valid field by field; only the merged state reveals the clash."""
+    with pytest.raises(ReservationStateError, match="계급을 선택하지 않습니다"):
+        await service.update_reservation(1, "token-1", match_type=MatchType.PLAYER)
+
+
+@pytest.mark.asyncio
+async def test_switching_to_a_player_match_together_with_clearing_ranks_is_allowed(dependencies):
+    await service.update_reservation(1, "token-1", match_type=MatchType.PLAYER, ranks=[], capacity=2)
+
+    _, _, changes = dependencies.updated
+    assert changes["match_type"] is MatchType.PLAYER
+    assert changes["ranks"] == []
+
+
+@pytest.mark.asyncio
+async def test_emptying_the_ranks_of_a_rank_match_is_rejected():
+    with pytest.raises(ReservationStateError, match="하나 이상"):
+        await service.update_reservation(1, "token-1", ranks=[])
+
+
+@pytest.mark.asyncio
+async def test_a_new_start_time_is_resolved_against_the_clock(dependencies):
+    await service.update_reservation(1, "token-1", start_time=time(21, 0))
+
+    _, _, changes = dependencies.updated
+    assert changes["start_at"] == datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc)
+
+
+@pytest.mark.asyncio
+async def test_a_start_time_inside_the_lead_time_is_rejected():
+    with pytest.raises(ReservationStateError, match="10분 이후"):
+        await service.update_reservation(1, "token-1", start_time=time(19, 5))
+
+
+@pytest.mark.asyncio
+async def test_the_token_reaches_the_repository_hashed(dependencies):
+    await service.update_reservation(1, "token-1", memo="hi")
+
+    _, token_hash, _ = dependencies.updated
+    assert token_hash == hash_credential("token-1")

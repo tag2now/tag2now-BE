@@ -85,6 +85,22 @@ def ensure_joinable(status: ReservationStatus, start_at: datetime, participant_c
         raise ReservationStateError("모집이 마감된 예약입니다.")
 
 
+def ensure_editable(status: ReservationStatus, start_at: datetime, participant_count: int, now: datetime) -> None:
+    """A reservation may be edited only while nobody is committed to it.
+
+    Participants agreed to the conditions as they stood when they joined; the
+    host changing the time or the match type underneath them would bind people
+    to an appointment they never accepted. Editing therefore stops at the first
+    participant, and the host cancels and re-posts instead.
+    """
+    if status not in LIVE_STATUSES:
+        raise ReservationStateError("이미 취소되었거나 종료된 예약입니다.")
+    if start_at <= now:
+        raise ReservationStateError("이미 시작된 예약은 변경할 수 없습니다.")
+    if participant_count > 0:
+        raise ReservationStateError("참가자가 있는 예약은 수정할 수 없습니다. 삭제 후 다시 등록해 주세요.")
+
+
 def ensure_participation_cancellable(status: ReservationStatus, start_at: datetime, now: datetime) -> None:
     if status not in LIVE_STATUSES:
         raise ReservationStateError("이미 취소되었거나 종료된 예약입니다.")

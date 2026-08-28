@@ -22,6 +22,10 @@ async def create_reservation(request: models.CreateReservationRequest):
 @router.get("/{reservation_id}", response_model=models.ReservationOut)
 async def get_reservation(reservation_id: int): return await service.get_reservation(reservation_id)
 
+@router.patch("/{reservation_id}", response_model=models.ReservationOut)
+async def update_reservation(reservation_id: int, request: models.UpdateReservationRequest, x_reservation_token: str | None = Header(default=None)):
+    return await service.update_reservation(reservation_id, _token(x_reservation_token), **request.model_dump(exclude_unset=True))
+
 @router.post("/{reservation_id}/participants", response_model=models.JoinReservationOut, status_code=201)
 async def join_reservation(reservation_id: int, request: models.JoinReservationRequest):
     reservation, token = await service.join_reservation(reservation_id, **request.model_dump())

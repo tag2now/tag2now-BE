@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from reservation.domain import (
     KST, LIVE_STATUSES, MatchType, Participant, Reservation, ReservationStatus,
-    ensure_joinable, ensure_participation_cancellable, status_for,
+    ensure_editable, ensure_joinable, ensure_participation_cancellable, status_for,
 )
 from reservation.entities import Reservation as ReservationRow
 from reservation.entities import ReservationParticipant as ReservationParticipantRow
@@ -90,6 +90,15 @@ class PostgresReservationRepository(ReservationRepository):
         )
 
     @staticmethod
+    async def _active_participant_count(session: AsyncSession, reservation_id: int) -> int:
+        return await session.scalar(
+            select(func.count()).select_from(ReservationParticipantRow).where(
+                ReservationParticipantRow.reservation_id == reservation_id,
+                ReservationParticipantRow.cancelled_at.is_(None),
+            )
+        ) or 0
+
+    @staticmethod
     async def _release_participants(session: AsyncSession, reservation_id: int, now: datetime) -> None:
         """A reservation that stops being live carries no active participants."""
         await session.execute(
@@ -138,6 +147,28 @@ class PostgresReservationRepository(ReservationRepository):
             await session.flush()
             await session.refresh(row)
             return _reservation(row, 0)
+
+    async def update(self, reservation_id: int, host_token_hash: str, now: datetime, **changes) -> Reservation:
+        async with self._sessions() as session, session.begin():
+            row = await session.scalar(select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update())
+            if row is None:
+                raise ReservationNotFoundError("Reservation not found")
+            if row.host_token_hash != host_token_hash:
+                raise ReservationAccessError("Reservation cannot be edited with this credential")
+            count = await self._active_participant_count(session, reservation_id)
+            ensure_editable(ReservationStatus(row.status), row.start_at, count, now)
+
+            applied = {field: value for field, value in changes.items() if value is not None}
+            if "match_type" in applied:
+                applied["match_type"] = applied["match_type"].value
+            if "ranks" in applied:
+                applied["host_ranks"] = applied.pop("ranks")
+            for field, value in applied.items():
+                setattr(row, field, value)
+            row.updated_at = now
+            await session.flush()
+            await session.refresh(row)
+            return _reservation(row, count)
 
     async def join(self, reservation_id: int, *, display_name: str, ranks: list[str], participant_token_hash: str, now: datetime) -> tuple[Reservation, Participant]:
         async with self._sessions() as session, session.begin():

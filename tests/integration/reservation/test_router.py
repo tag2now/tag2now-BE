@@ -254,3 +254,78 @@ def test_cancelling_a_reservation_without_the_header_is_refused(client):
     response = client.delete(f"/reservations/{reservation['id']}")
 
     assert response.status_code == 400
+
+
+def test_editing_a_reservation_answers_the_updated_row(client):
+    reservation, owner_token = _create(client)
+
+    response = client.patch(
+        f"/reservations/{reservation['id']}",
+        json={"memo": "자리 하나 남음"},
+        headers={"X-Reservation-Token": owner_token},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["memo"] == "자리 하나 남음"
+    assert response.json()["duration_minutes"] == reservation["duration_minutes"]
+
+
+def test_editing_without_a_token_is_refused(client):
+    reservation, _ = _create(client)
+
+    response = client.patch(f"/reservations/{reservation['id']}", json={"memo": "x"})
+
+    assert response.status_code == 400
+
+
+def test_editing_with_someone_elses_token_is_forbidden(client):
+    reservation, _ = _create(client)
+    _, other_token = _create(client)
+
+    response = client.patch(
+        f"/reservations/{reservation['id']}",
+        json={"memo": "stolen"},
+        headers={"X-Reservation-Token": other_token},
+    )
+
+    assert response.status_code == 403
+
+
+def test_an_edit_that_breaks_a_domain_rule_answers_400(client):
+    reservation, owner_token = _create(client)
+
+    response = client.patch(
+        f"/reservations/{reservation['id']}",
+        json={"match_type": "player_match"},
+        headers={"X-Reservation-Token": owner_token},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "플레이어 매치는 계급을 선택하지 않습니다."}
+
+
+def test_an_edit_with_a_bad_field_answers_422_naming_it(client):
+    reservation, owner_token = _create(client)
+
+    response = client.patch(
+        f"/reservations/{reservation['id']}",
+        json={"duration_minutes": 45},
+        headers={"X-Reservation-Token": owner_token},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "예상 시간 값을 확인해 주세요."}
+
+
+def test_a_reservation_someone_joined_can_no_longer_be_edited(client):
+    reservation, owner_token = _create(client, match_type="player_match", ranks=[], capacity=2)
+    client.post(f"/reservations/{reservation['id']}/participants", json={"display_name": "Joiner", "ranks": []})
+
+    response = client.patch(
+        f"/reservations/{reservation['id']}",
+        json={"memo": "too late"},
+        headers={"X-Reservation-Token": owner_token},
+    )
+
+    assert response.status_code == 400
+    assert "참가자가 있는 예약" in response.json()["detail"]

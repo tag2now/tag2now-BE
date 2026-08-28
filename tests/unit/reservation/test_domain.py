@@ -5,8 +5,8 @@ from datetime import datetime, time, timedelta, timezone
 import pytest
 
 from reservation.domain import (
-    MatchType, ReservationStatus, ensure_conditions_valid, ensure_joinable,
-    ensure_participation_cancellable, start_at_from, status_for,
+    MatchType, ReservationStatus, ensure_conditions_valid, ensure_editable,
+    ensure_joinable, ensure_participation_cancellable, start_at_from, status_for,
 )
 from reservation.exceptions import ReservationStateError
 
@@ -125,3 +125,28 @@ def test_a_start_time_already_past_in_seoul_is_rejected():
 
     with pytest.raises(ReservationStateError, match="10분 이후"):
         start_at_from(time(9, 0), now)
+
+
+def test_an_untaken_reservation_is_editable():
+    ensure_editable(ReservationStatus.OPEN, FUTURE, 0, NOW)
+
+
+def test_a_reservation_with_a_participant_is_not_editable():
+    with pytest.raises(ReservationStateError, match="참가자가 있는 예약"):
+        ensure_editable(ReservationStatus.OPEN, FUTURE, 1, NOW)
+
+
+def test_a_matched_reservation_is_not_editable():
+    """Matched means the capacity is filled, so somebody is committed to it."""
+    with pytest.raises(ReservationStateError, match="참가자가 있는 예약"):
+        ensure_editable(ReservationStatus.MATCHED, FUTURE, 1, NOW)
+
+
+def test_a_cancelled_reservation_is_not_editable():
+    with pytest.raises(ReservationStateError, match="취소되었거나 종료된"):
+        ensure_editable(ReservationStatus.CANCELLED, FUTURE, 0, NOW)
+
+
+def test_a_reservation_that_already_started_is_not_editable():
+    with pytest.raises(ReservationStateError, match="이미 시작된"):
+        ensure_editable(ReservationStatus.OPEN, NOW, 0, NOW)

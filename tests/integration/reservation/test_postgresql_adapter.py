@@ -11,7 +11,7 @@ from sqlalchemy.engine import Engine
 from reservation.domain import MatchType, ReservationStatus
 from reservation.entities import Reservation as ReservationRow
 from reservation.entities import ReservationParticipant as ReservationParticipantRow
-from reservation.exceptions import ReservationStateError
+from reservation.exceptions import ReservationAccessError, ReservationStateError
 from shared.database import close_database, get_session_factory, init_database
 
 
@@ -172,3 +172,68 @@ async def test_the_sweep_expires_reservations_outside_the_requested_day(reposito
 
     assert (await repository.get(old.id)).status is ReservationStatus.ENDED
     assert await _active_participant_count(old.id) == 0
+
+
+@pytest.mark.asyncio
+async def test_an_edit_persists_only_the_fields_it_names(repository):
+    reservation = await _create_open_reservation(repository)
+    now = datetime.now(timezone.utc)
+
+    edited = await repository.update(reservation.id, "owner", now, memo="자리 하나 남음")
+
+    assert edited.memo == "자리 하나 남음"
+    assert edited.duration_minutes == reservation.duration_minutes
+    assert edited.host_ranks == reservation.host_ranks
+    assert edited.start_at == reservation.start_at
+
+
+@pytest.mark.asyncio
+async def test_an_edit_can_replace_the_ranks(repository):
+    reservation = await _create_open_reservation(repository)
+    now = datetime.now(timezone.utc)
+
+    edited = await repository.update(reservation.id, "owner", now, ranks=["Yaksa", "Fujin"])
+
+    assert edited.host_ranks == ["Yaksa", "Fujin"]
+
+
+@pytest.mark.asyncio
+async def test_an_edit_can_switch_the_match_type(repository):
+    reservation = await _create_open_reservation(repository)
+    now = datetime.now(timezone.utc)
+
+    edited = await repository.update(reservation.id, "owner", now, match_type=MatchType.PLAYER, ranks=[], capacity=2)
+
+    assert edited.match_type is MatchType.PLAYER
+    assert edited.capacity == 2
+
+
+@pytest.mark.asyncio
+async def test_someone_elses_token_cannot_edit_a_reservation(repository):
+    reservation = await _create_open_reservation(repository)
+    now = datetime.now(timezone.utc)
+
+    with pytest.raises(ReservationAccessError):
+        await repository.update(reservation.id, "not-the-owner", now, memo="stolen")
+
+    assert (await repository.get(reservation.id)).memo == ""
+
+
+@pytest.mark.asyncio
+async def test_a_reservation_with_a_participant_cannot_be_edited(repository):
+    reservation = await _create_open_reservation(repository, capacity=2)
+    now = datetime.now(timezone.utc)
+    await repository.join(reservation.id, display_name="Joiner", ranks=[], participant_token_hash="participant", now=now)
+
+    with pytest.raises(ReservationStateError, match="참가자가 있는 예약"):
+        await repository.update(reservation.id, "owner", now, memo="too late")
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_reservation_cannot_be_edited(repository):
+    reservation = await _create_open_reservation(repository)
+    now = datetime.now(timezone.utc)
+    await repository.cancel(reservation.id, "owner", now)
+
+    with pytest.raises(ReservationStateError):
+        await repository.update(reservation.id, "owner", now, memo="zombie")
