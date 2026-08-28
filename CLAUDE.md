@@ -54,7 +54,20 @@ docker compose -f compose.test.yml up -d --wait            # Redis + PostgreSQL
 ```
 
 - `tests/unit/` — pure logic; no network, no database.
-- `tests/integration/` — requires Redis and PostgreSQL from `compose.test.yml`. `tests/integration/test_rpcn_client.py` additionally hits the live RPCN server and needs valid `RPCN_*` credentials.
+- `tests/integration/` — requires Redis and PostgreSQL from `compose.test.yml`. `tests/integration/test_rpcn_client.py` and `tests/integration/matching/test_service_integration.py` additionally hit the live RPCN server and need valid `RPCN_*` credentials.
+
+**Stop any running backend before the RPCN tests.** RPCN allows one session per
+account, and a dev server logs in at startup with the same `RPCN_USER` the tests
+use, so those tests fail with `RpcnError: Login failed: LoginAlreadyLoggedIn`
+while one is up. `docker ps` is not enough — a uvicorn started in the venv is not
+a container, and one that lost the port to another instance still holds the RPCN
+session:
+
+```bash
+powershell "Get-CimInstance Win32_Process -Filter \"Name like '%python%'\" | Where-Object { $_.CommandLine -match 'uvicorn' } | Select-Object ProcessId, CommandLine"
+```
+
+Stop every match, run the tests, then start the server again. Killing the parent is enough — the reloader's worker is its child and goes with it.
 
 `pyproject.toml` sets `pythonpath = ["src"]` and `asyncio_mode = "auto"`, so async tests need no `@pytest.mark.asyncio` decorator.
 
