@@ -54,8 +54,8 @@ jobs:
           RPCN_TOKEN: ${{ secrets.RPCN_TOKEN }}
           RPCN_HOST: ${{ vars.RPCN_HOST }}
           RPCN_PORT: "31313"
-          REDIS_URL: redis://localhost:6379/0
-          DB_URL: localhost:5432
+          REDIS_URL: redis://127.0.0.1:6379/0
+          DB_URL: 127.0.0.1:5432
           DB_USER: tag2now
           DB_PASSWORD: tag2now
           DB_NAME: tag2now

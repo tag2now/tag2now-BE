@@ -124,7 +124,7 @@ def test_an_empty_redis_url_selects_the_dict_cache(monkeypatch, clear_settings_c
 
 
 def test_a_configured_redis_url_selects_redis(monkeypatch, clear_settings_cache):
-    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:6379/0")
     assert isinstance(_make_cache(), RedisCache)
 
 

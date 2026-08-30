@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     matchmaking_ttl: int = 60
 
     # host:port only — shared.database.build_dsn() adds scheme and credentials
-    db_url: str = "localhost:5432"
+    db_url: str = "127.0.0.1:5432"
     db_name: str = "tag2now"
     db_user: str = "postgres"
     db_password: str = "postgres"

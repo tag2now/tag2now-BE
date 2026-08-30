@@ -132,7 +132,7 @@ other three (see [`shared/database.py`](src/shared/database.py)).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DB_URL` | `postgresql://localhost:5432/tag2now` | Full DSN, or bare `host:port` |
+| `DB_URL` | `postgresql://127.0.0.1:5432/tag2now` | Full DSN, or bare `host:port` |
 | `DB_NAME` | `tag2now` | Database name (bare-host form only) |
 | `DB_USER` | `postgres` | Database user (bare-host form only) |
 | `DB_PASSWORD` | `postgres` | Database password (bare-host form only) |

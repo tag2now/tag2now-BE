@@ -21,10 +21,10 @@ TOKEN = _settings.rpcn_token
 # os.environ.setdefault("RPCN_USER", "test")
 # os.environ.setdefault("RPCN_PASSWORD", "test")
 # os.environ.setdefault("RPCN_TOKEN", "test")
-# os.environ.setdefault("RPCN_HOST", "localhost")
+# os.environ.setdefault("RPCN_HOST", "127.0.0.1")
 # os.environ.setdefault("RPCN_PORT", "31313")
-# os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-# os.environ.setdefault("DB_URL", "localhost:5432")
+# os.environ.setdefault("REDIS_URL", "redis://127.0.0.1:6379/0")
+# os.environ.setdefault("DB_URL", "127.0.0.1:5432")
 #
 @pytest.fixture(scope="session")
 def session():
