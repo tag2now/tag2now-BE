@@ -83,6 +83,16 @@ def test_a_player_match_with_ranks_is_rejected():
         ensure_conditions_valid(MatchType.PLAYER, ["Brawler"], 2)
 
 
+@pytest.mark.parametrize("capacity", [1, 2, 3])
+def test_an_any_match_accepts_ranks_at_any_capacity(capacity):
+    ensure_conditions_valid(MatchType.ANY, ["Brawler"], capacity)
+
+
+@pytest.mark.parametrize("capacity", [1, 2, 3])
+def test_an_any_match_accepts_no_ranks_at_any_capacity(capacity):
+    ensure_conditions_valid(MatchType.ANY, [], capacity)
+
+
 def test_a_start_time_resolves_against_todays_date_in_seoul():
     # 10:00 UTC is 19:00 KST on the same day
     now = datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)

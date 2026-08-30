@@ -11,6 +11,7 @@ from reservation.exceptions import ReservationStateError
 class MatchType(StrEnum):
     RANK = "rank_match"
     PLAYER = "player_match"
+    ANY = "any"
 
 
 class ReservationStatus(StrEnum):
@@ -63,13 +64,16 @@ def start_at_from(start_time: time, now: datetime) -> datetime:
 
 
 def ensure_conditions_valid(match_type: MatchType, ranks: list[str], capacity: int) -> None:
-    """Rank matches are one-on-one and rank-scoped; player matches are neither."""
+    """Rank matches are one-on-one and rank-scoped; player matches are neither.
+
+    ANY takes either game, so it borrows neither rule: ranks and capacity are free.
+    """
     if match_type is MatchType.RANK:
         if not ranks:
             raise ReservationStateError("랭크매치는 보유 계급을 하나 이상 선택해야 합니다.")
         if capacity != 1:
             raise ReservationStateError("랭크매치는 1명만 모집할 수 있습니다.")
-    elif ranks:
+    elif match_type is MatchType.PLAYER and ranks:
         raise ReservationStateError("플레이어 매치는 계급을 선택하지 않습니다.")
 
 

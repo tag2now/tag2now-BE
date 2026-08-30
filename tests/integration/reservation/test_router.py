@@ -125,6 +125,14 @@ def test_creating_a_reservation_answers_the_row_and_an_owner_token(client):
     assert owner_token
 
 
+def test_a_match_type_of_any_keeps_both_its_ranks_and_a_larger_capacity(client):
+    reservation, _ = _create(client, match_type="any", ranks=["Brawler"], capacity=2)
+
+    assert reservation["match_type"] == "any"
+    assert reservation["host_ranks"] == ["Brawler"]
+    assert reservation["capacity"] == 2
+
+
 def test_a_reservation_is_listed_on_its_own_kst_date(client):
     reservation, _ = _create(client)
 
