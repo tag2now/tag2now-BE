@@ -44,10 +44,23 @@ def client():
     _truncate_reservations()
 
 
+def _bookable_time_of_day() -> str:
+    """A time of day past the lead time that still falls on today's KST date.
+
+    The API resolves a dateless time against today, so two hours out reads as
+    this morning once Seoul passes 22:00. Late evening uses a nearer offset.
+    """
+    now = datetime.now(timezone.utc).astimezone(KST)
+    for offset in (timedelta(hours=2), timedelta(minutes=20)):
+        candidate = now + offset
+        if candidate.date() == now.date():
+            return candidate.strftime("%H:%M:%S")
+    pytest.skip("no bookable time of day is left before midnight in Seoul")
+
+
 def _payload(**overrides):
-    soon = (datetime.now(timezone.utc) + timedelta(hours=2)).astimezone(KST)
     body = {
-        "start_time": soon.strftime("%H:%M:%S"),
+        "start_time": _bookable_time_of_day(),
         "duration_minutes": 60,
         "display_name": "Host",
         "ranks": ["Brawler"],
