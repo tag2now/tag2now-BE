@@ -5,12 +5,10 @@ Current production setup and the one-time AWS provisioning behind it.
 ## Architecture
 
 ```
-Route 53 (tag2now.click)
+Route 53 (match.tag2now.click)
     │
-    ├── CloudFront ──────► Lightsail :80  (static assets only)
-    │                          nginx serves /dist
-    │
-    └── (direct) ────────► Lightsail :8000  (/api, not via CloudFront)
+    └── CloudFront ──────► Lightsail :80
+                               nginx serves /dist and proxies /api/
 
 Lightsail single instance — docker compose
     ├── fe    (nginx + built SPA)
@@ -20,9 +18,18 @@ Lightsail single instance — docker compose
     └── dynamodb-local
 ```
 
-Only static assets go through CloudFront. `/api/` calls reach the instance
-directly, so they never appear in CloudFront logs — which is exactly what makes
-the access logs usable as a page-load counter (see [Analytics](#analytics)).
+**Everything is behind CloudFront**, `/api/` included: responses on both the
+SPA and the API carry a `Via: … cloudfront.net` header. API responses come back
+`X-Cache: Error from cloudfront` — uncacheable, forwarded to the origin every
+time — so each poll is still a distribution request and lands in the logs.
+
+That has a direct consequence for [Analytics](#analytics): CloudFront request
+counts are **not** a page-load counter. The rooms tab polls `/api/rooms/all`
+every 10 s, so API traffic dwarfs real page views. Any count taken from these
+logs has to filter by URI path first.
+
+The site is served at **`match.tag2now.click`**. The bare `tag2now.click` has
+no address record and serves nothing — absolute URLs must use the `match.` host.
 
 ## Deployment
 
@@ -159,7 +166,7 @@ blind spots.
 | Source | Counts | Blind spot |
 |--------|--------|------------|
 | GA4 | real user sessions | ad blockers drop ~10–30% |
-| CloudFront logs | every page load | includes bots |
+| CloudFront logs | every request, `/api/` polling included | includes bots; needs a URI filter to mean "page loads" |
 
 ### GA4
 
@@ -248,9 +255,10 @@ ORDER BY 2 DESC;
 
 Two details make this number trustworthy:
 
-- **`cs_uri_stem IN ('/', '/index.html')`** — the rooms tab polls `/api/rooms/all`
-  every 10 s (`useRooms.ts`), so counting requests would massively over-weight
-  long-lived desktop sessions. Filtering to page loads sidesteps that entirely.
+- **`cs_uri_stem IN ('/', '/index.html')`** — not optional. `/api/` is behind the
+  same distribution, and the rooms tab polls `/api/rooms/all` every 10 s
+  (`useRooms.ts`), so an unfiltered `COUNT(*)` counts polls and massively
+  over-weights long-lived desktop sessions.
 - **`COUNT(DISTINCT c_ip)`** — visitors, not hits.
 
 Bots are not excluded; add a `cs_user_agent NOT LIKE '%bot%'` filter if the
