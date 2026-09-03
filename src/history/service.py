@@ -5,12 +5,13 @@ The adapter is a pure data-access layer that receives a session.
 """
 
 import logging
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from history.db import get_history_repo
-from history.models import DailySummary, HourlyActivity, PlayerStats, RankMatchSnapshotRecord, TopPlayer
-from shared.cache import cache_get, cache_set
+from history.models import ActivitySnapshot, DailySummary, HourlyActivity, PlayerStats, RankMatchSnapshotRecord, TopPlayer
+from shared.cache import cache_delete_pattern, cache_get, cache_set
 from shared.database import transactional, read_only
 from shared.settings import get_settings
 
@@ -23,6 +24,29 @@ logger = logging.getLogger(__name__)
 async def record_snapshot(session: AsyncSession, rooms: list[RankMatchSnapshotRecord]) -> None:
 	"""Persist a room snapshot (fire-and-forget safe)."""
 	await get_history_repo().record_snapshot(session, rooms)
+
+
+@transactional
+async def _record_daily_matched_players(session: AsyncSession, npids: set[str], observed_at: datetime) -> None:
+	await get_history_repo().record_daily_matched_players(session, npids, observed_at)
+
+
+async def record_daily_matched_players(npids: set[str], observed_at: datetime) -> None:
+	"""Record participants, then invalidate summaries only after commit."""
+	if not any(npids):
+		return
+	await _record_daily_matched_players(npids, observed_at)
+	cache_delete_pattern("history:daily:*")
+
+
+@transactional
+async def _record_activity_snapshot(session: AsyncSession, snapshot: ActivitySnapshot) -> None:
+	await get_history_repo().record_activity_snapshot(session, snapshot)
+
+
+async def record_activity_snapshot(snapshot: ActivitySnapshot) -> None:
+	await _record_activity_snapshot(snapshot)
+	cache_delete_pattern("history:daily:*")
 
 
 # -- Read: global stats ------------------------------------------------------

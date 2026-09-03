@@ -16,6 +16,7 @@ from matching.models import (
 	PlayerLookupResponse,
 	PlayerOnlineStatus,
 	RoomInfoDTO,
+	ActivityObservation,
 	RoomType,
 	TTT2_COM_ID,
 	TTT2_RANK_BOARD_ID,
@@ -71,6 +72,32 @@ def _fetch_rooms_all(com_id: str):
 	grouped[RoomType.RANK_MATCH.value].extend(phantom_rooms)
 	grouped[RoomType.RANK_MATCH.value].sort(key=lambda r: r.rank_info.id if r.rank_info else -1)
 	return grouped, all_room_dtos
+
+
+def _fetch_activity_observation(com_id: str) -> ActivityObservation:
+	"""Blocking RPCN read used by the independent history collector.
+
+	This deliberately bypasses the HTTP response cache: collection must not
+	depend on a visitor requesting the rooms endpoint.
+	"""
+	repo = get_game_server_repo()
+	rooms = repo.search_rooms_all(com_id, _get_all_worlds(com_id))
+	rank_rooms = [room for room in rooms if room.room_type == RoomType.RANK_MATCH and room.current_members >= 1]
+	return ActivityObservation(
+		rank_player_npids={
+		user.npid
+		for room in rank_rooms
+		for user in room.users
+		if user.npid
+		},
+		total_players=sum(len(room.users) for room in rooms), total_rooms=len(rooms),
+		rank_players=sum(len(room.users) for room in rank_rooms), rank_rooms=len(rank_rooms),
+	)
+
+
+async def collect_activity_observation(com_id: str) -> ActivityObservation:
+	"""Fetch current player counts and rank participants without caching."""
+	return await asyncio.to_thread(_fetch_activity_observation, com_id)
 
 
 async def get_rooms_all(com_id: str) -> dict:

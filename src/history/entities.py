@@ -1,8 +1,8 @@
 """SQLAlchemy ORM entities for the history module."""
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy import Date, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.database import Base
@@ -28,3 +28,23 @@ class HourlyStatsRow(Base):
 	total_players: Mapped[int] = mapped_column(Integer, nullable=False)
 	total_rooms: Mapped[int] = mapped_column(Integer, nullable=False)
 	captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DailyMatchedPlayerRow(Base):
+	"""A player observed in a completed rank match on a KST calendar day."""
+	__tablename__ = "daily_matched_players"
+
+	date: Mapped[date] = mapped_column(Date, primary_key=True)
+	npid: Mapped[str] = mapped_column(String, primary_key=True)
+	first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ActivitySnapshotRow(Base):
+	__tablename__ = "activity_snapshots"
+
+	id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+	sampled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+	total_players: Mapped[int] = mapped_column(Integer, nullable=False)
+	total_rooms: Mapped[int] = mapped_column(Integer, nullable=False)
+	rank_players: Mapped[int] = mapped_column(Integer, nullable=False)
+	rank_rooms: Mapped[int] = mapped_column(Integer, nullable=False)

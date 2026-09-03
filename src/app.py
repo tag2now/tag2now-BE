@@ -13,6 +13,7 @@ API usage:
 import json
 import logging
 import os
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -24,6 +25,7 @@ from shared.cache import redis_health_check
 from shared.database import init_database, close_database
 from shared.exceptions import NotFoundError, ForbiddenError, ValidationError, ServiceUnavailableError
 from history import init_history_repo, close_history_repo
+from history.collector import run_collector, stop_collector
 from history.router import router as history_router
 from matching.router import router as ttt2_router
 from matching.db import init_game_repo, close_game_repo
@@ -54,7 +56,11 @@ async def lifespan(app: FastAPI):
     await init_reservation_db()
     await init_history_repo()
     await init_game_repo()
-    yield
+    collector_task = asyncio.create_task(run_collector(), name="match-history-collector")
+    try:
+        yield
+    finally:
+        await stop_collector(collector_task)
     await close_game_repo()
     await close_history_repo()
     await close_reservation_db()

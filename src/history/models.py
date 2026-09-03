@@ -26,11 +26,22 @@ class HourlyActivity:
 
 @dataclass
 class DailySummary:
-	"""Daily aggregated player and room statistics."""
+	"""Daily statistics, including unique completed-rank-match participants."""
 	date: str
-	peak_players: int
-	avg_players: float
-	peak_rooms: int
+	peak_players: int | None
+	avg_players: float | None
+	peak_rooms: int | None
+	unique_players: int = 0
+
+
+@dataclass
+class ActivitySnapshot:
+	"""One uncached observation of all currently visible rooms."""
+	observed_at: datetime
+	total_players: int
+	total_rooms: int
+	rank_players: int
+	rank_rooms: int
 
 
 @dataclass

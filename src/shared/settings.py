@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     cache_ttl_activity: int = 300
     cache_ttl_player_hours: int = 300
     matchmaking_ttl: int = 60
+    match_history_collection_interval_seconds: int = 30
 
     # host:port only — shared.database.build_dsn() adds scheme and credentials
     db_url: str = "127.0.0.1:5432"

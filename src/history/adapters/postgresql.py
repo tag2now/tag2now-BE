@@ -3,18 +3,19 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import DateTime, Integer, case, delete, func, or_, select, text, union_all
+from sqlalchemy import Date, DateTime, Integer, case, delete, func, or_, select, text, union_all
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from history.entities import HourlyStatsRow, RankMatchSnapshotRow
-from history.models import CoPlayer, DailySummary, HourlyActivity, PlayerStats, RankMatchSnapshotRecord, TopPlayer
+from history.entities import ActivitySnapshotRow, DailyMatchedPlayerRow, HourlyStatsRow, RankMatchSnapshotRow
+from history.models import ActivitySnapshot, CoPlayer, DailySummary, HourlyActivity, PlayerStats, RankMatchSnapshotRecord, TopPlayer
 from history.ports import HistoryPort
 
 logger = logging.getLogger(__name__)
 
 KST = timezone(timedelta(hours=9))
 _HOURLY_RETENTION_DAYS = 90
+_ACTIVITY_RETENTION_DAYS = 90
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +76,33 @@ class PostgresHistoryAdapter(HistoryPort):
 			)
 		)
 
+	async def record_daily_matched_players(
+		self, session: AsyncSession, npids: set[str], observed_at: datetime
+	) -> None:
+		"""Use the database unique key as the durable per-day participant set."""
+		valid_npids = {npid for npid in npids if npid}
+		if not valid_npids:
+			return
+
+		observed_kst = observed_at.astimezone(KST)
+		stmt = pg_insert(DailyMatchedPlayerRow).values([
+			dict(date=observed_kst.date(), npid=npid, first_seen_at=observed_at)
+			for npid in valid_npids
+		]).on_conflict_do_nothing(index_elements=["date", "npid"])
+		await session.execute(stmt)
+
+	async def record_activity_snapshot(self, session: AsyncSession, snapshot: ActivitySnapshot) -> None:
+		session.add(ActivitySnapshotRow(
+			sampled_at=snapshot.observed_at,
+			total_players=snapshot.total_players,
+			total_rooms=snapshot.total_rooms,
+			rank_players=snapshot.rank_players,
+			rank_rooms=snapshot.rank_rooms,
+		))
+		await session.execute(delete(ActivitySnapshotRow).where(
+			ActivitySnapshotRow.sampled_at < func.now() - timedelta(days=_ACTIVITY_RETENTION_DAYS)
+		))
+
 	# -- Read: global stats --------------------------------------------------
 
 	async def get_hourly_activity(self, session: AsyncSession, days: int = 7) -> list[HourlyActivity]:
@@ -103,21 +131,39 @@ class PostgresHistoryAdapter(HistoryPort):
 		]
 
 	async def get_daily_summary(self, session: AsyncSession, days: int = 30) -> list[DailySummary]:
-		stmt = (
+		start_date = (datetime.now(KST) - timedelta(days=days - 1)).date()
+		start_at = datetime.combine(start_date, datetime.min.time(), KST).astimezone(timezone.utc)
+		players = (
 			select(
-				func.split_part(HourlyStatsRow.hour_key, "T", 1).label("date"),
-				func.max(HourlyStatsRow.total_players).label("peak_players"),
-				func.round(func.avg(HourlyStatsRow.total_players), 1).label("avg_players"),
-				func.max(HourlyStatsRow.total_rooms).label("peak_rooms"),
+				DailyMatchedPlayerRow.date,
+				func.count().label("unique_players"),
 			)
-			.where(HourlyStatsRow.captured_at >= func.now() - timedelta(days=days))
-			.group_by("date")
-			.order_by(text("date DESC"))
-		)
+			.where(DailyMatchedPlayerRow.date >= start_date)
+			.group_by(DailyMatchedPlayerRow.date)
+		).subquery()
+		snapshot_date = func.cast(func.timezone("Asia/Seoul", ActivitySnapshotRow.sampled_at), Date).label("date")
+		snapshots = (
+			select(snapshot_date, func.max(ActivitySnapshotRow.total_players).label("peak_players"),
+				func.round(func.avg(ActivitySnapshotRow.total_players), 1).label("avg_players"),
+				func.max(ActivitySnapshotRow.total_rooms).label("peak_rooms"))
+			.where(ActivitySnapshotRow.sampled_at >= start_at)
+			.group_by(snapshot_date)
+		).subquery()
+		date = func.coalesce(snapshots.c.date, players.c.date).label("date")
+		stmt = select(date, snapshots.c.peak_players, snapshots.c.avg_players, snapshots.c.peak_rooms,
+			func.coalesce(players.c.unique_players, 0).label("unique_players")).select_from(
+			snapshots.outerjoin(players, snapshots.c.date == players.c.date, full=True)
+		).order_by(date)
 
 		result = await session.execute(stmt)
 		return [
-			DailySummary(date=row.date, peak_players=row.peak_players, avg_players=float(row.avg_players), peak_rooms=row.peak_rooms)
+			DailySummary(
+				date=row.date.isoformat(),
+				peak_players=row.peak_players,
+				avg_players=float(row.avg_players) if row.avg_players is not None else None,
+				peak_rooms=row.peak_rooms,
+				unique_players=row.unique_players,
+			)
 			for row in result
 		]
 

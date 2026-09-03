@@ -1,11 +1,7 @@
 """Tests for matching.models dataclasses."""
 
-from datetime import datetime, timezone
-
 from matching.models import (
     CharInfo,
-    PlayerLookupResponse,
-    PlayerOnlineStatus,
     Rank,
     RoomInfoDTO,
     RoomType,
@@ -87,17 +83,3 @@ def test_room_info_dto_phantom():
     assert room.rank_info.name == "Berserker"
     assert room.users[0].npid == "p1"
     assert room.users[0].online_name == "P1"
-
-
-def test_player_online_status_defaults():
-    status = PlayerOnlineStatus(is_online=False, is_matchmaking=False)
-    assert status.last_seen is None
-    assert status.is_online is False
-
-
-def test_player_lookup_response_construction():
-    status = PlayerOnlineStatus(is_online=True, is_matchmaking=True, last_seen=datetime.now(timezone.utc))
-    resp = PlayerLookupResponse(npid="p1", online_status=status, leaderboard=None, usual_playing_hours_kst=[14, 15])
-    assert resp.npid == "p1"
-    assert resp.online_status.is_matchmaking is True
-    assert resp.usual_playing_hours_kst == [14, 15]

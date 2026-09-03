@@ -4,7 +4,9 @@ from abc import ABC, abstractmethod
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from history.models import DailySummary, HourlyActivity, PlayerStats, RankMatchSnapshotRecord, TopPlayer
+from datetime import datetime
+
+from history.models import ActivitySnapshot, DailySummary, HourlyActivity, PlayerStats, RankMatchSnapshotRecord, TopPlayer
 
 
 class HistoryPort(ABC):
@@ -15,6 +17,14 @@ class HistoryPort(ABC):
 	@abstractmethod
 	async def record_snapshot(self, session: AsyncSession, rooms: list[RankMatchSnapshotRecord]) -> None:
 		"""Persist a room snapshot and update hourly aggregates."""
+
+	@abstractmethod
+	async def record_daily_matched_players(self, session: AsyncSession, npids: set[str], observed_at: datetime) -> None:
+		"""Persist unique completed-rank-match participants for the KST day."""
+
+	@abstractmethod
+	async def record_activity_snapshot(self, session: AsyncSession, snapshot: ActivitySnapshot) -> None:
+		"""Persist one observed concurrent-player snapshot."""
 
 	# -- Read: global stats --------------------------------------------------
 

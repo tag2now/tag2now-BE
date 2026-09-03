@@ -137,6 +137,15 @@ class HourlyActivityEntry:
 
 
 @dataclass
+class ActivityObservation:
+	rank_player_npids: set[str]
+	total_players: int
+	total_rooms: int
+	rank_players: int
+	rank_rooms: int
+
+
+@dataclass
 class PlayerOnlineStatus:
 	"""Current online status of a player."""
 	is_online: bool

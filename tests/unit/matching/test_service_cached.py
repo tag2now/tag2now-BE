@@ -51,6 +51,34 @@ async def test_get_rooms_all_publishes_activity_snapshot(mock_cache, mock_game_r
     assert isinstance(published[0], ActivitySnapshot)
 
 
+@pytest.mark.asyncio
+async def test_collect_activity_observation_bypasses_http_cache(mock_game_repo, monkeypatch):
+    from matching.models import Rank, RoomInfoDTO
+    from matching.service import collect_activity_observation
+    from rpcn_client.models import UserInfo
+
+    monkeypatch.setattr("matching.service.get_server_world_tree", lambda com_id: {"1": [10]})
+    solo_ranked = RoomInfoDTO.phantom("solo", "Solo", RoomType.RANK_MATCH, Rank(id=1))
+    full_ranked = RoomInfoDTO.phantom("first", "First", RoomType.RANK_MATCH, Rank(id=2))
+    full_ranked.current_members = 2
+    full_ranked.users = [
+        UserInfo(npid="first", online_name="First", avatar_url=""),
+        UserInfo(npid="second", online_name="Second", avatar_url=""),
+    ]
+    player_match = RoomInfoDTO.phantom("ignored", "Ignored", RoomType.PLAYER_MATCH, None)
+    empty_ranked = RoomInfoDTO.phantom("", "", RoomType.RANK_MATCH, Rank(id=3))
+    empty_ranked.current_members = 0
+    empty_ranked.users = []
+    mock_game_repo.search_rooms_all.return_value = [solo_ranked, full_ranked, player_match, empty_ranked]
+
+    observation = await collect_activity_observation("NPWR02973_00")
+
+    assert observation.rank_player_npids == {"solo", "first", "second"}
+    assert (observation.total_players, observation.total_rooms) == (4, 4)
+    assert (observation.rank_players, observation.rank_rooms) == (3, 2)
+    mock_game_repo.search_rooms_all.assert_called_once_with("NPWR02973_00", [10])
+
+
 def test_get_leaderboard_cache_miss(mock_cache, mock_game_repo):
     from matching.service import get_leaderboard
     from matching.models import TTT2LeaderboardResult
