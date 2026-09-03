@@ -43,7 +43,16 @@ docker compose up
 .venv/Scripts/python.exe -m rpcn_client --user YOUR_USER --password YOUR_PASS
 ```
 
-Redis is a hard dependency: `app.py` runs `redis_health_check()` at import time and calls `os._exit(1)` if Redis is unreachable.
+**Redis is optional.** `shared/cache.py` picks its backend from `redis_url`: set,
+and it is `RedisCache`; empty (the default), and it is `DictCache`, an
+in-process dict with per-entry TTL. `app.py` runs `redis_health_check()` at
+import time and `os._exit(1)`s on failure, but that check returns immediately
+when no `redis_url` is configured — so a local run with the setting blank starts
+fine and caches in memory.
+
+The dict cache is per-process and dies with it. That is a fine default for a
+local run and wrong for production, where the restart would silently drop every
+cached value.
 
 ## Tests
 
@@ -96,21 +105,37 @@ How each environment supplies config:
 image has no `env/` directory, so there is no file for a profile to select —
 values arrive as real environment variables, which take precedence anyway.
 
-Required with no default: `rpcn_user`, `rpcn_password`, `rpcn_token`, `redis_url`.
+**The two files are not interchangeable**, and picking the wrong one is the
+usual local-setup mistake: `.env.local` is read by a venv run and ignored by
+compose, `.env.dev` the reverse. Their hostnames differ accordingly —
+`redis://redis:6379` and `postgres:5432` resolve only inside the compose
+network, `localhost` only outside it.
+
+Both files are gitignored copies, so their contents drift between machines.
+Check what yours actually holds before assuming a service is configured.
+
+Required with no default: `rpcn_user`, `rpcn_password`, `rpcn_token`. Everything
+else has one — `redis_url` defaults to `""`, which selects the dict cache.
 
 Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leaderboard`, `cache_ttl_rooms`, `cache_ttl_rooms_all`, `cache_ttl_community`, `cache_ttl_activity`, `cache_ttl_player_hours`, `matchmaking_ttl`.
 
 ## Architecture
 
-Four domain modules under `src/`, plus a `shared/` layer and the standalone `rpcn_client` package.
+Five domain modules under `src/`, plus a `shared/` layer and the standalone `rpcn_client` package.
 
 | Module | Responsibility |
 |--------|----------------|
 | `matching/` | Live rooms, leaderboard, player lookup, matchmaking detection |
-| `history/` | Persisted snapshots and time-series statistics |
+| `history/` | Persisted snapshots, time-series statistics, the match collector |
 | `community/` | Message board — posts, comments, thumbs |
-| `shared/` | Settings, Redis cache, database, event bus, exceptions |
+| `reservation/` | Appointments — create, join, edit, cancel |
+| `shared/` | Settings, cache, database, event bus, exceptions, `security/` |
 | `rpcn_client/` | Standalone RPCN protocol client (no FastAPI dependency) |
+
+`shared/security/credentials.py` issues the opaque tokens that give a
+reservation an owner without an account: `TokenCredentialManager.issue()`
+returns the client's token and the SHA-256 form that is stored, so possession
+of the token is the whole proof of ownership.
 
 ### Hexagonal layering
 
@@ -129,6 +154,12 @@ Four domain modules under `src/`, plus a `shared/` layer and the standalone `rpc
 Routers depend on services; services depend on ports; only adapters know about a concrete store. Do not import an adapter directly from a service — go through the `db.py` accessor.
 
 The repository singleton is module-level state, initialised in the FastAPI `lifespan` and torn down in reverse order. `get_*_repo()` raises `RuntimeError` if called before init, so no null checks are needed at call sites.
+
+`reservation/` is the exception to that accessor rule: its `db.py` **injects**
+the repository with `service.configure(_repo)`, and `service.py` keeps its own
+`_repository()` guard. Copy the `matching`/`history`/`community` shape for a new
+module unless you want the injection seam that makes the service testable
+without touching `db.py`.
 
 `community/db.py` selects its adapter at runtime from the `db_type` setting (`postgresql` or `dynamodb`), importing the adapter lazily inside the branch. The `db_type` setting is marked for removal in the source.
 
@@ -149,10 +180,17 @@ Event types live in `matching/events.py`: `MatchmakingDetected`, `MatchmakingRes
 
 ### Caching
 
-`shared/cache.py` wraps a module-level synchronous `redis` client. All helpers swallow Redis errors and log a warning — a Redis outage degrades to cache misses rather than 500s.
+`shared/cache.py` exposes a `CacheBackend` ABC with two implementations,
+chosen once at import by `_make_cache()` from whether `redis_url` is set:
+`RedisCache` (module-level synchronous `redis` client) or `DictCache`
+(thread-safe in-process dict). `cache_get` / `cache_set` /
+`cache_delete_pattern` are module-level shims over whichever is active.
+
+`RedisCache` swallows every Redis error and logs a warning — an outage degrades
+to cache misses rather than 500s.
 
 - `cache_get(key)` / `cache_set(key, value, ttl)` — JSON round-trip; `_DataclassEncoder` handles dataclasses and `datetime`.
-- `cache_delete_pattern(pattern)` — SCAN-based invalidation, safe in production.
+- `cache_delete_pattern(pattern)` — SCAN on Redis (safe in production), `fnmatch` over the keys on the dict backend.
 
 The standard service pattern is read-through:
 
@@ -169,9 +207,22 @@ Routers own cache invalidation on writes (see `community/router.py:_invalidate_p
 
 ### Matchmaking detection
 
-`matching/matchmaking_tracker.py` infers who is searching for a match, since RPCN exposes no such state. Players cycling through the TTT2 matchmaking loop (`searchRoom → createRoom → wait → quit`) are only visible while their solo room exists. Consecutive room snapshots are diffed: a player whose `RANK_MATCH` room disappeared is presumed to be searching, and is surfaced as a **phantom room** (`RoomInfoDTO.phantom`) merged into the rank-match group. Entries expire after `matchmaking_ttl` seconds.
+`matching/matchmaking_tracker.py` infers who is searching for a match, since RPCN exposes no such state. Players cycling through the TTT2 matchmaking loop (`searchRoom → createRoom → wait → quit`) are only visible while their solo room exists. Consecutive room snapshots are diffed: a player whose `RANK_MATCH` room disappeared is presumed to be searching, and is surfaced as a **phantom room** — built by the `RoomInfoDTO.phantom()` classmethod — merged into the rank-match group. Entries expire after `matchmaking_ttl` seconds.
 
 The tracker holds module-level state (`_prev_rooms`, `_matchmaking_players`) — it is stateful across requests and not safe to run in multiple processes without coordination.
+
+### Match-history collector
+
+`history/collector.py` runs as a background asyncio task started in `lifespan`
+and cancelled before the database closes. Every
+`match_history_collection_interval_seconds` (default 30) it calls
+`matching.service.collect_completed_rank_player_ids()` and records the result
+via `history.service.record_daily_matched_players()`. A failed cycle is logged
+and skipped — the loop is never allowed to die on one bad poll.
+
+This is a second, independent path from the event bus below: the bus reacts to
+whatever `_fetch_rooms_all()` happens to observe, while the collector polls on
+its own clock.
 
 ### RPCN client lifecycle
 
@@ -197,6 +248,11 @@ Domain code raises the exceptions in `shared/exceptions.py`; `app.py` registers 
 | `ValidationError` | 400 |
 | `ServiceUnavailableError` | 502 |
 
+FastAPI's own `RequestValidationError` keeps its 422 but is reshaped by a
+handler in `app.py`: it answers with a single Korean sentence naming the fields
+a user can actually see, via the `_FIELD_LABELS` map, instead of the default
+error array. A new user-facing request field belongs in that map.
+
 ### Routes
 
 | Prefix | Router |
@@ -204,7 +260,7 @@ Domain code raises the exceptions in `shared/exceptions.py`; `app.py` registers 
 | *(none)* | `matching/router.py` — `/servers`, `/rooms/all`, `/leaderboard`, `/players/{npid}` |
 | `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/stats/weekly-top`, `/players/{npid}` |
 | `/community` | `community/router.py` — posts, comments, thumbs, identity |
-| `/reservations` | `reservation/router.py` — list, create, edit (`PATCH`), join, cancel |
+| `/reservations` | `reservation/router.py` — list, create, read one (`GET /{id}`), edit (`PATCH`), join, cancel |
 | *(none)* | `/health` in `app.py`, excluded from the schema |
 
 Community identity is not authentication: `_get_user` reads the `X-Community-User` header or the `community_user` cookie, truncated to 50 characters. There is no verification of who the caller claims to be.
@@ -215,12 +271,12 @@ A standalone package with no FastAPI dependency, usable via `python -m rpcn_clie
 
 | Module | Contents |
 |--------|----------|
-| `constants.py` | `HEADER_SIZE`, `PKT_*`, `CMD_*`, `ERR_*`, `_HDR_FMT` |
+| `constants.py` | `HEADER_SIZE`, `PROTOCOL_VERSION`, `PKT_*`, the `Cmd` IntEnum, `ERR_NO_ERROR`, `COMMUNICATION_ID_SIZE`, `_HDR_FMT` |
 | `exceptions.py` | `RpcnError` |
-| `models.py` | `LoginInfo`, `RoomAttr`, `RoomBinAttr`, `RoomInfo`, `SearchRoomsResult`, `ScoreEntry`, `ScoreResult` |
-| `helpers.py` | `_encode_com_id`, `_read_cstr`, `_pack_protobuf`, `_unpack_data_packet`, `_import_pb2` |
-| `client.py` | `RpcnClient` class |
+| `models.py` | `UserInfo`, `RoomAttr`, `RoomBinAttr`, `RoomInfo`, `SearchRoomsResult`, `ScoreEntry`, `ScoreResult` |
+| `client.py` | `RpcnClient`, plus the framing helper `_unpack_data_packet` |
 | `metrics.py` | `TrackedRpcnClient` — timing wrapper |
+| `__main__.py` | the `python -m rpcn_client` smoke-test CLI |
 | `__init__.py` | re-exports the full public API |
 
 ### Binary protocol framing
@@ -230,7 +286,7 @@ All packets share a 15-byte little-endian header (`<BHIQ`):
 | Field | Type | Description |
 |-------|------|-------------|
 | `pkt_type` | u8 | 0=Request, 1=Reply, 2=Notification, 3=ServerInfo |
-| `cmd` | u16 | CommandType enum (see `constants.py`) |
+| `cmd` | u16 | `Cmd` IntEnum (see `constants.py`) |
 | `total_size` | u32 | Header + payload bytes |
 | `packet_id` | u64 | Monotonically increasing per-connection counter |
 
@@ -239,7 +295,7 @@ TLS uses `CERT_NONE` because RPCN presents a self-signed certificate.
 ### Two payload formats
 
 - **Simple commands** (server list, world list): raw `struct.pack` little-endian integers.
-- **Complex commands** (rooms, scores): protobuf serialized with a u32 LE length prefix. Use `_pack_protobuf()` to serialize and `_unpack_data_packet()` to deserialize.
+- **Complex commands** (rooms, scores): protobuf serialized with a u32 LE length prefix. `client.py` packs the prefix at the call site and `_unpack_data_packet()` strips it on the way back.
 
 ### Notification handling
 
@@ -247,7 +303,9 @@ TLS uses `CERT_NONE` because RPCN presents a self-signed certificate.
 
 ### Comm IDs
 
-Game communication IDs are exactly 12 ASCII bytes (e.g. `NPWR04850_00`). `_encode_com_id()` validates and encodes them; the result is prepended to most request payloads. TTT2's ID and rank board ID are `TTT2_COM_ID` / `TTT2_RANK_BOARD_ID` in `matching/models.py`.
+Game communication IDs are exactly 12 ASCII bytes. The result is prepended to
+most request payloads. TTT2's are `TTT2_COM_ID` (`NPWR02973_00`) and
+`TTT2_RANK_BOARD_ID` (`4`) in `matching/models.py`.
 
 ## Deployment
 
