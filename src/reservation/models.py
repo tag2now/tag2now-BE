@@ -12,13 +12,13 @@ SUPPORTED_DURATIONS = {30, 60, 120, 180}
 
 def _reject_duplicate_ranks(ranks: list[str] | None) -> list[str] | None:
     if ranks is not None and len(set(ranks)) != len(ranks):
-        raise ValueError("ranks must not contain duplicates")
+        raise ValueError("같은 계급을 중복해서 선택할 수 없습니다.")
     return ranks
 
 
 def _reject_unsupported_duration(minutes: int | None) -> int | None:
     if minutes is not None and minutes not in SUPPORTED_DURATIONS:
-        raise ValueError("duration_minutes must be 30, 60, 120, or 180")
+        raise ValueError(f"예상 시간은 {', '.join(f'{m}분' for m in sorted(SUPPORTED_DURATIONS))} 중에서 선택해 주세요.")
     return minutes
 
 

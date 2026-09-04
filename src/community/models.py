@@ -27,7 +27,9 @@ class CreatePostRequest(BaseModel):
     @classmethod
     def must_be_valid_post_type(cls, v: str) -> str:
         if v not in VALID_POST_TYPES:
-            raise ValueError(f"post_type must be one of: {sorted(VALID_POST_TYPES)}")
+            # Not enumerated: VALID_POST_TYPES is the three board types plus
+            # every character name, and a 60-item list helps nobody.
+            raise ValueError("게시글 종류 값을 확인해 주세요.")
         return v
 
 
@@ -46,7 +48,7 @@ class ThumbRequest(BaseModel):
     @classmethod
     def must_be_up_or_down(cls, v: str) -> str:
         if v not in DIRECTION_MAP:
-            raise ValueError("direction must be up or down")
+            raise ValueError("추천 방향 값을 확인해 주세요.")
         return v
 
     @property

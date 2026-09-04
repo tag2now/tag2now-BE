@@ -71,18 +71,29 @@ def _payload(**overrides):
     return {**body, **overrides}
 
 
-def test_a_schema_violation_names_the_field_that_failed(client):
+def test_a_schema_violation_states_the_rule_that_failed(client):
     response = client.post("/reservations", json=_payload(duration_minutes=45))
 
     assert response.status_code == 422
-    assert response.json() == {"detail": "예상 시간 값을 확인해 주세요."}
+    assert response.json() == {"detail": "예상 시간은 30분, 60분, 120분, 180분 중에서 선택해 주세요."}
 
 
-def test_several_bad_fields_are_all_named(client):
+def test_one_rule_is_answered_even_when_several_fields_fail(client):
+    """A form shows one line, so the first violation that names a rule wins.
+
+    Both of these are specific, and pydantic reports them in field order --- the
+    point is that neither falls back to naming its field, which used to let the
+    vaguer of the two mask the other.
+    """
     response = client.post("/reservations", json=_payload(duration_minutes=45, display_name=""))
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "유저명, 예상 시간 값을 확인해 주세요."
+    assert response.json()["detail"] == "예상 시간은 30분, 60분, 120분, 180분 중에서 선택해 주세요."
+
+    response = client.post("/reservations", json=_payload(display_name=""))
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "유저명을 입력해 주세요."
 
 
 def test_a_domain_rule_answers_400_with_its_own_message(client):
@@ -325,7 +336,7 @@ def test_an_edit_that_breaks_a_domain_rule_answers_400(client):
     assert response.json() == {"detail": "플레이어 매치는 계급을 선택하지 않습니다."}
 
 
-def test_an_edit_with_a_bad_field_answers_422_naming_it(client):
+def test_an_edit_with_a_bad_field_answers_422_stating_the_rule(client):
     reservation, owner_token = _create(client)
 
     response = client.patch(
@@ -335,7 +346,7 @@ def test_an_edit_with_a_bad_field_answers_422_naming_it(client):
     )
 
     assert response.status_code == 422
-    assert response.json() == {"detail": "예상 시간 값을 확인해 주세요."}
+    assert response.json() == {"detail": "예상 시간은 30분, 60분, 120분, 180분 중에서 선택해 주세요."}
 
 
 def test_a_reservation_someone_joined_can_no_longer_be_edited(client):
