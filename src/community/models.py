@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 from matching.constants import TTT2_CHARACTERS
 
 VALID_POST_TYPES: set[str] = (
-    {"자유", "랭매구인"}
+    {"자유", "건의", "공략"}
     | {name for name in TTT2_CHARACTERS.values() if name and name != "?"}
 )
 
