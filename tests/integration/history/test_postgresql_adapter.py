@@ -129,10 +129,15 @@ async def test_daily_summary_counts_unique_players_in_requested_kst_days(adapter
     yesterday_players = {"summary-yesterday"}
 
     # The local integration DB may contain retained collector data.  Isolate the
-    # two dates under test inside this test transaction.
+    # two dates under test inside this test transaction, on the same KST day
+    # boundaries get_daily_summary groups by --- anchoring the delete to
+    # yesterday_at instead would leave that day's earlier snapshots behind, and
+    # their peak would outrank the one this test records.
+    yesterday_start = datetime.combine(today - timedelta(days=1), time(), tzinfo=kst).astimezone(timezone.utc)
+    tomorrow_start = datetime.combine(today + timedelta(days=1), time(), tzinfo=kst).astimezone(timezone.utc)
     await db_session.execute(delete(ActivitySnapshotRow).where(
-        ActivitySnapshotRow.sampled_at >= yesterday_at,
-        ActivitySnapshotRow.sampled_at < today_at + timedelta(days=1),
+        ActivitySnapshotRow.sampled_at >= yesterday_start,
+        ActivitySnapshotRow.sampled_at < tomorrow_start,
     ))
     await db_session.execute(delete(DailyMatchedPlayerRow).where(
         DailyMatchedPlayerRow.date.in_([today, today - timedelta(days=1)]),
