@@ -44,18 +44,30 @@ def client():
     _truncate_reservations()
 
 
-def _bookable_time_of_day() -> str:
-    """A time of day past the lead time that still falls on today's KST date.
+def _window_end() -> datetime:
+    """The next 06:00 KST — the far edge of what the API lists and accepts."""
+    now = datetime.now(timezone.utc).astimezone(KST)
+    end = now.replace(hour=6, minute=0, second=0, microsecond=0)
+    return end if now < end else end + timedelta(days=1)
 
-    The API resolves a dateless time against today, so two hours out reads as
-    this morning once Seoul passes 22:00. Late evening uses a nearer offset.
+
+def _bookable_time_of_day() -> str:
+    """A time of day past the lead time that still lands before the next dawn.
+
+    The window can be as short as ten minutes just before 06:00, so the offsets
+    step down rather than assuming an evening's worth of room.
     """
     now = datetime.now(timezone.utc).astimezone(KST)
-    for offset in (timedelta(hours=2), timedelta(minutes=20)):
+    for offset in (timedelta(hours=2), timedelta(minutes=30), timedelta(minutes=11)):
         candidate = now + offset
-        if candidate.date() == now.date():
+        if candidate < _window_end():
             return candidate.strftime("%H:%M:%S")
-    pytest.skip("no bookable time of day is left before midnight in Seoul")
+    pytest.skip("the window closes too soon to book anything in it")
+
+
+def _unbookable_time_of_day() -> str:
+    """A time of day the window cannot reach — one hour past the next dawn."""
+    return (_window_end() + timedelta(hours=1)).strftime("%H:%M:%S")
 
 
 def _payload(**overrides):
@@ -135,10 +147,6 @@ def _join(client, reservation_id, display_name="Joiner", ranks=()):
     return response
 
 
-def _kst_date_of(reservation):
-    return datetime.fromisoformat(reservation["start_at"]).astimezone(KST).date().isoformat()
-
-
 def test_creating_a_reservation_answers_the_row_and_an_owner_token(client):
     reservation, owner_token = _create(client)
 
@@ -157,22 +165,21 @@ def test_a_match_type_of_any_keeps_both_its_ranks_and_a_larger_capacity(client):
     assert reservation["capacity"] == 2
 
 
-def test_a_reservation_is_listed_on_its_own_kst_date(client):
+def test_a_new_reservation_is_listed_without_asking_for_a_date(client):
     reservation, _ = _create(client)
 
-    listed = client.get("/reservations", params={"date": _kst_date_of(reservation)})
+    listed = client.get("/reservations")
 
     assert listed.status_code == 200
     assert reservation["id"] in [item["id"] for item in listed.json()]
 
 
-def test_a_reservation_is_absent_from_a_neighbouring_date(client):
-    reservation, _ = _create(client)
-    day_before = (datetime.fromisoformat(reservation["start_at"]).astimezone(KST) - timedelta(days=1)).date()
+def test_a_time_of_day_past_dawn_is_refused(client):
+    """The window ends at 06:00 KST, so nothing can be booked into the day after."""
+    response = client.post("/reservations", json=_payload(start_time=_unbookable_time_of_day()))
 
-    listed = client.get("/reservations", params={"date": day_before.isoformat()})
-
-    assert reservation["id"] not in [item["id"] for item in listed.json()]
+    assert response.status_code == 400
+    assert "오전 6시" in response.json()["detail"]
 
 
 def test_fetching_one_reservation_returns_the_same_row_the_creation_did(client):
@@ -264,7 +271,7 @@ def test_the_host_cancels_the_reservation_and_it_leaves_the_days_list(client):
 
     assert response.status_code == 204
     assert client.get(f"/reservations/{reservation['id']}").json()["status"] == "cancelled"
-    listed = client.get("/reservations", params={"date": _kst_date_of(reservation)})
+    listed = client.get("/reservations")
     assert reservation["id"] not in [item["id"] for item in listed.json()]
 
 

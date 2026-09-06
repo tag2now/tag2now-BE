@@ -1,6 +1,6 @@
 """Reservation use cases depend only on repository, clock, and credentials ports."""
 
-from datetime import date, datetime, time
+from datetime import datetime, time
 
 from shared.security.credentials import CredentialManager, TokenCredentialManager, hash_credential
 from reservation.domain import MatchType, Reservation, ensure_conditions_valid, start_at_from
@@ -29,8 +29,8 @@ def _repository() -> ReservationRepository:
     return _repo
 
 
-async def list_reservations(day: date) -> list[Reservation]:
-    return await _repository().list_for_date(day)
+async def list_reservations() -> list[Reservation]:
+    return await _repository().list_upcoming()
 
 
 async def create_reservation(*, start_time: time, duration_minutes: int, display_name: str, ranks: list[str], match_type: MatchType, capacity: int, memo: str) -> tuple[Reservation, str]:

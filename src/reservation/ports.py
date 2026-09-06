@@ -1,7 +1,7 @@
 """Replaceable infrastructure contracts for reservations."""
 
 from abc import ABC, abstractmethod
-from datetime import date, datetime
+from datetime import datetime
 
 from reservation.domain import MatchType, Participant, Reservation
 
@@ -14,7 +14,7 @@ class ReservationRepository(ABC):
     async def close(self) -> None: ...
 
     @abstractmethod
-    async def list_for_date(self, day: date) -> list[Reservation]: ...
+    async def list_upcoming(self) -> list[Reservation]: ...
 
     @abstractmethod
     async def get(self, reservation_id: int) -> Reservation: ...

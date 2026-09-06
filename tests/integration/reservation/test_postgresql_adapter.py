@@ -8,7 +8,7 @@ import pytest_asyncio
 from sqlalchemy import delete, event, func, select
 from sqlalchemy.engine import Engine
 
-from reservation.domain import MatchType, ReservationStatus
+from reservation.domain import MatchType, ReservationStatus, window_end
 from reservation.entities import Reservation as ReservationRow
 from reservation.entities import ReservationParticipant as ReservationParticipantRow
 from reservation.exceptions import ReservationAccessError, ReservationStateError
@@ -119,7 +119,7 @@ async def test_expiring_a_reservation_also_releases_its_participants(repository)
     )
     await repository.join(reservation.id, display_name="Joiner", ranks=[], participant_token_hash="participant", now=past - timedelta(minutes=1))
 
-    await repository.list_for_date(past.date())
+    await repository.list_upcoming()
 
     assert (await repository.get(reservation.id)).status is ReservationStatus.ENDED
     assert await _active_participant_count(reservation.id) == 0
@@ -138,7 +138,7 @@ async def _expired_reservation(repo, token: str):
 @pytest.mark.asyncio
 async def test_the_expiry_sweep_costs_the_same_no_matter_how_many_expired(repository):
     """Cost must not grow with the table: the sweep is two statements, always."""
-    def updates_during_listing(day):
+    def updates_during_listing():
         statements = []
 
         def record(conn, cursor, statement, *_):
@@ -148,30 +148,51 @@ async def test_the_expiry_sweep_costs_the_same_no_matter_how_many_expired(reposi
         async def run():
             event.listen(Engine, "before_cursor_execute", record)
             try:
-                await repository.list_for_date(day)
+                await repository.list_upcoming()
             finally:
                 event.remove(Engine, "before_cursor_execute", record)
             return statements
 
         return run()
 
-    one = await _expired_reservation(repository, "owner-1")
-    assert len(await updates_during_listing(one.start_at.date())) == 2
+    await _expired_reservation(repository, "owner-1")
+    assert len(await updates_during_listing()) == 2
 
     for index in range(2, 6):
         await _expired_reservation(repository, f"owner-{index}")
-    assert len(await updates_during_listing(one.start_at.date())) == 2
+    assert len(await updates_during_listing()) == 2
 
 
 @pytest.mark.asyncio
-async def test_the_sweep_expires_reservations_outside_the_requested_day(repository):
-    """A stale reservation is retired even when nobody asks about its date."""
+async def test_the_sweep_expires_reservations_outside_the_listed_window(repository):
+    """A stale reservation is retired even though the listing never returns it."""
     old = await _expired_reservation(repository, "owner")
 
-    await repository.list_for_date(datetime.now(timezone.utc).date() + timedelta(days=7))
+    assert old.id not in [item.id for item in await repository.list_upcoming()]
 
     assert (await repository.get(old.id)).status is ReservationStatus.ENDED
     assert await _active_participant_count(old.id) == 0
+
+
+@pytest.mark.asyncio
+async def test_the_listing_covers_now_until_the_next_dawn(repository):
+    """The window is anchored to now: a started reservation drops out of it."""
+    now = datetime.now(timezone.utc)
+    upcoming = await _create_open_reservation(repository)
+    started = await repository.create(
+        start_at=now - timedelta(minutes=5), duration_minutes=180, host_display_name="Host",
+        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_token_hash="started",
+    )
+    beyond = await repository.create(
+        start_at=window_end(now) + timedelta(minutes=1), duration_minutes=60, host_display_name="Host",
+        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_token_hash="beyond",
+    )
+
+    listed = [item.id for item in await repository.list_upcoming()]
+
+    assert upcoming.id in listed
+    assert started.id not in listed
+    assert beyond.id not in listed
 
 
 @pytest.mark.asyncio

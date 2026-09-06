@@ -49,17 +49,40 @@ KST = ZoneInfo("Asia/Seoul")
 LIVE_STATUSES = (ReservationStatus.OPEN, ReservationStatus.MATCHED)
 LEAD_TIME = timedelta(minutes=10)
 
+# A play session ends at dawn, not at midnight, so the day boundary is 06:00 KST.
+DAY_END_HOUR = 6
+
+
+def window_end(now: datetime) -> datetime:
+    """The next 06:00 KST — today's if dawn has not come yet, tomorrow's otherwise.
+
+    This is the far edge of everything the reservation tab shows and accepts:
+    at 02:00 it is four hours away, at 21:00 it is nine.
+    """
+    kst_now = now.astimezone(KST)
+    end = kst_now.replace(hour=DAY_END_HOUR, minute=0, second=0, microsecond=0)
+    if kst_now >= end:
+        end += timedelta(days=1)
+    return end.astimezone(now.tzinfo)
+
 
 def start_at_from(start_time: time, now: datetime) -> datetime:
-    """Resolve a wall-clock KST time to the instant it denotes today.
+    """Resolve a wall-clock KST time to the next instant it denotes.
 
-    Hosts pick a time of day, not a date: 21:00 means 21:00 KST on whatever day
-    it currently is in Seoul. The result is returned in the clock's own zone so
-    that callers compare like with like.
+    Hosts pick a time of day, not a date. 21:00 means 21:00 KST today, but a
+    time of day that Seoul has already passed rolls over to tomorrow — at 23:00
+    a host picking 00:30 means half an hour from now, not twenty-three and a
+    half hours ago. The result is returned in the clock's own zone so that
+    callers compare like with like.
     """
     start_at = datetime.combine(now.astimezone(KST).date(), start_time, tzinfo=KST).astimezone(now.tzinfo)
+    if start_at < now:
+        start_at += timedelta(days=1)
     if start_at < now + LEAD_TIME:
         raise ReservationStateError("지금부터 10분 이후 시각으로 예약할 수 있습니다.")
+    if start_at >= window_end(now):
+        # Anything past dawn would be created into a window nobody can see.
+        raise ReservationStateError("지금부터 다음 날 오전 6시 사이의 시각만 예약할 수 있습니다.")
     return start_at
 
 

@@ -1,13 +1,14 @@
 """SQLAlchemy ORM adapter. Row locking keeps participant capacity atomic."""
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from reservation.domain import (
-    KST, LIVE_STATUSES, MatchType, Participant, Reservation, ReservationStatus,
+    LIVE_STATUSES, MatchType, Participant, Reservation, ReservationStatus,
     ensure_editable, ensure_joinable, ensure_participation_cancellable, status_for,
+    window_end,
 )
 from reservation.entities import Reservation as ReservationRow
 from reservation.entities import ReservationParticipant as ReservationParticipantRow
@@ -110,17 +111,21 @@ class PostgresReservationRepository(ReservationRepository):
             .values(cancelled_at=now)
         )
 
-    async def list_for_date(self, day: date) -> list[Reservation]:
-        start = datetime.combine(day, datetime.min.time(), tzinfo=KST)
-        end = start + timedelta(days=1)
+    async def list_upcoming(self) -> list[Reservation]:
+        """Everything still ahead of the caller, up to the next 06:00 KST.
+
+        The window is anchored to now rather than to a date: a reservation that
+        has already started is inert — it can no longer be joined or edited —
+        so the list is what somebody could still turn up to.
+        """
         now = datetime.now(timezone.utc)
         async with self._sessions() as session, session.begin():
             await self._expire_finished(session, now)
             result = await session.execute(
                 self._with_participant_count()
                 .where(
-                    ReservationRow.start_at >= start,
-                    ReservationRow.start_at < end,
+                    ReservationRow.start_at >= now,
+                    ReservationRow.start_at < window_end(now),
                     ReservationRow.status.in_(("open", "matched")),
                 )
                 .order_by(ReservationRow.start_at, case((ReservationRow.status == "open", 0), else_=1))

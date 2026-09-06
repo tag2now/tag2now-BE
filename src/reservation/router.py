@@ -1,6 +1,4 @@
-from datetime import date
-
-from fastapi import APIRouter, Header, Query, Response
+from fastapi import APIRouter, Header, Response
 
 from reservation import models, service
 
@@ -11,8 +9,9 @@ def _token(value: str | None) -> str:
     return value
 
 @router.get("", response_model=list[models.ReservationOut])
-async def list_reservations(day: date = Query(alias="date")):
-    return await service.list_reservations(day)
+async def list_reservations():
+    """Reservations from now until the next 06:00 KST."""
+    return await service.list_reservations()
 
 @router.post("", response_model=models.CreateReservationOut, status_code=201)
 async def create_reservation(request: models.CreateReservationRequest):

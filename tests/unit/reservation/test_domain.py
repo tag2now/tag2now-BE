@@ -7,6 +7,7 @@ import pytest
 from reservation.domain import (
     MatchType, ReservationStatus, ensure_conditions_valid, ensure_editable,
     ensure_joinable, ensure_participation_cancellable, start_at_from, status_for,
+    window_end,
 )
 from reservation.exceptions import ReservationStateError
 
@@ -106,9 +107,21 @@ def test_seoul_today_is_already_tomorrow_late_in_the_utc_day():
     # 16:00 UTC is 01:00 KST the next day, so "today" in Seoul is the 25th
     now = datetime(2026, 8, 24, 16, 0, tzinfo=timezone.utc)
 
-    start_at = start_at_from(time(21, 0), now)
+    start_at = start_at_from(time(3, 0), now)
 
-    assert start_at == datetime(2026, 8, 25, 12, 0, tzinfo=timezone.utc)
+    assert start_at == datetime(2026, 8, 24, 18, 0, tzinfo=timezone.utc)  # 25th 03:00 KST
+
+
+def test_the_small_hours_cannot_book_the_coming_evening():
+    """01:00 sits in the tail of the previous night: its window ends at 06:00.
+
+    Tonight's 21:00 becomes bookable once dawn moves the window forward, which
+    is the price of a window anchored to the session rather than to the date.
+    """
+    now = datetime(2026, 8, 24, 16, 0, tzinfo=timezone.utc)  # 25th 01:00 KST
+
+    with pytest.raises(ReservationStateError, match="오전 6시"):
+        start_at_from(time(21, 0), now)
 
 
 def test_the_result_keeps_the_clocks_own_timezone():
@@ -130,11 +143,52 @@ def test_a_start_time_inside_the_lead_time_is_rejected():
         start_at_from(time(19, 9), now)
 
 
-def test_a_start_time_already_past_in_seoul_is_rejected():
+def test_a_start_time_already_past_in_seoul_rolls_over_to_tomorrow():
+    """23:00 picking 00:30 means half an hour from now, not yesterday morning."""
+    now = datetime(2026, 8, 24, 14, 0, tzinfo=timezone.utc)  # 23:00 KST
+
+    start_at = start_at_from(time(0, 30), now)
+
+    assert start_at == datetime(2026, 8, 24, 15, 30, tzinfo=timezone.utc)  # 25th 00:30 KST
+
+
+def test_a_rolled_over_time_past_dawn_is_rejected():
+    """09:00 picked at 19:00 would land in a window nobody can see."""
     now = datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)  # 19:00 KST
 
-    with pytest.raises(ReservationStateError, match="10분 이후"):
+    with pytest.raises(ReservationStateError, match="오전 6시"):
         start_at_from(time(9, 0), now)
+
+
+def test_a_start_time_at_or_after_the_window_end_is_rejected():
+    now = datetime(2026, 8, 24, 20, 0, tzinfo=timezone.utc)  # 25th 05:00 KST
+
+    with pytest.raises(ReservationStateError, match="오전 6시"):
+        start_at_from(time(6, 0), now)
+
+
+def test_a_start_time_just_inside_the_window_end_is_accepted():
+    now = datetime(2026, 8, 24, 20, 0, tzinfo=timezone.utc)  # 25th 05:00 KST
+
+    assert start_at_from(time(5, 59), now) == datetime(2026, 8, 24, 20, 59, tzinfo=timezone.utc)
+
+
+def test_before_dawn_the_window_ends_at_this_mornings_six():
+    now = datetime(2026, 8, 24, 17, 0, tzinfo=timezone.utc)  # 25th 02:00 KST
+
+    assert window_end(now) == datetime(2026, 8, 24, 21, 0, tzinfo=timezone.utc)  # 25th 06:00 KST
+
+
+def test_after_dawn_the_window_ends_at_tomorrows_six():
+    now = datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc)  # 21:00 KST
+
+    assert window_end(now) == datetime(2026, 8, 24, 21, 0, tzinfo=timezone.utc)  # 25th 06:00 KST
+
+
+def test_the_window_end_keeps_the_clocks_own_timezone():
+    now = datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc)
+
+    assert window_end(now).tzinfo is timezone.utc
 
 
 def test_an_untaken_reservation_is_editable():
