@@ -241,3 +241,55 @@ async def test_get_player_stats_and_hours(adapter, db_session):
     assert stats.npid == "test_player"
     assert stats.times_seen >= 1
     assert isinstance(stats.active_hours, list)
+
+
+@pytest.mark.asyncio
+async def test_days_active_counts_kst_days_not_matches(adapter, db_session):
+    """Three matches spread over two KST days are two active days, not three."""
+    from datetime import datetime, timedelta, timezone
+    KST = timezone(timedelta(hours=9))
+    today = datetime.now(KST).replace(hour=21, minute=0, second=0, microsecond=0)
+    await adapter.record_snapshot(db_session, [
+        _make_record(room_id=9001, user1_npid="daycount", created_dt=today),
+        _make_record(room_id=9002, user1_npid="daycount", created_dt=today + timedelta(minutes=20)),
+        _make_record(room_id=9003, user1_npid="daycount", created_dt=today - timedelta(days=1)),
+    ])
+
+    stats = await adapter.get_player_stats(db_session, "daycount", days=7)
+    assert stats.times_seen == 3
+    assert stats.days_active == 2
+
+
+@pytest.mark.asyncio
+async def test_days_active_uses_kst_day_boundary(adapter, db_session):
+    """01:00 and 23:00 KST on one day are one active day, though they straddle UTC midnight."""
+    from datetime import datetime, timedelta, timezone
+    KST = timezone(timedelta(hours=9))
+    day = (datetime.now(KST) - timedelta(days=2)).replace(hour=1, minute=0, second=0, microsecond=0)
+    await adapter.record_snapshot(db_session, [
+        _make_record(room_id=9101, user1_npid="kstday", created_dt=day),
+        _make_record(room_id=9102, user1_npid="kstday", created_dt=day + timedelta(hours=22)),
+    ])
+
+    stats = await adapter.get_player_stats(db_session, "kstday", days=7)
+    assert stats.days_active == 1
+
+
+@pytest.mark.asyncio
+async def test_active_hours_requires_two_distinct_days(adapter, db_session):
+    """A one-off session must not register as a habitual hour; two days at 21:00 must."""
+    from datetime import datetime, timedelta, timezone
+    KST = timezone(timedelta(hours=9))
+    base = (datetime.now(KST) - timedelta(days=1)).replace(hour=21, minute=0, second=0, microsecond=0)
+    await adapter.record_snapshot(db_session, [
+        # 15:00 twice in one sitting --- one day only
+        _make_record(room_id=9201, user1_npid="hours", created_dt=base.replace(hour=15)),
+        _make_record(room_id=9202, user1_npid="hours", created_dt=base.replace(hour=15) + timedelta(minutes=10)),
+        # 21:00 on two separate days
+        _make_record(room_id=9203, user1_npid="hours", created_dt=base),
+        _make_record(room_id=9204, user1_npid="hours", created_dt=base - timedelta(days=1)),
+    ])
+
+    stats = await adapter.get_player_stats(db_session, "hours", days=7)
+    assert 21 in stats.active_hours
+    assert 15 not in stats.active_hours

@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import Date, DateTime, Integer, case, delete, func, or_, select, text, union_all
+from sqlalchemy import Date, Integer, case, delete, func, or_, select, text, union_all
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -187,7 +187,9 @@ class PostgresHistoryAdapter(HistoryPort):
 		)
 
 		stats_stmt = select(
-			func.count(func.distinct(func.cast(player_snapshots.c.created_dt, DateTime))).label("days_active"),
+			func.count(func.distinct(
+				func.cast(func.timezone("Asia/Seoul", player_snapshots.c.created_dt), Date)
+			)).label("days_active"),
 			func.count().label("times_seen"),
 			func.min(player_snapshots.c.created_dt).label("first_seen"),
 			func.max(player_snapshots.c.created_dt).label("last_seen"),
@@ -217,7 +219,9 @@ class PostgresHistoryAdapter(HistoryPort):
 		hours_stmt = (
 			select(
 				func.extract("hour", func.timezone("Asia/Seoul", RankMatchSnapshotRow.created_dt)).cast(Integer).label("hour"),
-				func.count(func.distinct(func.cast(func.timezone("Asia/Seoul", RankMatchSnapshotRow.created_dt), DateTime))).label("day_count"),
+				func.count(func.distinct(
+					func.cast(func.timezone("Asia/Seoul", RankMatchSnapshotRow.created_dt), Date)
+				)).label("day_count"),
 			)
 			.where(
 				or_(RankMatchSnapshotRow.user1_npid == npid, RankMatchSnapshotRow.user2_npid == npid),
