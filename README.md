@@ -17,6 +17,7 @@ src/
   reservation/         # Match reservations
   shared/              # Settings, Redis cache, SQLAlchemy engine, events, exceptions
 alembic/               # PostgreSQL migrations
+docs/spec/             # Feature specifications (Korean) — what each feature does and why
 env/                   # Per-profile .env files (see Configuration)
 tests/
   unit/
@@ -251,6 +252,10 @@ it records the revision without applying DDL. Verify later changes with
 `alembic check`.
 
 ## Endpoints
+
+Per-feature behaviour — rules, edge cases, and the frontend side of each
+feature — is specified in [docs/spec/](docs/spec/README.md). The tables below
+are the wire surface only.
 
 ### Matching — live RPCN data
 
