@@ -286,7 +286,7 @@ it records the revision without applying DDL. Verify later changes with
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/reservations?date=` | Reservations for a date |
+| GET | `/reservations` | Reservations from now until the next 06:00 KST |
 | POST | `/reservations` | Create a reservation |
 | GET | `/reservations/{id}` | Reservation detail |
 | POST | `/reservations/{id}/participants` | Join a reservation |
