@@ -42,6 +42,7 @@ class PostgresHistoryAdapter(HistoryPort):
 			dict(
 				room_id=room.room_id,
 				created_dt=room.created_dt,
+				match_date=room.created_dt.astimezone(KST).date(),
 				rank_id=room.rank_id,
 				user1_npid=room.user1_npid,
 				user1_online_name=room.user1_online_name,
@@ -49,7 +50,9 @@ class PostgresHistoryAdapter(HistoryPort):
 				user2_online_name=room.user2_online_name,
 			)
 			for room in rooms
-		]).on_conflict_do_nothing(index_elements=["room_id"])
+		]).on_conflict_do_nothing(
+			index_elements=["room_id", "user1_npid", "user2_npid", "match_date"]
+		)
 		await session.execute(stmt)
 		await session.flush()
 

@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Integer, String, func
+from sqlalchemy import BigInteger, Date, DateTime, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.database import Base
@@ -11,8 +11,17 @@ from shared.database import Base
 class RankMatchSnapshotRow(Base):
 	__tablename__ = "rank_match_snapshots"
 
-	room_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+	# RPCN room ids come from an in-memory counter that restarts at 1 with the
+	# server, so they are unique only within one RPCN uptime --- never the key.
+	__table_args__ = (
+		UniqueConstraint("room_id", "user1_npid", "user2_npid", "match_date",
+						 name="uq_rank_match_snapshots_match"),
+	)
+
+	id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+	room_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
 	created_dt: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+	match_date: Mapped[date] = mapped_column(Date, nullable=False)
 	rank_id: Mapped[int] = mapped_column(Integer, nullable=False)
 	user1_npid: Mapped[str] = mapped_column(String, nullable=False, index=True)
 	user1_online_name: Mapped[str] = mapped_column(String, nullable=False)

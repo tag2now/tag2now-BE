@@ -57,6 +57,35 @@ async def test_record_snapshot_inserts_rows(adapter, db_session):
 
 
 @pytest.mark.asyncio
+async def test_record_snapshot_keeps_rooms_after_rpcn_counter_reset(adapter, db_session):
+    """RPCN restarts reissue room ids from 1; those matches must still be stored."""
+    await adapter.record_snapshot(db_session, [_make_record(room_id=5000, user1_npid="reset1", user2_npid="reset2")])
+    await adapter.record_snapshot(db_session, [_make_record(room_id=1, user1_npid="reset3", user2_npid="reset4")])
+
+    from history.entities import RankMatchSnapshotRow
+    from sqlalchemy import select
+    rows = (await db_session.execute(
+        select(RankMatchSnapshotRow).where(RankMatchSnapshotRow.user1_npid.in_(["reset1", "reset3"]))
+    )).scalars().all()
+    assert {r.room_id for r in rows} == {1, 5000}
+
+
+@pytest.mark.asyncio
+async def test_record_snapshot_deduplicates_reobserved_room(adapter, db_session):
+    """A room still in progress after a backend restart must not be counted twice."""
+    record = _make_record(room_id=7, user1_npid="dedup1", user2_npid="dedup2")
+    await adapter.record_snapshot(db_session, [record])
+    await adapter.record_snapshot(db_session, [record])
+
+    from history.entities import RankMatchSnapshotRow
+    from sqlalchemy import func, select
+    count = (await db_session.execute(
+        select(func.count()).select_from(RankMatchSnapshotRow).where(RankMatchSnapshotRow.user1_npid == "dedup1")
+    )).scalar_one()
+    assert count == 1
+
+
+@pytest.mark.asyncio
 async def test_record_snapshot_upserts_hourly_stats(adapter, db_session):
     records = [_make_record()]
     await adapter.record_snapshot(db_session, records)
