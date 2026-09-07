@@ -33,11 +33,11 @@ async def list_reservations() -> list[Reservation]:
     return await _repository().list_upcoming()
 
 
-async def create_reservation(*, start_time: time, duration_minutes: int, display_name: str, ranks: list[str], match_type: MatchType, capacity: int, memo: str) -> tuple[Reservation, str]:
+async def create_reservation(*, start_time: time, display_name: str, ranks: list[str], match_type: MatchType, capacity: int, memo: str) -> tuple[Reservation, str]:
     ensure_conditions_valid(match_type, ranks, capacity)
     start_at = start_at_from(start_time, _clock.now())
     token, token_hash = _credentials.issue()
-    reservation = await _repository().create(start_at=start_at, duration_minutes=duration_minutes, host_display_name=display_name.strip(), host_ranks=ranks, match_type=match_type, capacity=capacity, memo=memo.strip(), host_token_hash=token_hash)
+    reservation = await _repository().create(start_at=start_at, host_display_name=display_name.strip(), host_ranks=ranks, match_type=match_type, capacity=capacity, memo=memo.strip(), host_token_hash=token_hash)
     return reservation, token
 
 
@@ -45,7 +45,7 @@ async def get_reservation(reservation_id: int) -> Reservation:
     return await _repository().get(reservation_id)
 
 
-async def update_reservation(reservation_id: int, token: str, *, start_time: time | None = None, duration_minutes: int | None = None, ranks: list[str] | None = None, match_type: MatchType | None = None, capacity: int | None = None, memo: str | None = None) -> Reservation:
+async def update_reservation(reservation_id: int, token: str, *, start_time: time | None = None, ranks: list[str] | None = None, match_type: MatchType | None = None, capacity: int | None = None, memo: str | None = None) -> Reservation:
     """Apply a partial edit, validating the reservation as it will end up.
 
     A patch is only coherent against the rest of the reservation: switching to a
@@ -62,7 +62,7 @@ async def update_reservation(reservation_id: int, token: str, *, start_time: tim
     start_at = start_at_from(start_time, _clock.now()) if start_time is not None else None
     return await _repository().update(
         reservation_id, hash_credential(token), _clock.now(),
-        start_at=start_at, duration_minutes=duration_minutes, ranks=ranks,
+        start_at=start_at, ranks=ranks,
         match_type=match_type, capacity=capacity, memo=memo.strip() if memo is not None else None,
     )
 

@@ -13,7 +13,7 @@
 | 자정 롤오버 | 고른 시각이 이미 지났으면 다음 날로 넘긴다. 23:00에 고른 `00:30`은 익일 00:30 |
 | 최소 리드타임 | 현재 시각 + **10분** 이후만 등록 가능 |
 | 상한 | **다음 06:00 KST** 이전만 등록 가능. 그 뒤 시각은 400 |
-| 예상 시간 | 30 / 60 / 120 / 180분 중 택1 (필드 범위 자체는 30~240) |
+| 유지 시간 | 시작 후 **1시간**. 호스트가 고르지 않는 고정값 |
 | 랭크 매치 | 계급 1개 이상 필수, 모집 인원은 **반드시 1명** |
 | 플레이어 매치 | 계급 선택 불가 |
 | 상관없음(`any`) | 계급·인원 제약 없음 |
@@ -23,6 +23,12 @@
 
 ### 참가 가능 조건 (`ensure_joinable`)
 `open` 상태 + 시작 전 + 정원 미충족.
+
+### 예상 시간을 없앤 이유
+
+호스트가 30/60/120/180분 중에 고르던 `duration_minutes`가 있었고, 그 값이 만료 시점을 정했다.
+한 세트가 길어지기도 하고 10분 만에 끝나기도 해서 **애초에 예측 가능한 값이 아니었다.**
+지금은 `domain.LISTING_GRACE`(1시간)가 그 자리를 대신한다 — 호스트가 입력하지 않고, 모든 예약에 같게 적용된다.
 
 ### 수정 가능 조건 (`ensure_editable`)
 `open`/`matched` + 시작 전 + **참가자 0명**.
@@ -50,7 +56,7 @@ FE는 `localStorage`에 `reservation-owner-{id}` / `reservation-participant-{id}
 
 | 메서드 | 경로 | 설명 | 인증 |
 |--------|------|------|------|
-| GET | `/reservations` | 지금부터 다음 06:00 KST까지의 `open`/`matched` 예약 목록 | 없음 |
+| GET | `/reservations` | 1시간 전부터 다음 06:00 KST까지의 `open`/`matched` 예약 목록 | 없음 |
 | POST | `/reservations` | 등록 → `{ reservation, owner_token }` (201) | 없음 |
 | GET | `/reservations/{id}` | 단건 조회 | 없음 |
 | PATCH | `/reservations/{id}` | 부분 수정 | 호스트 토큰 |
@@ -74,16 +80,19 @@ FE는 `localStorage`에 `reservation-owner-{id}` / `reservation-participant-{id}
 
 | 조건 | 값 |
 |------|-----|
-| 시간 범위 | `start_at >= now` AND `start_at < window_end(now)` |
+| 시간 범위 | `start_at > now - LISTING_GRACE` AND `start_at < window_end(now)` |
 | 상태 | `open`, `matched`만 (`cancelled`·`ended` 제외) |
 | 정렬 | `start_at` 오름차순, 같은 시각이면 `open`이 `matched`보다 앞 |
 | `participant_count` | `cancelled_at IS NULL`인 참가자만 outer join으로 집계 |
 
-하한이 `now`이므로 **이미 시작된 예약은 목록에서 빠진다.** 시작된 예약은 참가도 수정도 안 되는 죽은 항목이라,
-목록은 "지금이라도 갈 수 있는 약속"만 담는다. 진행 중인 예약은 `GET /{id}`로만 볼 수 있다.
+하한이 `now - 1시간`이므로 **진행 중인 예약도 1시간까지는 목록에 남는다.** 참가와 수정은 시작과 동시에 막히지만,
+그 안에 있는 사람들에게는 여전히 자기 약속이고 — 무엇보다 **목록이 상세 페이지에 닿는 유일한 경로다.**
+FE에는 단건 조회를 부르는 코드가 없고 상세 패널은 목록 배열에서 `find`로 고른다. 시작하는 순간 목록에서 빼면
+그 예약의 상세 화면에 아무도 들어갈 수 없다.
 
 **조회는 만료 처리를 먼저 수행한다.** `_expire_finished()`가
-`start_at + duration_minutes <= now` 인 live 예약을 `ended`로 바꾸고 그 참가자를 모두 해제한다.
+`start_at <= now - LISTING_GRACE` 인 live 예약을 `ended`로 바꾸고 그 참가자를 모두 해제한다.
+만료 기준과 목록 하한이 같은 상수를 쓰므로, 목록에서 사라지는 시점과 `ended`가 되는 시점이 어긋나지 않는다.
 이 갱신은 **요청한 날짜에 한정되지 않는다** — 어느 날짜의 예약이든 시간이 지나면 정리되어야 하기 때문이다.
 행 단위가 아니라 두 개의 `UPDATE`문으로 처리하는 이유도 같다. 예약 탭이 10초마다 이 엔드포인트를 치므로
 목록 비용이 테이블 크기를 따라 커지면 안 된다.
@@ -126,4 +135,5 @@ FE는 `localStorage`에 `reservation-owner-{id}` / `reservation-participant-{id}
 - 등록 모달이 수정 폼을 겸한다 — 같은 필드, 같은 검증. 등록과 수정 사이에 규칙이 어긋날 수 없다.
 - 참가자가 1명이라도 있으면 수정 버튼이 비활성화된다. 다만 **서버가 권위**다.
   모달을 연 사이에 참가자가 들어오면 400으로 막힌다.
+- 등록 폼에는 시각·매치 종류·계급·인원·메모만 있다. 예상 시간 입력은 없어졌다.
 - 라벨·KST 시각 포맷은 `reservationLabels.ts`에 둔다(개요 탭도 쓰고, 테스트가 API 모듈을 통째로 모킹하므로).

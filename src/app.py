@@ -115,7 +115,6 @@ _FIELD_LABELS = {
     "post_type": "게시글 종류",
     "parent_id": "상위 댓글",
     "direction": "추천 방향",
-    "duration_minutes": "예상 시간",
     "start_time": "시작 시각",
     "match_type": "매치 종류",
     "capacity": "모집 인원",
@@ -175,10 +174,10 @@ def _describe(error: dict) -> str | None:
     if kind in ("less_than_equal", "less_than"):
         return f"{_topic(label)} {ctx['le'] if kind.endswith('equal') else ctx['lt']} 이하여야 합니다."
     # A @field_validator raising ValueError arrives as value_error. Those
-    # messages are written for the user and state the rule --- which durations
-    # exist, that ranks cannot repeat --- so they beat anything reconstructed
-    # from the field name. Falling back to the field alone here would let a
-    # vague error mask a specific one reported after it.
+    # messages are written for the user and state the rule --- that ranks
+    # cannot repeat, which post types exist --- so they beat anything
+    # reconstructed from the field name. Falling back to the field alone here
+    # would let a vague error mask a specific one reported after it.
     if kind == "value_error" and (message := str(ctx.get("error", "")).strip()):
         return message
     return f"{label} 값을 확인해 주세요."

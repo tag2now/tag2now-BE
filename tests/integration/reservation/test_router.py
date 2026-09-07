@@ -73,7 +73,6 @@ def _unbookable_time_of_day() -> str:
 def _payload(**overrides):
     body = {
         "start_time": _bookable_time_of_day(),
-        "duration_minutes": 60,
         "display_name": "Host",
         "ranks": ["Brawler"],
         "match_type": "rank_match",
@@ -84,10 +83,10 @@ def _payload(**overrides):
 
 
 def test_a_schema_violation_states_the_rule_that_failed(client):
-    response = client.post("/reservations", json=_payload(duration_minutes=45))
+    response = client.post("/reservations", json=_payload(ranks=["Brawler", "Brawler"]))
 
     assert response.status_code == 422
-    assert response.json() == {"detail": "예상 시간은 30분, 60분, 120분, 180분 중에서 선택해 주세요."}
+    assert response.json() == {"detail": "같은 계급을 중복해서 선택할 수 없습니다."}
 
 
 def test_one_rule_is_answered_even_when_several_fields_fail(client):
@@ -97,10 +96,10 @@ def test_one_rule_is_answered_even_when_several_fields_fail(client):
     point is that neither falls back to naming its field, which used to let the
     vaguer of the two mask the other.
     """
-    response = client.post("/reservations", json=_payload(duration_minutes=45, display_name=""))
+    response = client.post("/reservations", json=_payload(ranks=["Brawler", "Brawler"], display_name=""))
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "예상 시간은 30분, 60분, 120분, 180분 중에서 선택해 주세요."
+    assert response.json()["detail"] == "유저명을 입력해 주세요."
 
     response = client.post("/reservations", json=_payload(display_name=""))
 
@@ -117,7 +116,7 @@ def test_a_domain_rule_answers_400_with_its_own_message(client):
 
 def test_both_failure_kinds_share_one_response_shape(client):
     """Statuses differ by kind, but a client parses one body shape either way."""
-    schema = client.post("/reservations", json=_payload(duration_minutes=45))
+    schema = client.post("/reservations", json=_payload(ranks=["Brawler", "Brawler"]))
     domain = client.post("/reservations", json=_payload(ranks=[]))
 
     assert (schema.status_code, domain.status_code) == (422, 400)
@@ -306,7 +305,6 @@ def test_editing_a_reservation_answers_the_updated_row(client):
 
     assert response.status_code == 200
     assert response.json()["memo"] == "자리 하나 남음"
-    assert response.json()["duration_minutes"] == reservation["duration_minutes"]
 
 
 def test_editing_without_a_token_is_refused(client):
@@ -348,12 +346,12 @@ def test_an_edit_with_a_bad_field_answers_422_stating_the_rule(client):
 
     response = client.patch(
         f"/reservations/{reservation['id']}",
-        json={"duration_minutes": 45},
+        json={"ranks": ["Brawler", "Brawler"]},
         headers={"X-Reservation-Token": owner_token},
     )
 
     assert response.status_code == 422
-    assert response.json() == {"detail": "예상 시간은 30분, 60분, 120분, 180분 중에서 선택해 주세요."}
+    assert response.json() == {"detail": "같은 계급을 중복해서 선택할 수 없습니다."}
 
 
 def test_a_reservation_someone_joined_can_no_longer_be_edited(client):

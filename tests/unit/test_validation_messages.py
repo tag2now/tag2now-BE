@@ -28,7 +28,6 @@ def reservation_payload():
     """A valid body, so a test's own field is the only thing that fails."""
     return {
         "start_time": "20:00",
-        "duration_minutes": 60,
         "display_name": "tester",
         "match_type": "any",
         "capacity": 2,
@@ -69,8 +68,6 @@ def test_post_creation_names_the_field_that_failed(client, payload, expected):
 @pytest.mark.parametrize(
     "override, expected",
     [
-        ({"duration_minutes": 15}, "예상 시간은 30 이상이어야 합니다."),
-        ({"duration_minutes": 300}, "예상 시간은 240 이하여야 합니다."),
         ({"capacity": 0}, "모집 인원은 1 이상이어야 합니다."),
         ({"capacity": 9}, "모집 인원은 3 이하여야 합니다."),
         ({"memo": "A" * 141}, "메모는 140자를 넘을 수 없습니다."),

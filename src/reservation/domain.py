@@ -25,7 +25,6 @@ class ReservationStatus(StrEnum):
 class Reservation:
     id: int
     start_at: datetime
-    duration_minutes: int
     host_display_name: str
     host_ranks: list[str]
     match_type: MatchType
@@ -51,6 +50,15 @@ LEAD_TIME = timedelta(minutes=10)
 
 # A play session ends at dawn, not at midnight, so the day boundary is 06:00 KST.
 DAY_END_HOUR = 6
+
+# How long a reservation stays alive once it has started.
+#
+# Hosts used to declare how long they expected to play, and that estimate drove
+# expiry. Nobody can predict it — a set runs long or ends in ten minutes — so a
+# reservation now simply outlives its start by a fixed hour. That hour is also
+# the only window in which the detail page is reachable, since the listing is
+# how anyone gets to it.
+LISTING_GRACE = timedelta(hours=1)
 
 
 def window_end(now: datetime) -> datetime:
@@ -98,6 +106,11 @@ def ensure_conditions_valid(match_type: MatchType, ranks: list[str], capacity: i
             raise ReservationStateError("랭크매치는 1명만 모집할 수 있습니다.")
     elif match_type is MatchType.PLAYER and ranks:
         raise ReservationStateError("플레이어 매치는 계급을 선택하지 않습니다.")
+
+
+def ends_at(start_at: datetime) -> datetime:
+    """The instant a reservation stops being live, an hour after it starts."""
+    return start_at + LISTING_GRACE
 
 
 def status_for(participant_count: int, capacity: int) -> ReservationStatus:

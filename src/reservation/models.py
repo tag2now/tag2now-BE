@@ -7,24 +7,14 @@ from pydantic import BaseModel, Field, field_validator
 from reservation.domain import MatchType, ReservationStatus
 
 
-SUPPORTED_DURATIONS = {30, 60, 120, 180}
-
-
 def _reject_duplicate_ranks(ranks: list[str] | None) -> list[str] | None:
     if ranks is not None and len(set(ranks)) != len(ranks):
         raise ValueError("같은 계급을 중복해서 선택할 수 없습니다.")
     return ranks
 
 
-def _reject_unsupported_duration(minutes: int | None) -> int | None:
-    if minutes is not None and minutes not in SUPPORTED_DURATIONS:
-        raise ValueError(f"예상 시간은 {', '.join(f'{m}분' for m in sorted(SUPPORTED_DURATIONS))} 중에서 선택해 주세요.")
-    return minutes
-
-
 class CreateReservationRequest(BaseModel):
     start_time: time
-    duration_minutes: int = Field(..., ge=30, le=240)
     display_name: str = Field(..., min_length=1, max_length=50)
     ranks: list[str] = Field(default_factory=list, max_length=20)
     match_type: MatchType
@@ -32,7 +22,6 @@ class CreateReservationRequest(BaseModel):
     memo: str = Field("", max_length=140)
 
     _check_ranks = field_validator("ranks")(_reject_duplicate_ranks)
-    _check_duration = field_validator("duration_minutes")(_reject_unsupported_duration)
 
 
 class UpdateReservationRequest(BaseModel):
@@ -43,14 +32,12 @@ class UpdateReservationRequest(BaseModel):
     """
 
     start_time: time | None = None
-    duration_minutes: int | None = Field(None, ge=30, le=240)
     ranks: list[str] | None = Field(None, max_length=20)
     match_type: MatchType | None = None
     capacity: int | None = Field(None, ge=1, le=3)
     memo: str | None = Field(None, max_length=140)
 
     _check_ranks = field_validator("ranks")(_reject_duplicate_ranks)
-    _check_duration = field_validator("duration_minutes")(_reject_unsupported_duration)
 
 
 class JoinReservationRequest(BaseModel):
@@ -61,7 +48,6 @@ class JoinReservationRequest(BaseModel):
 class ReservationOut(BaseModel):
     id: int
     start_at: datetime
-    duration_minutes: int
     host_display_name: str
     host_ranks: list[str]
     match_type: MatchType

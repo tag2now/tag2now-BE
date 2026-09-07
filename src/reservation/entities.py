@@ -11,7 +11,6 @@ class Reservation(Base):
     id: Mapped[int] = mapped_column(Integer, Identity(always=True), primary_key=True)
     __table_args__ = (Index("idx_reservations_start_at", "start_at"),)
     start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     host_display_name: Mapped[str] = mapped_column(Text, nullable=False)
     host_subject: Mapped[str | None] = mapped_column(Text)
     host_ranks: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default="{}")

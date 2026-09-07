@@ -6,7 +6,7 @@ from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from reservation.domain import (
-    LIVE_STATUSES, MatchType, Participant, Reservation, ReservationStatus,
+    LISTING_GRACE, LIVE_STATUSES, MatchType, Participant, Reservation, ReservationStatus,
     ensure_editable, ensure_joinable, ensure_participation_cancellable, status_for,
     window_end,
 )
@@ -20,7 +20,7 @@ from shared.database import get_session_factory
 
 def _reservation(row: ReservationRow, participant_count: int) -> Reservation:
     return Reservation(
-        id=row.id, start_at=row.start_at, duration_minutes=row.duration_minutes,
+        id=row.id, start_at=row.start_at,
         host_display_name=row.host_display_name, host_ranks=list(row.host_ranks),
         match_type=MatchType(row.match_type), capacity=row.capacity, memo=row.memo,
         status=ReservationStatus(row.status), participant_count=participant_count,
@@ -61,9 +61,8 @@ class PostgresReservationRepository(ReservationRepository):
 
     @staticmethod
     def _finished(now: datetime):
-        """Rows whose start plus duration has already passed."""
-        elapsed = ReservationRow.start_at + func.make_interval(0, 0, 0, 0, 0, ReservationRow.duration_minutes)
-        return (ReservationRow.status.in_(LIVE_STATUSES), elapsed <= now)
+        """Rows whose grace hour past the start has already run out."""
+        return (ReservationRow.status.in_(LIVE_STATUSES), ReservationRow.start_at <= now - LISTING_GRACE)
 
     @classmethod
     async def _expire_finished(cls, session: AsyncSession, now: datetime) -> None:
@@ -112,11 +111,12 @@ class PostgresReservationRepository(ReservationRepository):
         )
 
     async def list_upcoming(self) -> list[Reservation]:
-        """Everything still ahead of the caller, up to the next 06:00 KST.
+        """Everything from an hour ago up to the next 06:00 KST.
 
-        The window is anchored to now rather than to a date: a reservation that
-        has already started is inert — it can no longer be joined or edited —
-        so the list is what somebody could still turn up to.
+        The window is anchored to now rather than to a date. It reaches an hour
+        back because a reservation that has just started is not over — the
+        players are in it, and the listing is the only route to its detail page,
+        so dropping it at the stroke of its start time would strand them.
         """
         now = datetime.now(timezone.utc)
         async with self._sessions() as session, session.begin():
@@ -124,7 +124,7 @@ class PostgresReservationRepository(ReservationRepository):
             result = await session.execute(
                 self._with_participant_count()
                 .where(
-                    ReservationRow.start_at >= now,
+                    ReservationRow.start_at > now - LISTING_GRACE,
                     ReservationRow.start_at < window_end(now),
                     ReservationRow.status.in_(("open", "matched")),
                 )
@@ -143,7 +143,7 @@ class PostgresReservationRepository(ReservationRepository):
     async def create(self, **values) -> Reservation:
         async with self._sessions() as session, session.begin():
             row = ReservationRow(
-                start_at=values["start_at"], duration_minutes=values["duration_minutes"],
+                start_at=values["start_at"],
                 host_display_name=values["host_display_name"], host_ranks=values["host_ranks"],
                 host_token_hash=values["host_token_hash"], match_type=values["match_type"].value,
                 capacity=values["capacity"], memo=values["memo"],

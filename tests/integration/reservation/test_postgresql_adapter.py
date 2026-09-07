@@ -8,7 +8,7 @@ import pytest_asyncio
 from sqlalchemy import delete, event, func, select
 from sqlalchemy.engine import Engine
 
-from reservation.domain import MatchType, ReservationStatus, window_end
+from reservation.domain import LISTING_GRACE, MatchType, ReservationStatus, window_end
 from reservation.entities import Reservation as ReservationRow
 from reservation.entities import ReservationParticipant as ReservationParticipantRow
 from reservation.exceptions import ReservationAccessError, ReservationStateError
@@ -33,7 +33,6 @@ async def repository():
 async def _create_open_reservation(repo, capacity: int = 1):
     return await repo.create(
         start_at=datetime.now(timezone.utc) + timedelta(hours=1),
-        duration_minutes=60,
         host_display_name="Host",
         host_ranks=["Brawler"],
         match_type=MatchType.RANK if capacity == 1 else MatchType.PLAYER,
@@ -114,7 +113,7 @@ async def test_cancelling_a_reservation_also_releases_its_participants(repositor
 async def test_expiring_a_reservation_also_releases_its_participants(repository):
     past = datetime.now(timezone.utc) - timedelta(hours=3)
     reservation = await repository.create(
-        start_at=past, duration_minutes=60, host_display_name="Host", host_ranks=["Brawler"],
+        start_at=past, host_display_name="Host", host_ranks=["Brawler"],
         match_type=MatchType.RANK, capacity=1, memo="", host_token_hash="owner",
     )
     await repository.join(reservation.id, display_name="Joiner", ranks=[], participant_token_hash="participant", now=past - timedelta(minutes=1))
@@ -128,7 +127,7 @@ async def test_expiring_a_reservation_also_releases_its_participants(repository)
 async def _expired_reservation(repo, token: str):
     past = datetime.now(timezone.utc) - timedelta(hours=3)
     reservation = await repo.create(
-        start_at=past, duration_minutes=60, host_display_name="Host", host_ranks=["Brawler"],
+        start_at=past, host_display_name="Host", host_ranks=["Brawler"],
         match_type=MatchType.RANK, capacity=1, memo="", host_token_hash=token,
     )
     await repo.join(reservation.id, display_name="Joiner", ranks=[], participant_token_hash=token, now=past - timedelta(minutes=1))
@@ -175,24 +174,47 @@ async def test_the_sweep_expires_reservations_outside_the_listed_window(reposito
 
 
 @pytest.mark.asyncio
-async def test_the_listing_covers_now_until_the_next_dawn(repository):
-    """The window is anchored to now: a started reservation drops out of it."""
+async def test_the_listing_covers_the_grace_hour_until_the_next_dawn(repository):
+    """The window trails an hour behind now and stops at the next 06:00 KST.
+
+    A reservation under way is still the players' own — and the listing is the
+    only way to reach its detail page — so it stays until the grace hour is up.
+    """
     now = datetime.now(timezone.utc)
     upcoming = await _create_open_reservation(repository)
-    started = await repository.create(
-        start_at=now - timedelta(minutes=5), duration_minutes=180, host_display_name="Host",
-        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_token_hash="started",
+    running = await repository.create(
+        start_at=now - timedelta(minutes=5), host_display_name="Host",
+        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_token_hash="running",
+    )
+    long_over = await repository.create(
+        start_at=now - LISTING_GRACE - timedelta(minutes=1), host_display_name="Host",
+        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_token_hash="over",
     )
     beyond = await repository.create(
-        start_at=window_end(now) + timedelta(minutes=1), duration_minutes=60, host_display_name="Host",
+        start_at=window_end(now) + timedelta(minutes=1), host_display_name="Host",
         host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_token_hash="beyond",
     )
 
     listed = [item.id for item in await repository.list_upcoming()]
 
     assert upcoming.id in listed
-    assert started.id not in listed
+    assert running.id in listed
+    assert long_over.id not in listed
     assert beyond.id not in listed
+
+
+@pytest.mark.asyncio
+async def test_a_reservation_is_retired_once_its_grace_hour_runs_out(repository):
+    """Expiry and the listing floor are the same instant, so nothing lingers."""
+    now = datetime.now(timezone.utc)
+    stale = await repository.create(
+        start_at=now - LISTING_GRACE - timedelta(minutes=1), host_display_name="Host",
+        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_token_hash="stale",
+    )
+
+    await repository.list_upcoming()
+
+    assert (await repository.get(stale.id)).status is ReservationStatus.ENDED
 
 
 @pytest.mark.asyncio
@@ -203,7 +225,6 @@ async def test_an_edit_persists_only_the_fields_it_names(repository):
     edited = await repository.update(reservation.id, "owner", now, memo="자리 하나 남음")
 
     assert edited.memo == "자리 하나 남음"
-    assert edited.duration_minutes == reservation.duration_minutes
     assert edited.host_ranks == reservation.host_ranks
     assert edited.start_at == reservation.start_at
 
