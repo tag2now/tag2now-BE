@@ -17,6 +17,10 @@ from rpcn_client import RpcnClient, RpcnError, PROTOCOL_VERSION, UserInfo, Searc
 
 from .conftest import HOST, PORT, USER
 
+# Every test here talks to the live server, including the two that never log in
+# successfully -- connecting at all needs RPCN to be reachable.
+pytestmark = pytest.mark.rpcn
+
 COM_ID   = "NPWR02973_00"
 BOARD_ID = 0
 

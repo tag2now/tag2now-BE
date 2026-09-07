@@ -23,6 +23,10 @@ from matching import (
 from matching.db import init_game_repo, close_game_repo
 from matching.rpcn_lifecycle import api_client, shutdown_client
 
+# These reach RPCN through the shared api_client(), so they carry the same
+# one-session-per-account restriction as tests/integration/test_rpcn_client.py.
+pytestmark = pytest.mark.rpcn
+
 # ---------------------------------------------------------------------------
 # Game-specific constants
 # ---------------------------------------------------------------------------
