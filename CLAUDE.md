@@ -57,13 +57,23 @@ cached value.
 ## Tests
 
 ```bash
-.venv/Scripts/python.exe -m pytest tests/unit/ -v          # no external services needed
-docker compose -f compose.test.yml up -d --wait            # Redis + PostgreSQL
-.venv/Scripts/python.exe -m pytest tests/integration/ -v   # needs services + RPCN credentials
+.venv/Scripts/python.exe -m pytest tests/unit/ -v                        # no external services needed
+docker compose -f compose.test.yml up -d --wait                          # Redis + PostgreSQL
+.venv/Scripts/python.exe -m pytest tests/integration/ -v -m "not rpcn"   # 86, services only
+.venv/Scripts/python.exe -m pytest tests/integration/ -v                 # all 99, adds live RPCN
 ```
 
 - `tests/unit/` — pure logic; no network, no database.
 - `tests/integration/` — requires Redis and PostgreSQL from `compose.test.yml`. `tests/integration/test_rpcn_client.py` and `tests/integration/matching/test_service_integration.py` additionally hit the live RPCN server and need valid `RPCN_*` credentials.
+
+**The `rpcn` marker separates those two.** Both live-RPCN modules carry a
+module-level `pytestmark = pytest.mark.rpcn`, so `-m "not rpcn"` leaves 86 tests
+that need nothing but the two containers. CI runs exactly that: it cannot hold
+the account (production is logged in as that user around the clock, and two
+overlapping runs would collide with each other besides), so the 13 marked tests
+are a local check and nothing more. A second RPCN account would fix the local
+collision below, but not the CI one — concurrency and third-party availability
+remain.
 
 **Stop any running backend before the RPCN tests.** RPCN allows one session per
 account, and a dev server logs in at startup with the same `RPCN_USER` the tests
@@ -313,7 +323,7 @@ Docker image built from `python:3.12-alpine`; protobuf is generated during the b
 
 Production is a **single AWS Lightsail instance** running docker compose — `fe`, `be`, `redis`, `postgres`, `dynamodb-local`. Not ECS. Because there is one process, module-level state (the matchmaking tracker, the shared RPCN client) is safe here but would break under horizontal scaling.
 
-- `.github/workflows/ci.yml` — on PRs to `master`: unit tests, then integration tests against `compose.test.yml`.
+- `.github/workflows/ci.yml` — on pushes and PRs to `master`: unit tests, then the `not rpcn` integration tests against `compose.test.yml`. Both jobs generate the protobuf first; without it `import matching` raises `RpcnError` and collection fails before a single test runs.
 - `.github/workflows/deploy.yml` — on `v*` tags: build and push to ECR, then deploy to production over SSH.
 
 **Release is automatic on a `v*` tag.** The `deploy` job SSHes into Lightsail,

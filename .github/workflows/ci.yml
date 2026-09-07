@@ -3,6 +3,8 @@ name: CI
 on:
   pull_request:
     branches: [master]
+  push:
+    branches: [master]
 
 jobs:
   unit-tests:
@@ -20,6 +22,12 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install -e .
+
+      # np2_structs_pb2.py is generated, not committed, and rpcn_client/client.py
+      # raises RpcnError on import without it. The unit tests reach that import
+      # through matching/, so skipping this step fails collection, not a test.
+      - name: Generate protobuf
+        run: python -m grpc_tools.protoc -I. --python_out=src/rpcn_client np2_structs.proto
 
       - name: Run unit tests
         run: pytest tests/unit/ -v
@@ -47,19 +55,24 @@ jobs:
       - name: Generate protobuf
         run: python -m grpc_tools.protoc -I. --python_out=src/rpcn_client np2_structs.proto
 
+      # The rpcn-marked tests need sole use of an RPCN account, which CI cannot
+      # hold: production is logged in as that user around the clock, and two
+      # overlapping runs would collide with each other besides. They stay a
+      # local check. These placeholders exist only because Settings requires the
+      # three fields with no default -- nothing here reaches RPCN.
       - name: Run integration tests
         env:
-          RPCN_USER: ${{ secrets.RPCN_USER }}
-          RPCN_PASSWORD: ${{ secrets.RPCN_PASSWORD }}
-          RPCN_TOKEN: ${{ secrets.RPCN_TOKEN }}
-          RPCN_HOST: ${{ vars.RPCN_HOST }}
+          RPCN_USER: ci-unused
+          RPCN_PASSWORD: ci-unused
+          RPCN_TOKEN: ci-unused
+          RPCN_HOST: 127.0.0.1
           RPCN_PORT: "31313"
           REDIS_URL: redis://127.0.0.1:6379/0
           DB_URL: 127.0.0.1:5432
           DB_USER: tag2now
           DB_PASSWORD: tag2now
           DB_NAME: tag2now
-        run: pytest tests/integration/ -v
+        run: pytest tests/integration/ -v -m "not rpcn"
 
       - name: Stop services
         if: always()
