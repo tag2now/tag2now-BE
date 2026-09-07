@@ -52,6 +52,15 @@ jobs:
       - name: Start services
         run: docker compose -f compose.test.yml up -d --wait
 
+      # Startup does not create tables, so the compose database comes up empty
+      # and every test that touches it fails on a missing relation. Alembic
+      # reads DATABASE_URL, not the app's DB_URL, and needs the driver spelled
+      # out: a bare postgresql:// selects psycopg2, which is not installed.
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgresql+psycopg://tag2now:tag2now@127.0.0.1:5432/tag2now
+        run: alembic upgrade head
+
       - name: Generate protobuf
         run: python -m grpc_tools.protoc -I. --python_out=src/rpcn_client np2_structs.proto
 
