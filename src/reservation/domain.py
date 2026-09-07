@@ -36,6 +36,15 @@ class Reservation:
 
 
 @dataclass(frozen=True)
+class Comment:
+    id: int
+    reservation_id: int
+    author: str
+    body: str
+    created_at: datetime
+
+
+@dataclass(frozen=True)
 class Participant:
     id: int
     reservation_id: int
@@ -139,6 +148,17 @@ def ensure_editable(status: ReservationStatus, start_at: datetime, participant_c
         raise ReservationStateError("이미 시작된 예약은 변경할 수 없습니다.")
     if participant_count > 0:
         raise ReservationStateError("참가자가 있는 예약은 수정할 수 없습니다. 삭제 후 다시 등록해 주세요.")
+
+
+def ensure_commentable(status: ReservationStatus) -> None:
+    """Anything but a cancelled reservation can be talked about.
+
+    A reservation that has started or ended is still a thing that happened, and
+    its page is shareable, so "잘 뒀습니다" after the fact has somewhere to go.
+    A cancelled one never happened: there is no appointment left to discuss.
+    """
+    if status is ReservationStatus.CANCELLED:
+        raise ReservationStateError("취소된 예약에는 댓글을 쓸 수 없습니다.")
 
 
 def ensure_participation_cancellable(status: ReservationStatus, start_at: datetime, now: datetime) -> None:

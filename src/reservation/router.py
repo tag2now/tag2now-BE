@@ -34,6 +34,20 @@ async def join_reservation(reservation_id: int, request: models.JoinReservationR
 async def cancel_participation(reservation_id: int, x_reservation_token: str | None = Header(default=None)):
     return await service.cancel_participation(reservation_id, _token(x_reservation_token))
 
+@router.get("/{reservation_id}/comments", response_model=list[models.CommentOut])
+async def list_comments(reservation_id: int):
+    return await service.list_comments(reservation_id)
+
+@router.post("/{reservation_id}/comments", response_model=models.CreateCommentOut, status_code=201)
+async def add_comment(reservation_id: int, request: models.CreateCommentRequest):
+    comment, token = await service.add_comment(reservation_id, **request.model_dump())
+    return {"comment": comment, "author_token": token}
+
+@router.delete("/{reservation_id}/comments/{comment_id}", status_code=204)
+async def delete_comment(reservation_id: int, comment_id: int, x_reservation_token: str | None = Header(default=None)):
+    await service.delete_comment(reservation_id, comment_id, _token(x_reservation_token))
+    return Response(status_code=204)
+
 @router.delete("/{reservation_id}", status_code=204)
 async def cancel_reservation(reservation_id: int, x_reservation_token: str | None = Header(default=None)):
     await service.cancel_reservation(reservation_id, _token(x_reservation_token))

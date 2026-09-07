@@ -1,7 +1,7 @@
 """SQLAlchemy ORM entities for reservation persistence."""
 
 from datetime import datetime
-from sqlalchemy import DateTime, ForeignKey, Identity, Index, Integer, Text, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Identity, Index, Integer, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 from shared.database import Base
@@ -23,6 +23,21 @@ class Reservation(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+class ReservationComment(Base):
+    __tablename__ = "reservation_comments"
+    __table_args__ = (
+        CheckConstraint("length(body) <= 500", name="reservation_comments_body_check"),
+        Index("idx_reservation_comments_active", "reservation_id", postgresql_where="deleted_at IS NULL"),
+    )
+    id: Mapped[int] = mapped_column(Integer, Identity(always=True), primary_key=True)
+    reservation_id: Mapped[int] = mapped_column(ForeignKey("reservations.id", ondelete="CASCADE"), nullable=False)
+    author: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    author_token_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
 
 class ReservationParticipant(Base):
     __tablename__ = "reservation_participants"

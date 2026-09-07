@@ -9,22 +9,35 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import delete
+
+from reservation.entities import Reservation as ReservationRow
+from reservation.entities import ReservationComment as ReservationCommentRow
+from reservation.entities import ReservationParticipant as ReservationParticipantRow
 
 KST = ZoneInfo("Asia/Seoul")
 
 
-def _truncate_reservations():
-    import asyncpg
-    from shared.database import build_dsn
+def _empty_reservation_tables():
+    """Delete the reservation rows through the app's own session factory.
+
+    TRUNCATE would do the same in one statement, but it takes an ACCESS
+    EXCLUSIVE lock and CASCADEs into whatever else comes to reference these
+    tables later. A plain DELETE names exactly the three tables the suite owns
+    and behaves like any other write, which matters because a local dev server
+    is usually pointed at this same database.
+    """
+    from shared.database import close_database, get_session_factory, init_database
 
     async def _run():
-        connection = await asyncpg.connect(build_dsn(driver=""))
+        await init_database()
         try:
-            await connection.execute(
-                "TRUNCATE reservations, reservation_participants RESTART IDENTITY CASCADE"
-            )
+            async with get_session_factory()() as session, session.begin():
+                await session.execute(delete(ReservationCommentRow))
+                await session.execute(delete(ReservationParticipantRow))
+                await session.execute(delete(ReservationRow))
         finally:
-            await connection.close()
+            await close_database()
 
     asyncio.run(_run())
 
@@ -33,15 +46,17 @@ def _truncate_reservations():
 def client():
     """A client over an empty reservations table, left empty for the next test.
 
-    Listing and capacity assertions count rows, so a leftover row from an
-    earlier test would let a broken query pass.
+    The assertions here look for their own row by id rather than counting, so
+    they survive a stray row; the emptying is what stops a suite that creates a
+    reservation per test from growing the table without bound, and what keeps a
+    listing test honest if someone later writes one that does count.
     """
     from app import app
 
-    _truncate_reservations()
+    _empty_reservation_tables()
     with TestClient(app) as tc:
         yield tc
-    _truncate_reservations()
+    _empty_reservation_tables()
 
 
 def _window_end() -> datetime:
@@ -366,3 +381,126 @@ def test_a_reservation_someone_joined_can_no_longer_be_edited(client):
 
     assert response.status_code == 400
     assert "참가자가 있는 예약" in response.json()["detail"]
+
+
+def _comment(client, reservation_id, body="21시 괜찮으세요?", display_name="Commenter"):
+    response = client.post(
+        f"/reservations/{reservation_id}/comments",
+        json={"display_name": display_name, "body": body},
+    )
+    assert response.status_code == 201, response.text
+    payload = response.json()
+    return payload["comment"], payload["author_token"]
+
+
+def test_a_comment_is_listed_under_the_reservation_it_was_left_on(client):
+    reservation, _ = _create(client)
+
+    posted, _ = _comment(client, reservation["id"], body="초보인데 괜찮을까요")
+
+    listed = client.get(f"/reservations/{reservation['id']}/comments").json()
+    assert [c["id"] for c in listed] == [posted["id"]]
+    assert listed[0]["body"] == "초보인데 괜찮을까요"
+    assert listed[0]["author"] == "Commenter"
+
+
+def test_comments_read_in_the_order_they_were_written(client):
+    reservation, _ = _create(client)
+
+    for line in ("첫번째", "두번째", "세번째"):
+        _comment(client, reservation["id"], body=line)
+
+    listed = client.get(f"/reservations/{reservation['id']}/comments").json()
+    assert [c["body"] for c in listed] == ["첫번째", "두번째", "세번째"]
+
+
+def test_the_author_token_never_comes_back_inside_the_comment(client):
+    """The token is the whole proof of authorship, so it is handed over once."""
+    reservation, _ = _create(client)
+
+    comment, token = _comment(client, reservation["id"])
+
+    assert token
+    assert token not in str(comment)
+    assert "author_token" not in comment
+
+
+def test_an_author_can_delete_their_own_comment(client):
+    reservation, _ = _create(client)
+    comment, token = _comment(client, reservation["id"])
+
+    response = client.delete(
+        f"/reservations/{reservation['id']}/comments/{comment['id']}",
+        headers={"X-Reservation-Token": token},
+    )
+
+    assert response.status_code == 204
+    assert client.get(f"/reservations/{reservation['id']}/comments").json() == []
+
+
+def test_someone_elses_token_cannot_delete_a_comment(client):
+    reservation, _ = _create(client)
+    comment, _ = _comment(client, reservation["id"])
+    _, other_token = _comment(client, reservation["id"], body="다른 사람")
+
+    response = client.delete(
+        f"/reservations/{reservation['id']}/comments/{comment['id']}",
+        headers={"X-Reservation-Token": other_token},
+    )
+
+    assert response.status_code == 403
+    assert len(client.get(f"/reservations/{reservation['id']}/comments").json()) == 2
+
+
+def test_deleting_a_comment_without_the_header_is_refused(client):
+    reservation, _ = _create(client)
+    comment, _ = _comment(client, reservation["id"])
+
+    response = client.delete(f"/reservations/{reservation['id']}/comments/{comment['id']}")
+
+    assert response.status_code == 400
+
+
+def test_a_deleted_comment_cannot_be_deleted_twice(client):
+    reservation, _ = _create(client)
+    comment, token = _comment(client, reservation["id"])
+    headers = {"X-Reservation-Token": token}
+    client.delete(f"/reservations/{reservation['id']}/comments/{comment['id']}", headers=headers)
+
+    response = client.delete(f"/reservations/{reservation['id']}/comments/{comment['id']}", headers=headers)
+
+    assert response.status_code == 404
+
+
+def test_a_comment_on_a_missing_reservation_is_a_404(client):
+    response = client.post(
+        "/reservations/9999/comments",
+        json={"display_name": "Commenter", "body": "있나요"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_a_cancelled_reservation_stops_taking_comments(client):
+    """A cancelled appointment is not a thing left to discuss."""
+    reservation, owner_token = _create(client)
+    client.delete(f"/reservations/{reservation['id']}", headers={"X-Reservation-Token": owner_token})
+
+    response = client.post(
+        f"/reservations/{reservation['id']}/comments",
+        json={"display_name": "Commenter", "body": "아쉽네요"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "취소된 예약에는 댓글을 쓸 수 없습니다."}
+
+
+def test_an_empty_comment_is_refused_before_it_reaches_the_domain(client):
+    reservation, _ = _create(client)
+
+    response = client.post(
+        f"/reservations/{reservation['id']}/comments",
+        json={"display_name": "Commenter", "body": "   "},
+    )
+
+    assert response.status_code == 422

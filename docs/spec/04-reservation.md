@@ -38,6 +38,10 @@
 ### 참가 취소 조건
 `open`/`matched` + 시작 전.
 
+### 댓글 가능 조건 (`ensure_commentable`)
+**취소된 예약만** 거부한다. 시작했든 끝났든 그 약속은 실제로 있었던 일이고 페이지는 공유 가능하므로,
+사후에 "잘 뒀습니다"를 남길 곳이 있어야 한다. 취소된 예약은 애초에 일어나지 않았으니 논할 대상이 없다.
+
 ## 소유권 — 계정 없는 능력 토큰
 
 `shared/security/credentials.py`의 `TokenCredentialManager`가 처리한다.
@@ -63,6 +67,9 @@ FE는 `localStorage`에 `reservation-owner-{id}` / `reservation-participant-{id}
 | POST | `/reservations/{id}/participants` | 참가 → `{ reservation, participant_token }` (201) | 없음 |
 | DELETE | `/reservations/{id}/participants/me` | 참가 취소 | 참가자 토큰 |
 | DELETE | `/reservations/{id}` | 예약 취소 (204) | 호스트 토큰 |
+| GET | `/reservations/{id}/comments` | 댓글 목록 (작성순) | 없음 |
+| POST | `/reservations/{id}/comments` | 댓글 등록 → `{ comment, author_token }` (201) | 없음 |
+| DELETE | `/reservations/{id}/comments/{comment_id}` | 댓글 삭제 (204) | 작성자 토큰 |
 
 ## 조회 조건
 
@@ -127,6 +134,40 @@ FE에는 단건 조회를 부르는 코드가 없고 상세 패널은 목록 배
 
 취소는 소프트 삭제(`status = 'cancelled'`)이며 참가자도 함께 해제한다.
 목록 조회가 `open`/`matched`만 반환하므로, 취소된 예약은 다음 폴링에서 자연히 사라진다 — 클라이언트 측 제거 코드가 없다.
+
+## 댓글
+
+예약 하나에 달리는 평면 목록이다. **대댓글이 없다** — 커뮤니티 게시판과 달리 오가는 말이
+"21시 괜찮으세요?" 수준의 짧은 조율이라, `parent_id`와 트리 조립을 들일 만한 깊이가 생기지 않는다.
+
+| 항목 | 값 |
+|------|-----|
+| 본문 | 1~500자. **공백은 검증 전에 제거된다** (`str_strip_whitespace`) — 공백 세 칸은 빈 댓글이다 |
+| 작성자명 | 1~50자. 요청마다 실어 보낸다 (예약 등록과 같은 방식) |
+| 정렬 | `created_at` 오름차순, 같으면 `id` |
+| 삭제 | 소프트 삭제(`deleted_at`). 목록은 `deleted_at IS NULL`만 반환 |
+
+**소유권은 예약과 같은 토큰 모델이다.** 등록 시 `author_token`을 1회 발급하고 서버는 SHA-256 해시만
+저장한다. FE는 `localStorage`의 `reservation-comment-{commentId}`에 담고, `isCommentAuthor(id)`는
+"이 브라우저가 토큰을 갖고 있는가"를 답한다. 커뮤니티식 이름 비교였다면 아무나 남의 이름을 적고
+지울 수 있다.
+
+**삭제가 소프트인 이유**: 목록이 작성순이고 사람들이 서로를 인용한다. 행을 지우면 답글이
+아무것도 아닌 것에 답하는 꼴이 되므로, 구멍이 남는 편이 읽기 쉽다.
+
+예약 행이 사라지면 댓글도 함께 사라진다 — FK가 `ON DELETE CASCADE`다. 다만 예약 취소는
+소프트 삭제(`status = 'cancelled'`)이므로 이 경로로는 지워지지 않고, `ensure_commentable`이
+새 댓글만 막는다.
+
+`GET`은 상태를 보지 않는다. 취소된 예약의 상세 페이지에서도 이미 달린 댓글은 그대로 읽힌다.
+
+### 댓글 화면
+
+- 상세 패널 하단에 `reservation/component/CommentList.tsx`로 붙는다. `Reservation.tsx`가 이미
+  길어서, 댓글은 자체 상태와 자체 조회를 갖는 별도 컴포넌트다.
+- **탭의 10초 폴링을 타지 않는다.** 댓글은 몰아서 쓰이고 목록은 느리게 변하므로, 한 줄을 얻자고
+  예약 목록 전체를 다시 부르는 것은 잘못된 교환이다. 등록·삭제 직후에만 다시 읽는다.
+- 유저명이 없으면 입력이 비활성화된다. 예약 참가와 같은 `getUsername()`을 쓴다.
 
 ## 화면
 

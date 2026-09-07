@@ -5,9 +5,9 @@ from datetime import datetime, time, timedelta, timezone
 import pytest
 
 from reservation.domain import (
-    MatchType, ReservationStatus, ensure_conditions_valid, ensure_editable,
-    ensure_joinable, ensure_participation_cancellable, start_at_from, status_for,
-    window_end,
+    MatchType, ReservationStatus, ensure_commentable, ensure_conditions_valid,
+    ensure_editable, ensure_joinable, ensure_participation_cancellable,
+    start_at_from, status_for, window_end,
 )
 from reservation.exceptions import ReservationStateError
 
@@ -214,3 +214,17 @@ def test_a_cancelled_reservation_is_not_editable():
 def test_a_reservation_that_already_started_is_not_editable():
     with pytest.raises(ReservationStateError, match="이미 시작된"):
         ensure_editable(ReservationStatus.OPEN, NOW, 0, NOW)
+
+
+@pytest.mark.parametrize(
+    "status",
+    [ReservationStatus.OPEN, ReservationStatus.MATCHED, ReservationStatus.ENDED],
+)
+def test_a_reservation_can_be_commented_on_even_after_it_ends(status):
+    """The page is shareable and the match happened; there is still something to say."""
+    ensure_commentable(status)
+
+
+def test_a_cancelled_reservation_takes_no_comments():
+    with pytest.raises(ReservationStateError):
+        ensure_commentable(ReservationStatus.CANCELLED)

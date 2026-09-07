@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 
-from reservation.domain import MatchType, Participant, Reservation
+from reservation.domain import Comment, MatchType, Participant, Reservation
 
 
 class ReservationRepository(ABC):
@@ -33,6 +33,15 @@ class ReservationRepository(ABC):
 
     @abstractmethod
     async def cancel(self, reservation_id: int, host_token_hash: str, now: datetime) -> None: ...
+
+    @abstractmethod
+    async def list_comments(self, reservation_id: int) -> list[Comment]: ...
+
+    @abstractmethod
+    async def add_comment(self, reservation_id: int, *, author: str, body: str, author_token_hash: str) -> Comment: ...
+
+    @abstractmethod
+    async def delete_comment(self, reservation_id: int, comment_id: int, author_token_hash: str, now: datetime) -> None: ...
 
 
 class Clock(ABC):

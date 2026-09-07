@@ -3,7 +3,7 @@
 from datetime import datetime, time
 
 from shared.security.credentials import CredentialManager, TokenCredentialManager, hash_credential
-from reservation.domain import MatchType, Reservation, ensure_conditions_valid, start_at_from
+from reservation.domain import Comment, MatchType, Reservation, ensure_conditions_valid, start_at_from
 from reservation.ports import Clock, ReservationRepository
 
 _repo: ReservationRepository | None = None
@@ -75,6 +75,22 @@ async def join_reservation(reservation_id: int, *, display_name: str, ranks: lis
 
 async def cancel_participation(reservation_id: int, token: str) -> Reservation:
     return await _repository().cancel_participation(reservation_id, hash_credential(token), _clock.now())
+
+
+async def list_comments(reservation_id: int) -> list[Comment]:
+    return await _repository().list_comments(reservation_id)
+
+
+async def add_comment(reservation_id: int, *, display_name: str, body: str) -> tuple[Comment, str]:
+    token, token_hash = _credentials.issue()
+    comment = await _repository().add_comment(
+        reservation_id, author=display_name.strip(), body=body.strip(), author_token_hash=token_hash,
+    )
+    return comment, token
+
+
+async def delete_comment(reservation_id: int, comment_id: int, token: str) -> None:
+    await _repository().delete_comment(reservation_id, comment_id, hash_credential(token), _clock.now())
 
 
 async def cancel_reservation(reservation_id: int, token: str) -> None:

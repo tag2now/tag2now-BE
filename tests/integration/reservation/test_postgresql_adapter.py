@@ -10,8 +10,9 @@ from sqlalchemy.engine import Engine
 
 from reservation.domain import LISTING_GRACE, MatchType, ReservationStatus, window_end
 from reservation.entities import Reservation as ReservationRow
+from reservation.entities import ReservationComment as ReservationCommentRow
 from reservation.entities import ReservationParticipant as ReservationParticipantRow
-from reservation.exceptions import ReservationAccessError, ReservationStateError
+from reservation.exceptions import ReservationAccessError, ReservationNotFoundError, ReservationStateError
 from shared.database import close_database, get_session_factory, init_database
 
 
@@ -23,6 +24,7 @@ async def repository():
     repo = PostgresReservationRepository()
     await repo.init()
     async with get_session_factory()() as session, session.begin():
+        await session.execute(delete(ReservationCommentRow))
         await session.execute(delete(ReservationParticipantRow))
         await session.execute(delete(ReservationRow))
     yield repo
@@ -279,3 +281,50 @@ async def test_a_cancelled_reservation_cannot_be_edited(repository):
 
     with pytest.raises(ReservationStateError):
         await repository.update(reservation.id, "owner", now, memo="zombie")
+
+
+@pytest.mark.asyncio
+async def test_a_deleted_comment_is_kept_but_stops_being_listed(repository):
+    """Soft delete: the listing is ordered by creation and people quote each other."""
+    reservation = await _create_open_reservation(repository)
+    comment = await repository.add_comment(
+        reservation.id, author="Author", body="곧 갑니다", author_token_hash="author",
+    )
+
+    await repository.delete_comment(reservation.id, comment.id, "author", datetime.now(timezone.utc))
+
+    assert await repository.list_comments(reservation.id) == []
+    async with get_session_factory()() as session:
+        assert await session.get(ReservationCommentRow, comment.id) is not None
+
+
+@pytest.mark.asyncio
+async def test_a_comment_id_from_another_reservation_is_not_found(repository):
+    """The path names both, so a mismatched pair must not delete anything."""
+    mine = await _create_open_reservation(repository)
+    theirs = await repository.create(
+        start_at=datetime.now(timezone.utc) + timedelta(hours=2), host_display_name="Other",
+        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_token_hash="other",
+    )
+    comment = await repository.add_comment(
+        theirs.id, author="Author", body="여기요", author_token_hash="author",
+    )
+
+    with pytest.raises(ReservationNotFoundError):
+        await repository.delete_comment(mine.id, comment.id, "author", datetime.now(timezone.utc))
+
+    assert [c.id for c in await repository.list_comments(theirs.id)] == [comment.id]
+
+
+@pytest.mark.asyncio
+async def test_cancelling_a_reservation_takes_its_comments_with_it(repository):
+    """The rows go with the parent row --- the FK is ON DELETE CASCADE."""
+    reservation = await _create_open_reservation(repository)
+    await repository.add_comment(
+        reservation.id, author="Author", body="갑니다", author_token_hash="author",
+    )
+
+    async with get_session_factory()() as session, session.begin():
+        await session.execute(delete(ReservationRow).where(ReservationRow.id == reservation.id))
+
+    assert await repository.list_comments(reservation.id) == []

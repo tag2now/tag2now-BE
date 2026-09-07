@@ -6,16 +6,24 @@ from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from reservation.domain import (
-    LISTING_GRACE, LIVE_STATUSES, MatchType, Participant, Reservation, ReservationStatus,
-    ensure_editable, ensure_joinable, ensure_participation_cancellable, status_for,
-    window_end,
+    LISTING_GRACE, LIVE_STATUSES, Comment, MatchType, Participant, Reservation, ReservationStatus,
+    ensure_commentable, ensure_editable, ensure_joinable, ensure_participation_cancellable,
+    status_for, window_end,
 )
 from reservation.entities import Reservation as ReservationRow
+from reservation.entities import ReservationComment as ReservationCommentRow
 from reservation.entities import ReservationParticipant as ReservationParticipantRow
 from reservation.exceptions import ReservationAccessError, ReservationNotFoundError, ReservationStateError
 from reservation.ports import ReservationRepository
 from shared.database import get_session_factory
 
+
+
+def _comment(row: ReservationCommentRow) -> Comment:
+    return Comment(
+        id=row.id, reservation_id=row.reservation_id, author=row.author,
+        body=row.body, created_at=row.created_at,
+    )
 
 
 def _reservation(row: ReservationRow, participant_count: int) -> Reservation:
@@ -228,6 +236,48 @@ class PostgresReservationRepository(ReservationRepository):
             )
             row.status, row.updated_at = status_for(count, row.capacity).value, now
             return _reservation(row, count)
+
+    async def list_comments(self, reservation_id: int) -> list[Comment]:
+        async with self._sessions() as session:
+            rows = await session.scalars(
+                select(ReservationCommentRow)
+                .where(
+                    ReservationCommentRow.reservation_id == reservation_id,
+                    ReservationCommentRow.deleted_at.is_(None),
+                )
+                .order_by(ReservationCommentRow.created_at, ReservationCommentRow.id)
+            )
+            return [_comment(row) for row in rows]
+
+    async def add_comment(self, reservation_id: int, *, author: str, body: str, author_token_hash: str) -> Comment:
+        async with self._sessions() as session, session.begin():
+            reservation = await session.get(ReservationRow, reservation_id)
+            if reservation is None:
+                raise ReservationNotFoundError("Reservation not found")
+            ensure_commentable(ReservationStatus(reservation.status))
+            row = ReservationCommentRow(
+                reservation_id=reservation_id, author=author, body=body,
+                author_token_hash=author_token_hash,
+            )
+            session.add(row)
+            await session.flush()
+            await session.refresh(row)
+            return _comment(row)
+
+    async def delete_comment(self, reservation_id: int, comment_id: int, author_token_hash: str, now: datetime) -> None:
+        """Soft delete, so a reply reading as an answer to nothing is at least rare.
+
+        The row is kept rather than removed because the listing is ordered by
+        creation and people quote each other; a hole is easier to read than a
+        renumbered thread.
+        """
+        async with self._sessions() as session, session.begin():
+            row = await session.get(ReservationCommentRow, comment_id)
+            if row is None or row.reservation_id != reservation_id or row.deleted_at is not None:
+                raise ReservationNotFoundError("Comment not found")
+            if row.author_token_hash != author_token_hash:
+                raise ReservationAccessError("Comment cannot be deleted with this credential")
+            row.deleted_at = now
 
     async def cancel(self, reservation_id: int, host_token_hash: str, now: datetime) -> None:
         async with self._sessions() as session, session.begin():

@@ -2,7 +2,7 @@
 
 from datetime import datetime, time
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from reservation.domain import MatchType, ReservationStatus
 
@@ -43,6 +43,33 @@ class UpdateReservationRequest(BaseModel):
 class JoinReservationRequest(BaseModel):
     display_name: str = Field(..., min_length=1, max_length=50)
     ranks: list[str] = Field(default_factory=list, max_length=20)
+
+
+class CreateCommentRequest(BaseModel):
+    """Whitespace is stripped before the length rules run.
+
+    A body of three spaces is an empty comment; letting min_length see it
+    unstripped would store one, because the service strips on the way to the
+    repository either way.
+    """
+
+    display_name: str = Field(..., min_length=1, max_length=50)
+    body: str = Field(..., min_length=1, max_length=500)
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+
+class CommentOut(BaseModel):
+    id: int
+    reservation_id: int
+    author: str
+    body: str
+    created_at: datetime
+
+
+class CreateCommentOut(BaseModel):
+    comment: CommentOut
+    author_token: str
 
 
 class ReservationOut(BaseModel):
