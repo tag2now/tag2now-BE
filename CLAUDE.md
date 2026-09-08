@@ -90,6 +90,30 @@ Stop every match, run the tests, then start the server again. Killing the parent
 
 `pyproject.toml` sets `pythonpath = ["src"]` and `asyncio_mode = "auto"`, so async tests need no `@pytest.mark.asyncio` decorator.
 
+### The published contract
+
+`openapi.json` at the repository root is not generated at build time — it is
+committed, because **tag2now-FE checks its API calls against a copy of it**.
+Nothing else can catch a rename across the two repositories: the integration
+tests here build their own requests, so they only ask this service about names
+this service chose, and the frontend's e2e mocks answer with whatever the
+frontend already believed.
+
+`test_openapi_contract` fails when the file no longer describes the
+application, printing the diff. Regenerate and commit it in the same change:
+
+```bash
+.venv/Scripts/python.exe scripts/dump_openapi.py
+```
+
+A FastAPI upgrade can move the schema with no route changing. That diff is
+worth reading rather than suppressing — it changes the document clients read.
+
+**A route without a `response_model` contributes nothing to the contract**: its
+schema serialises as `{}`, so the frontend can assert its path but nothing
+about its payload. Twelve routes are in that state, the leaderboard, rooms and
+history reads among them.
+
 ## Configuration
 
 `shared/settings.py` defines a pydantic-settings `Settings` model loaded from `env/.env` plus `env/.env.{profile}`, where profile comes from the `FAST_API_PROFILE` environment variable (default `local`). `get_settings()` is `@lru_cache`d — settings are read once per process.
