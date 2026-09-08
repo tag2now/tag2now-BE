@@ -35,6 +35,22 @@ jobs:
   integration-tests:
     runs-on: ubuntu-latest
     needs: unit-tests
+    # Job-level, because the migration step and the test step need the same
+    # database values and letting them drift apart would fail confusingly. The
+    # RPCN_* three are placeholders, not secrets: Settings requires them with no
+    # default, so anything reaching get_settings() needs them present -- nothing
+    # in this job talks to RPCN.
+    env:
+      RPCN_USER: ci-unused
+      RPCN_PASSWORD: ci-unused
+      RPCN_TOKEN: ci-unused
+      RPCN_HOST: 127.0.0.1
+      RPCN_PORT: "31313"
+      REDIS_URL: redis://127.0.0.1:6379/0
+      DB_URL: 127.0.0.1:5432
+      DB_USER: tag2now
+      DB_PASSWORD: tag2now
+      DB_NAME: tag2now
     steps:
       - uses: actions/checkout@v7
 
@@ -53,12 +69,11 @@ jobs:
         run: docker compose -f compose.test.yml up -d --wait
 
       # Startup does not create tables, so the compose database comes up empty
-      # and every test that touches it fails on a missing relation. Alembic
-      # reads DATABASE_URL, not the app's DB_URL, and needs the driver spelled
-      # out: a bare postgresql:// selects psycopg2, which is not installed.
+      # and every test that touches it fails on a missing relation. env.py has
+      # no DATABASE_URL here and falls back to build_dsn(driver="psycopg") over
+      # the job env above; the driver has to be named because a bare
+      # postgresql:// selects psycopg2, which is not installed.
       - name: Run migrations
-        env:
-          DATABASE_URL: postgresql+psycopg://tag2now:tag2now@127.0.0.1:5432/tag2now
         run: alembic upgrade head
 
       - name: Generate protobuf
@@ -67,20 +82,8 @@ jobs:
       # The rpcn-marked tests need sole use of an RPCN account, which CI cannot
       # hold: production is logged in as that user around the clock, and two
       # overlapping runs would collide with each other besides. They stay a
-      # local check. These placeholders exist only because Settings requires the
-      # three fields with no default -- nothing here reaches RPCN.
+      # local check.
       - name: Run integration tests
-        env:
-          RPCN_USER: ci-unused
-          RPCN_PASSWORD: ci-unused
-          RPCN_TOKEN: ci-unused
-          RPCN_HOST: 127.0.0.1
-          RPCN_PORT: "31313"
-          REDIS_URL: redis://127.0.0.1:6379/0
-          DB_URL: 127.0.0.1:5432
-          DB_USER: tag2now
-          DB_PASSWORD: tag2now
-          DB_NAME: tag2now
         run: pytest tests/integration/ -v -m "not rpcn"
 
       - name: Stop services
