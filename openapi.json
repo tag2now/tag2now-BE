@@ -1,0 +1,1816 @@
+{
+  "components": {
+    "schemas": {
+      "CreateCommentOut": {
+        "properties": {
+          "author_token": {
+            "title": "Author Token",
+            "type": "string"
+          },
+          "comment": {
+            "$ref": "#/components/schemas/reservation__models__CommentOut"
+          }
+        },
+        "required": [
+          "comment",
+          "author_token"
+        ],
+        "title": "CreateCommentOut",
+        "type": "object"
+      },
+      "CreatePostRequest": {
+        "properties": {
+          "body": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "post_type": {
+            "default": "자유",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "body"
+        ],
+        "title": "CreatePostRequest",
+        "type": "object"
+      },
+      "CreateReservationOut": {
+        "properties": {
+          "owner_token": {
+            "title": "Owner Token",
+            "type": "string"
+          },
+          "reservation": {
+            "$ref": "#/components/schemas/ReservationOut"
+          }
+        },
+        "required": [
+          "reservation",
+          "owner_token"
+        ],
+        "title": "CreateReservationOut",
+        "type": "object"
+      },
+      "CreateReservationRequest": {
+        "properties": {
+          "capacity": {
+            "default": 1,
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Capacity",
+            "type": "integer"
+          },
+          "display_name": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "match_type": {
+            "$ref": "#/components/schemas/MatchType"
+          },
+          "memo": {
+            "default": "",
+            "maxLength": 140,
+            "title": "Memo",
+            "type": "string"
+          },
+          "ranks": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Ranks",
+            "type": "array"
+          },
+          "start_time": {
+            "format": "time",
+            "title": "Start Time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start_time",
+          "display_name",
+          "match_type"
+        ],
+        "title": "CreateReservationRequest",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "JoinReservationOut": {
+        "properties": {
+          "participant_token": {
+            "title": "Participant Token",
+            "type": "string"
+          },
+          "reservation": {
+            "$ref": "#/components/schemas/ReservationOut"
+          }
+        },
+        "required": [
+          "reservation",
+          "participant_token"
+        ],
+        "title": "JoinReservationOut",
+        "type": "object"
+      },
+      "JoinReservationRequest": {
+        "properties": {
+          "display_name": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          },
+          "ranks": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Ranks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "display_name"
+        ],
+        "title": "JoinReservationRequest",
+        "type": "object"
+      },
+      "MatchType": {
+        "enum": [
+          "rank_match",
+          "player_match",
+          "any"
+        ],
+        "title": "MatchType",
+        "type": "string"
+      },
+      "PostDetail": {
+        "properties": {
+          "author": {
+            "title": "Author",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "comments": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/community__models__CommentOut"
+            },
+            "title": "Comments",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "post_type": {
+            "default": "자유",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "thumbs_down": {
+            "title": "Thumbs Down",
+            "type": "integer"
+          },
+          "thumbs_up": {
+            "title": "Thumbs Up",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "title",
+          "body",
+          "thumbs_up",
+          "thumbs_down",
+          "created_at"
+        ],
+        "title": "PostDetail",
+        "type": "object"
+      },
+      "PostListResponse": {
+        "properties": {
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "posts": {
+            "items": {
+              "$ref": "#/components/schemas/PostSummary"
+            },
+            "title": "Posts",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "posts",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "PostListResponse",
+        "type": "object"
+      },
+      "PostSummary": {
+        "properties": {
+          "author": {
+            "title": "Author",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "comment_count": {
+            "default": 0,
+            "title": "Comment Count",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "post_type": {
+            "default": "자유",
+            "title": "Post Type",
+            "type": "string"
+          },
+          "thumbs_down": {
+            "title": "Thumbs Down",
+            "type": "integer"
+          },
+          "thumbs_up": {
+            "title": "Thumbs Up",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "title",
+          "body",
+          "thumbs_up",
+          "thumbs_down",
+          "created_at"
+        ],
+        "title": "PostSummary",
+        "type": "object"
+      },
+      "ReservationOut": {
+        "properties": {
+          "capacity": {
+            "title": "Capacity",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "host_display_name": {
+            "title": "Host Display Name",
+            "type": "string"
+          },
+          "host_ranks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Host Ranks",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "match_type": {
+            "$ref": "#/components/schemas/MatchType"
+          },
+          "memo": {
+            "title": "Memo",
+            "type": "string"
+          },
+          "participant_count": {
+            "title": "Participant Count",
+            "type": "integer"
+          },
+          "start_at": {
+            "format": "date-time",
+            "title": "Start At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReservationStatus"
+          }
+        },
+        "required": [
+          "id",
+          "start_at",
+          "host_display_name",
+          "host_ranks",
+          "match_type",
+          "capacity",
+          "memo",
+          "status",
+          "participant_count",
+          "created_at"
+        ],
+        "title": "ReservationOut",
+        "type": "object"
+      },
+      "ReservationStatus": {
+        "enum": [
+          "open",
+          "matched",
+          "cancelled",
+          "ended"
+        ],
+        "title": "ReservationStatus",
+        "type": "string"
+      },
+      "SetIdentityRequest": {
+        "properties": {
+          "name": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "SetIdentityRequest",
+        "type": "object"
+      },
+      "ThumbRequest": {
+        "properties": {
+          "direction": {
+            "description": "up for thumbs up, down for thumbs down",
+            "title": "Direction",
+            "type": "string"
+          }
+        },
+        "required": [
+          "direction"
+        ],
+        "title": "ThumbRequest",
+        "type": "object"
+      },
+      "UpdateReservationRequest": {
+        "description": "Every field optional: the host sends only what changed.\n\nThe validators are the create request's own, so a rule cannot drift between\nposting a reservation and editing one.",
+        "properties": {
+          "capacity": {
+            "anyOf": [
+              {
+                "maximum": 3.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity"
+          },
+          "match_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MatchType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "memo": {
+            "anyOf": [
+              {
+                "maxLength": 140,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memo"
+          },
+          "ranks": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranks"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time"
+          }
+        },
+        "title": "UpdateReservationRequest",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "community__models__CommentOut": {
+        "properties": {
+          "author": {
+            "title": "Author",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "post_id": {
+            "title": "Post Id",
+            "type": "integer"
+          },
+          "replies": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/community__models__CommentOut"
+            },
+            "title": "Replies",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "post_id",
+          "parent_id",
+          "author",
+          "body",
+          "created_at"
+        ],
+        "title": "CommentOut",
+        "type": "object"
+      },
+      "community__models__CreateCommentRequest": {
+        "properties": {
+          "body": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "CreateCommentRequest",
+        "type": "object"
+      },
+      "reservation__models__CommentOut": {
+        "properties": {
+          "author": {
+            "title": "Author",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "reservation_id": {
+            "title": "Reservation Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "reservation_id",
+          "author",
+          "body",
+          "created_at"
+        ],
+        "title": "CommentOut",
+        "type": "object"
+      },
+      "reservation__models__CreateCommentRequest": {
+        "description": "Whitespace is stripped before the length rules run.\n\nA body of three spaces is an empty comment; letting min_length see it\nunstripped would store one, because the service strips on the way to the\nrepository either way.",
+        "properties": {
+          "body": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "display_name": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Display Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "display_name",
+          "body"
+        ],
+        "title": "CreateCommentRequest",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Live data from the RPCN multiplayer server for TTT2.",
+    "title": "Tekken Tag Tournament 2 RPCN API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/community/identity": {
+      "post": {
+        "operationId": "set_identity_community_identity_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetIdentityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Identity",
+        "tags": [
+          "community"
+        ]
+      }
+    },
+    "/community/posts": {
+      "get": {
+        "operationId": "list_posts_community_posts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "post_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Post Type"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Posts",
+        "tags": [
+          "community"
+        ]
+      },
+      "post": {
+        "operationId": "create_post_community_posts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePostRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Post",
+        "tags": [
+          "community"
+        ]
+      }
+    },
+    "/community/posts/{post_id}": {
+      "delete": {
+        "operationId": "delete_post_community_posts__post_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "title": "Post Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Post",
+        "tags": [
+          "community"
+        ]
+      },
+      "get": {
+        "operationId": "get_post_community_posts__post_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "title": "Post Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Post",
+        "tags": [
+          "community"
+        ]
+      }
+    },
+    "/community/posts/{post_id}/comments": {
+      "post": {
+        "operationId": "create_comment_community_posts__post_id__comments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "title": "Post Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/community__models__CreateCommentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Comment",
+        "tags": [
+          "community"
+        ]
+      }
+    },
+    "/community/posts/{post_id}/thumb": {
+      "post": {
+        "operationId": "thumb_post_community_posts__post_id__thumb_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "title": "Post Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThumbRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Thumb Post",
+        "tags": [
+          "community"
+        ]
+      }
+    },
+    "/history/players/{npid}": {
+      "get": {
+        "description": "Return aggregated history stats for a player.",
+        "operationId": "player_history_history_players__npid__get",
+        "parameters": [
+          {
+            "description": "Player NPID",
+            "in": "path",
+            "name": "npid",
+            "required": true,
+            "schema": {
+              "description": "Player NPID",
+              "title": "Npid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Number of days",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "description": "Number of days",
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Player history",
+        "tags": [
+          "History & Statistics"
+        ]
+      }
+    },
+    "/history/stats": {
+      "get": {
+        "description": "Return average and peak player counts per KST hour.",
+        "operationId": "hourly_activity_history_stats_get",
+        "parameters": [
+          {
+            "description": "Number of days to aggregate",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 7,
+              "description": "Number of days to aggregate",
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Hourly player activity (KST)",
+        "tags": [
+          "History & Statistics"
+        ]
+      }
+    },
+    "/history/stats/daily": {
+      "get": {
+        "description": "Return daily peak/average player and room counts.",
+        "operationId": "daily_summary_history_stats_daily_get",
+        "parameters": [
+          {
+            "description": "Number of days",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "description": "Number of days",
+              "maximum": 90,
+              "minimum": 1,
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Daily summary",
+        "tags": [
+          "History & Statistics"
+        ]
+      }
+    },
+    "/history/stats/weekly-top": {
+      "get": {
+        "description": "Return the top N most frequently seen players in the last 7 days.",
+        "operationId": "weekly_top_players_history_stats_weekly_top_get",
+        "parameters": [
+          {
+            "description": "Number of top players to return",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "Number of top players to return",
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Weekly top players",
+        "tags": [
+          "History & Statistics"
+        ]
+      }
+    },
+    "/leaderboard": {
+      "get": {
+        "description": "Return the top N leaderboard entries with TTT2 character info decoded.",
+        "operationId": "leaderboard_leaderboard_get",
+        "parameters": [
+          {
+            "description": "Score board ID",
+            "in": "query",
+            "name": "board",
+            "required": false,
+            "schema": {
+              "default": 4,
+              "description": "Score board ID",
+              "title": "Board",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "top",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Top",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Leaderboard entries",
+        "tags": [
+          "Tekken Tag Tournament 2"
+        ]
+      }
+    },
+    "/players/{npid}": {
+      "get": {
+        "description": "Look up a player: online status, leaderboard stats, and usual playing hours.",
+        "operationId": "player_lookup_players__npid__get",
+        "parameters": [
+          {
+            "description": "Player NPID",
+            "in": "path",
+            "name": "npid",
+            "required": true,
+            "schema": {
+              "description": "Player NPID",
+              "title": "Npid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Player lookup",
+        "tags": [
+          "Tekken Tag Tournament 2"
+        ]
+      }
+    },
+    "/reservations": {
+      "get": {
+        "description": "Reservations from now until the next 06:00 KST.",
+        "operationId": "list_reservations_reservations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReservationOut"
+                  },
+                  "title": "Response List Reservations Reservations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Reservations",
+        "tags": [
+          "Reservations"
+        ]
+      },
+      "post": {
+        "operationId": "create_reservation_reservations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReservationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateReservationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Reservation",
+        "tags": [
+          "Reservations"
+        ]
+      }
+    },
+    "/reservations/{reservation_id}": {
+      "delete": {
+        "operationId": "cancel_reservation_reservations__reservation_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reservation_id",
+            "required": true,
+            "schema": {
+              "title": "Reservation Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-reservation-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Reservation-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Reservation",
+        "tags": [
+          "Reservations"
+        ]
+      },
+      "get": {
+        "operationId": "get_reservation_reservations__reservation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reservation_id",
+            "required": true,
+            "schema": {
+              "title": "Reservation Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Reservation",
+        "tags": [
+          "Reservations"
+        ]
+      },
+      "patch": {
+        "operationId": "update_reservation_reservations__reservation_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reservation_id",
+            "required": true,
+            "schema": {
+              "title": "Reservation Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-reservation-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Reservation-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReservationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Reservation",
+        "tags": [
+          "Reservations"
+        ]
+      }
+    },
+    "/reservations/{reservation_id}/comments": {
+      "get": {
+        "operationId": "list_comments_reservations__reservation_id__comments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reservation_id",
+            "required": true,
+            "schema": {
+              "title": "Reservation Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/reservation__models__CommentOut"
+                  },
+                  "title": "Response List Comments Reservations  Reservation Id  Comments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Comments",
+        "tags": [
+          "Reservations"
+        ]
+      },
+      "post": {
+        "operationId": "add_comment_reservations__reservation_id__comments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reservation_id",
+            "required": true,
+            "schema": {
+              "title": "Reservation Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/reservation__models__CreateCommentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCommentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Comment",
+        "tags": [
+          "Reservations"
+        ]
+      }
+    },
+    "/reservations/{reservation_id}/comments/{comment_id}": {
+      "delete": {
+        "operationId": "delete_comment_reservations__reservation_id__comments__comment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reservation_id",
+            "required": true,
+            "schema": {
+              "title": "Reservation Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "comment_id",
+            "required": true,
+            "schema": {
+              "title": "Comment Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-reservation-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Reservation-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Comment",
+        "tags": [
+          "Reservations"
+        ]
+      }
+    },
+    "/reservations/{reservation_id}/participants": {
+      "post": {
+        "operationId": "join_reservation_reservations__reservation_id__participants_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reservation_id",
+            "required": true,
+            "schema": {
+              "title": "Reservation Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinReservationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JoinReservationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Join Reservation",
+        "tags": [
+          "Reservations"
+        ]
+      }
+    },
+    "/reservations/{reservation_id}/participants/me": {
+      "delete": {
+        "operationId": "cancel_participation_reservations__reservation_id__participants_me_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reservation_id",
+            "required": true,
+            "schema": {
+              "title": "Reservation Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-reservation-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Reservation-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReservationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Participation",
+        "tags": [
+          "Reservations"
+        ]
+      }
+    },
+    "/rooms/all": {
+      "get": {
+        "description": "Search all rooms including hidden ones via SearchRoomAll.",
+        "operationId": "rooms_all_rooms_all_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "All rooms including hidden",
+        "tags": [
+          "Tekken Tag Tournament 2"
+        ]
+      }
+    },
+    "/servers": {
+      "get": {
+        "description": "Return the server → world hierarchy.",
+        "operationId": "servers_servers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Server and world list",
+        "tags": [
+          "Tekken Tag Tournament 2"
+        ]
+      }
+    }
+  }
+}
