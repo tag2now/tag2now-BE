@@ -16,6 +16,7 @@ class Post(Base):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     post_type: Mapped[str] = mapped_column(Text, nullable=False, server_default="자유")
+    youtube_video_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     thumbs_up: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     thumbs_down: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

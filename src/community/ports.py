@@ -28,8 +28,12 @@ class CommunityRepository(ABC):
         """Return flat list of comments for *post_id*, ordered by created_at ASC."""
 
     @abstractmethod
-    async def create_post(self, author: str, title: str, body: str, post_type: str = "자유") -> dict:
+    async def create_post(self, author: str, title: str, body: str, post_type: str = "자유", youtube_video_id: str | None = None) -> dict:
         """Insert a new post and return it."""
+
+    @abstractmethod
+    async def update_post(self, post_id: int, user: str, title: str, body: str, post_type: str, youtube_video_id: str | None) -> dict:
+        """Update editable fields of a post owned by user."""
 
     @abstractmethod
     async def delete_post(self, post_id: int, user: str) -> None:

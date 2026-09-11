@@ -33,9 +33,18 @@ class PostgresCommunityRepository(CommunityRepository):
     async def get_post_comments(self, post_id):
         async with self.sessions() as s:
             return [_dict(x) for x in (await s.scalars(select(Comment).where(Comment.post_id==post_id).order_by(Comment.created_at))).all()]
-    async def create_post(self, author, title, body, post_type="자유"):
+    async def create_post(self, author, title, body, post_type="자유", youtube_video_id=None):
         async with self.sessions() as s, s.begin():
-            row=Post(author=author,title=title,body=body,post_type=post_type); s.add(row); await s.flush(); await s.refresh(row); return _dict(row)
+            row=Post(author=author,title=title,body=body,post_type=post_type,youtube_video_id=youtube_video_id); s.add(row); await s.flush(); await s.refresh(row); return _dict(row)
+    async def update_post(self, post_id, user, title, body, post_type, youtube_video_id):
+        async with self.sessions() as s, s.begin():
+            row = await s.scalar(select(Post).where(Post.id == post_id).with_for_update())
+            if row is None: raise PostNotFoundError("Post not found")
+            if row.author != user: raise OwnershipError("Not your post")
+            row.title, row.body, row.post_type = title, body, post_type
+            row.youtube_video_id = youtube_video_id
+            await s.flush()
+            return {**_dict(row), "comment_count": await s.scalar(select(func.count()).select_from(Comment).where(Comment.post_id == post_id))}
     async def delete_post(self, post_id, user):
         async with self.sessions() as s, s.begin():
             row=await s.get(Post,post_id)

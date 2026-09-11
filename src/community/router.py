@@ -63,7 +63,7 @@ async def list_posts(
 
 @router.post("/posts", status_code=201)
 async def create_post(req: models.CreatePostRequest, user: str = Depends(_get_user)):
-    post = await service.create_post(user, req.title, req.body, req.post_type)
+    post = await service.create_post(user, req.title, req.body, req.post_type, req.youtube_video_id)
     _invalidate_posts()
     return post
 
@@ -94,6 +94,14 @@ async def get_post(post_id: int):
 
     post["comments"] = top_level
     cache_set(cache_key, post, _ttl())
+    return post
+
+
+@router.patch("/posts/{post_id}", response_model=models.PostSummary)
+async def update_post(post_id: int, req: models.UpdatePostRequest, user: str = Depends(_get_user)):
+    post = await service.update_post(post_id, user, req.title, req.body, req.post_type, req.youtube_video_id)
+    _invalidate_posts()
+    _invalidate_post(post_id)
     return post
 
 
