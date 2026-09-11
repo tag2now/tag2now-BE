@@ -1,6 +1,6 @@
 """Framework-independent reservation domain types and rules."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta
 from enum import StrEnum
 from zoneinfo import ZoneInfo
@@ -22,6 +22,12 @@ class ReservationStatus(StrEnum):
 
 
 @dataclass(frozen=True)
+class ParticipantSummary:
+    id: int
+    display_name: str
+
+
+@dataclass(frozen=True)
 class Reservation:
     id: int
     start_at: datetime
@@ -33,6 +39,7 @@ class Reservation:
     status: ReservationStatus
     participant_count: int
     created_at: datetime
+    participants: list[ParticipantSummary] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -131,7 +138,7 @@ def ensure_joinable(status: ReservationStatus, start_at: datetime, participant_c
     if status is not ReservationStatus.OPEN or start_at <= now:
         raise ReservationStateError("지금은 참가할 수 없는 예약입니다.")
     if participant_count >= capacity:
-        raise ReservationStateError("모집이 마감된 예약입니다.")
+        raise ReservationStateError("모집이 완료된 예약입니다.")
 
 
 def ensure_editable(status: ReservationStatus, start_at: datetime, participant_count: int, now: datetime) -> None:

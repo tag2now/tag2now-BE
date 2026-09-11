@@ -39,7 +39,7 @@ def test_a_started_reservation_rejects_participants():
 
 
 def test_a_reservation_at_capacity_rejects_participants():
-    with pytest.raises(ReservationStateError, match="모집이 마감된"):
+    with pytest.raises(ReservationStateError, match="모집이 완료된"):
         ensure_joinable(ReservationStatus.OPEN, FUTURE, 1, 1, NOW)
 
 

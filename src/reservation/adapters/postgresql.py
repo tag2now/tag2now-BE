@@ -3,10 +3,11 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import case, func, select, update
+from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from reservation.domain import (
-    LISTING_GRACE, LIVE_STATUSES, Comment, MatchType, Participant, Reservation, ReservationStatus,
+    LISTING_GRACE, LIVE_STATUSES, Comment, MatchType, Participant, ParticipantSummary, Reservation, ReservationStatus,
     ensure_commentable, ensure_editable, ensure_joinable, ensure_participation_cancellable,
     status_for, window_end,
 )
@@ -26,13 +27,14 @@ def _comment(row: ReservationCommentRow) -> Comment:
     )
 
 
-def _reservation(row: ReservationRow, participant_count: int) -> Reservation:
+def _reservation(row: ReservationRow, participant_count: int, participants: list[dict] | None = None) -> Reservation:
     return Reservation(
         id=row.id, start_at=row.start_at,
         host_display_name=row.host_display_name, host_ranks=list(row.host_ranks),
         match_type=MatchType(row.match_type), capacity=row.capacity, memo=row.memo,
         status=ReservationStatus(row.status), participant_count=participant_count,
         created_at=row.created_at,
+        participants=[ParticipantSummary(**item) for item in (participants or [])],
     )
 
 
@@ -57,8 +59,15 @@ class PostgresReservationRepository(ReservationRepository):
     @staticmethod
     def _with_participant_count():
         count = func.count(ReservationParticipantRow.id).label("participant_count")
+        participants = func.json_agg(aggregate_order_by(
+            func.json_build_object(
+                "id", ReservationParticipantRow.id,
+                "display_name", ReservationParticipantRow.display_name,
+            ),
+            ReservationParticipantRow.joined_at, ReservationParticipantRow.id,
+        )).filter(ReservationParticipantRow.id.is_not(None)).label("participants")
         return (
-            select(ReservationRow, count)
+            select(ReservationRow, count, participants)
             .outerjoin(
                 ReservationParticipantRow,
                 (ReservationParticipantRow.reservation_id == ReservationRow.id)
@@ -138,7 +147,7 @@ class PostgresReservationRepository(ReservationRepository):
                 )
                 .order_by(ReservationRow.start_at, case((ReservationRow.status == "open", 0), else_=1))
             )
-            return [_reservation(row, count) for row, count in result.all()]
+            return [_reservation(*item) for item in result.all()]
 
     async def get(self, reservation_id: int) -> Reservation:
         async with self._sessions() as session:
@@ -205,7 +214,8 @@ class PostgresReservationRepository(ReservationRepository):
             row.updated_at = now
             await session.flush()
             await session.refresh(participant)
-            return _reservation(row, count), Participant(
+            result = await session.execute(self._with_participant_count().where(ReservationRow.id == reservation_id))
+            return _reservation(*result.one()), Participant(
                 id=participant.id, reservation_id=reservation_id,
                 display_name=participant.display_name, ranks=list(participant.ranks),
                 joined_at=participant.joined_at,
@@ -235,7 +245,9 @@ class PostgresReservationRepository(ReservationRepository):
                 )
             )
             row.status, row.updated_at = status_for(count, row.capacity).value, now
-            return _reservation(row, count)
+            await session.flush()
+            result = await session.execute(self._with_participant_count().where(ReservationRow.id == reservation_id))
+            return _reservation(*result.one())
 
     async def list_comments(self, reservation_id: int) -> list[Comment]:
         async with self._sessions() as session:

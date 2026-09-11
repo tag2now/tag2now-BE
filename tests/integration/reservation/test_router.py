@@ -230,6 +230,30 @@ def test_joining_a_reservation_that_never_existed_is_a_404(client):
     assert response.status_code == 404
 
 
+def test_roster_is_ordered_public_and_excludes_cancelled_participants(client):
+    reservation, _ = _create(client, match_type="player_match", ranks=[], capacity=2)
+    reservation_id = reservation["id"]
+    assert reservation["participants"] == []
+    first = _join(client, reservation_id, display_name="First").json()
+    second = _join(client, reservation_id, display_name="Second").json()
+    roster = second["reservation"]["participants"]
+    assert [p["display_name"] for p in roster] == ["First", "Second"]
+    assert all(set(p) == {"id", "display_name"} for p in roster)
+    assert second["reservation"]["status"] == "matched"
+    assert client.get(f"/reservations/{reservation_id}").json()["participants"] == roster
+    listed = next(r for r in client.get("/reservations").json() if r["id"] == reservation_id)
+    assert listed["participants"] == roster
+    cancelled = client.delete(
+        f"/reservations/{reservation_id}/participants/me",
+        headers={"X-Reservation-Token": first["participant_token"]},
+    )
+    assert cancelled.status_code == 200
+    assert cancelled.json()["participants"] == [roster[1]]
+    assert cancelled.json()["participant_count"] == 1
+    assert cancelled.json()["status"] == "open"
+    assert client.get(f"/reservations/{reservation_id}").json()["participants"] == [roster[1]]
+
+
 def test_joining_past_capacity_is_refused_as_a_domain_violation(client):
     reservation, _ = _create(client)
     _join(client, reservation["id"], display_name="First")

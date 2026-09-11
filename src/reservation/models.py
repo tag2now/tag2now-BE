@@ -72,6 +72,11 @@ class CreateCommentOut(BaseModel):
     author_token: str
 
 
+class ParticipantSummaryOut(BaseModel):
+    id: int
+    display_name: str
+
+
 class ReservationOut(BaseModel):
     id: int
     start_at: datetime
@@ -82,6 +87,7 @@ class ReservationOut(BaseModel):
     memo: str
     status: ReservationStatus
     participant_count: int
+    participants: list[ParticipantSummaryOut]
     created_at: datetime
 
 

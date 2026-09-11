@@ -91,6 +91,12 @@ FE는 `localStorage`에 `reservation-owner-{id}` / `reservation-participant-{id}
 | 상태 | `open`, `matched`만 (`cancelled`·`ended` 제외) |
 | 정렬 | `start_at` 오름차순, 같은 시각이면 `open`이 `matched`보다 앞 |
 | `participant_count` | `cancelled_at IS NULL`인 참가자만 outer join으로 집계 |
+| `participants` | 같은 활성 참가자의 `{id, display_name}` 목록. `joined_at`, `id` 순으로 정렬하며 방장과 인증 정보는 제외 |
+
+예약 목록·단건·참가·참가 취소 응답에 명단을 포함한다. 참가자가 없으면 `[]`을 반환한다.
+인원수와 명단은 같은 쿼리로 조회해 일치시키며, 목록의 예약마다 추가 쿼리를 실행하지 않는다.
+FE 상세 화면은 명단과 방장 제외 인원수를 표시하고, 참가·취소 직후 및 기존 10초 조회 때 갱신한다.
+구버전 BE가 `participants`를 생략하면 명단 확인 불가로 표시하며, 빈 명단으로 간주하지 않는다.
 
 하한이 `now - 1시간`이므로 **진행 중인 예약도 1시간까지는 목록에 남는다.** 참가와 수정은 시작과 동시에 막히지만,
 그 안에 있는 사람들에게는 여전히 자기 약속이고 — 무엇보다 **목록이 상세 페이지에 닿는 유일한 경로다.**

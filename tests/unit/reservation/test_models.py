@@ -19,3 +19,13 @@ def _request(**overrides):
 def test_create_request_rejects_duplicate_ranks():
     with pytest.raises(ValidationError, match="ranks"):
         _request(ranks=["Brawler", "Brawler"])
+
+
+def test_participant_response_exposes_only_id_and_display_name():
+    from reservation.models import ParticipantSummaryOut
+
+    response = ParticipantSummaryOut.model_validate({
+        "id": 7, "display_name": "Joiner", "participant_token_hash": "private",
+        "subject": "private-subject", "ranks": ["Brawler"],
+    })
+    assert response.model_dump() == {"id": 7, "display_name": "Joiner"}

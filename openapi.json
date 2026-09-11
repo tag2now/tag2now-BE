@@ -170,6 +170,24 @@
         "title": "MatchType",
         "type": "string"
       },
+      "ParticipantSummaryOut": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "display_name"
+        ],
+        "title": "ParticipantSummaryOut",
+        "type": "object"
+      },
       "PostDetail": {
         "properties": {
           "author": {
@@ -349,6 +367,13 @@
             "title": "Participant Count",
             "type": "integer"
           },
+          "participants": {
+            "items": {
+              "$ref": "#/components/schemas/ParticipantSummaryOut"
+            },
+            "title": "Participants",
+            "type": "array"
+          },
           "start_at": {
             "format": "date-time",
             "title": "Start At",
@@ -368,6 +393,7 @@
           "memo",
           "status",
           "participant_count",
+          "participants",
           "created_at"
         ],
         "title": "ReservationOut",
