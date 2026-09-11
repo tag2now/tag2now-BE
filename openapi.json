@@ -36,6 +36,20 @@
             "minLength": 1,
             "title": "Title",
             "type": "string"
+          },
+          "youtube_video_id": {
+            "anyOf": [
+              {
+                "maxLength": 11,
+                "minLength": 11,
+                "pattern": "^[A-Za-z0-9_-]{11}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Video Id"
           }
         },
         "required": [
@@ -213,6 +227,20 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "youtube_video_id": {
+            "anyOf": [
+              {
+                "maxLength": 11,
+                "minLength": 11,
+                "pattern": "^[A-Za-z0-9_-]{11}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Video Id"
           }
         },
         "required": [
@@ -298,6 +326,20 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "youtube_video_id": {
+            "anyOf": [
+              {
+                "maxLength": 11,
+                "minLength": 11,
+                "pattern": "^[A-Za-z0-9_-]{11}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Video Id"
           }
         },
         "required": [
@@ -410,6 +452,49 @@
           "direction"
         ],
         "title": "ThumbRequest",
+        "type": "object"
+      },
+      "UpdatePostRequest": {
+        "description": "The edit form submits all editable fields, including an explicit video removal.",
+        "properties": {
+          "body": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "post_type": {
+            "title": "Post Type",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "youtube_video_id": {
+            "anyOf": [
+              {
+                "maxLength": 11,
+                "minLength": 11,
+                "pattern": "^[A-Za-z0-9_-]{11}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Video Id"
+          }
+        },
+        "required": [
+          "title",
+          "body",
+          "post_type",
+          "youtube_video_id"
+        ],
+        "title": "UpdatePostRequest",
         "type": "object"
       },
       "UpdateReservationRequest": {
@@ -885,6 +970,56 @@
           }
         },
         "summary": "Get Post",
+        "tags": [
+          "community"
+        ]
+      },
+      "patch": {
+        "operationId": "update_post_community_posts__post_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "post_id",
+            "required": true,
+            "schema": {
+              "title": "Post Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePostRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Post",
         "tags": [
           "community"
         ]

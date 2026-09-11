@@ -22,6 +22,7 @@ class CreatePostRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=100)
     body: str = Field(..., min_length=1, max_length=1000)
     post_type: str = "자유"
+    youtube_video_id: str | None = Field(default=None, min_length=11, max_length=11, pattern=r"^[A-Za-z0-9_-]{11}$")
 
     @field_validator("post_type")
     @classmethod
@@ -31,6 +32,19 @@ class CreatePostRequest(BaseModel):
             # every character name, and a 60-item list helps nobody.
             raise ValueError("게시글 종류 값을 확인해 주세요.")
         return v
+
+
+class UpdatePostRequest(CreatePostRequest):
+    """The edit form submits all editable fields, including an explicit video removal."""
+    post_type: str
+    youtube_video_id: str | None = Field(..., min_length=11, max_length=11, pattern=r"^[A-Za-z0-9_-]{11}$")
+
+    @field_validator("title", "body")
+    @classmethod
+    def must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("공백만 입력할 수 없습니다.")
+        return value.strip()
 
 
 class CreateCommentRequest(BaseModel):
@@ -64,6 +78,7 @@ class PostSummary(BaseModel):
     title: str
     body: str
     post_type: str = "자유"
+    youtube_video_id: str | None = Field(default=None, min_length=11, max_length=11, pattern=r"^[A-Za-z0-9_-]{11}$")
     thumbs_up: int
     thumbs_down: int
     created_at: datetime
@@ -86,6 +101,7 @@ class PostDetail(BaseModel):
     title: str
     body: str
     post_type: str = "자유"
+    youtube_video_id: str | None = Field(default=None, min_length=11, max_length=11, pattern=r"^[A-Za-z0-9_-]{11}$")
     thumbs_up: int
     thumbs_down: int
     created_at: datetime
