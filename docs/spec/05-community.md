@@ -19,20 +19,31 @@ FE는 `useIdentity().ensureIdentity()`로 세션당 1회만 등록하고(`useRef
 
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
-| GET | `/community/posts?page&page_size&post_type` | 목록 (page ≥ 1, page_size 1~100 기본 20) |
+| GET | `/community/posts?page&page_size&post_type&characters` | 목록 (page ≥ 1, page_size 1~100 기본 20) |
 | POST | `/community/posts` | 작성 (201) |
 | GET | `/community/posts/{id}` | 상세 + 댓글 트리 |
+| PATCH | `/community/posts/{id}` | 수정 — 작성자 본인만, 편집 가능한 필드 전부를 보낸다 |
 | DELETE | `/community/posts/{id}` | 작성자 본인만 (204) |
 
 ### 글 종류(`post_type`)
 
-`자유`, `건의`, `공략` **+ 모든 TTT2 캐릭터 이름**(`TTT2_CHARACTERS`). 기본값 `자유`.
-캐릭터별 공략 글을 캐릭터 탭으로 분류하기 위한 설계다.
-목록은 60개가 넘는 값을 열거하지 않고 "게시글 종류 값을 확인해 주세요."로만 거절한다.
+`자유`, `건의`, `공략` 중 하나. 기본값 `자유`. 캐릭터는 여기에 넣지 않는다 — 아래 `characters`.
+
+### 캐릭터 태그(`characters`)
+
+TTT2는 2인 태그 팀으로 싸우므로 글 하나에 **캐릭터를 최대 2개**(`TTT2_CHARACTERS` 이름) 붙인다.
+중복 불가, 순서는 작성자가 고른 대로 보존한다. 비워 두면 캐릭터 무관 글이다.
+
+- 목록 필터는 `characters`를 반복해서 보낸다(`?characters=Jin&characters=Kazuya`, 최대 2개).
+  **선택한 캐릭터를 모두 포함한 글**만 남는다 — 1개면 그 캐릭터가 들어간 모든 글, 2개면 그 팀.
+  순서는 무관하며 `post_type` 필터와 함께 쓸 수 있다.
+- PostgreSQL은 `text[]` 컬럼 + GIN 인덱스로 `characters @> ARRAY[...]`를 처리한다.
+- 예전에는 `post_type`에 캐릭터 이름을 넣었다. 마이그레이션 `e7b3f5a2c914`가 그런 글을
+  `post_type='공략'`, `characters=[캐릭터]`로 옮겼다.
 
 ### 제약
 
-`title` 1~100자, `body` 1~1000자.
+`title` 1~100자, `body` 1~1000자, `characters` 0~2개.
 
 ## 댓글
 
@@ -58,7 +69,7 @@ FE는 `useIdentity().ensureIdentity()`로 세션당 1회만 등록하고(`useRef
 
 ## 캐싱
 
-- 목록: `community:posts:p{page}:s{size}:t{type}`, 상세: `community:post:{id}`. TTL 30초.
+- 목록: `community:posts:p{page}:s{size}:t{type}:c{정렬된 캐릭터}`, 상세: `community:post:{id}`. TTL 30초.
 - **무효화는 라우터가 소유한다**. 글 작성/삭제 시 `community:posts:*`, 댓글·추천 시 `community:post:{id}`.
 
 ## 저장소
