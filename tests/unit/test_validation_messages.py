@@ -56,6 +56,11 @@ def test_identity_names_the_username_rule(client, payload, expected):
         ({"title": "", "body": "x"}, "제목을 입력해 주세요."),
         ({"title": "t", "body": "A" * 1001}, "내용은 1000자를 넘을 수 없습니다."),
         ({"title": "t", "body": "b", "post_type": "없는종류"}, "게시글 종류 값을 확인해 주세요."),
+        # Characters moved to their own field; a character is no longer a post type.
+        ({"title": "t", "body": "b", "post_type": "Jin"}, "게시글 종류 값을 확인해 주세요."),
+        ({"title": "t", "body": "b", "characters": ["Jin", "Kazuya", "Lars"]}, "캐릭터는 2개를 넘을 수 없습니다."),
+        ({"title": "t", "body": "b", "characters": ["없는캐릭터"]}, "캐릭터 값을 확인해 주세요."),
+        ({"title": "t", "body": "b", "characters": ["Jin", "Jin"]}, "같은 캐릭터를 두 번 선택할 수 없습니다."),
     ],
 )
 def test_post_creation_names_the_field_that_failed(client, payload, expected):
@@ -63,6 +68,13 @@ def test_post_creation_names_the_field_that_failed(client, payload, expected):
 
     assert response.status_code == 422
     assert response.json()["detail"] == expected
+
+
+def test_post_filter_caps_characters_at_a_team(client):
+    response = client.get("/community/posts", params=[("characters", "Jin"), ("characters", "Kazuya"), ("characters", "Lars")])
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "캐릭터는 2개를 넘을 수 없습니다."
 
 
 @pytest.mark.parametrize(

@@ -113,6 +113,7 @@ _FIELD_LABELS = {
     "title": "제목",
     "body": "내용",
     "post_type": "게시글 종류",
+    "characters": "캐릭터",
     "youtube_video_id": "YouTube 영상 링크",
     "parent_id": "상위 댓글",
     "direction": "추천 방향",

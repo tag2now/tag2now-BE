@@ -17,12 +17,14 @@ class PostgresCommunityRepository(CommunityRepository):
     def sessions(self):
         if self._sessions is None: raise RuntimeError("Community repository not initialized")
         return self._sessions
-    async def list_posts(self, page, page_size, post_type=None):
+    async def list_posts(self, page, page_size, post_type=None, characters=None):
         async with self.sessions() as s:
+            filters = []
+            if post_type: filters.append(Post.post_type == post_type)
+            if characters: filters.append(Post.characters.contains(characters))
             count = func.count(Comment.id).label("comment_count")
-            q = select(Post, count).outerjoin(Comment, Comment.post_id == Post.id).group_by(Post.id)
-            if post_type: q = q.where(Post.post_type == post_type)
-            total = await s.scalar(select(func.count()).select_from(Post).where(Post.post_type == post_type) if post_type else select(func.count()).select_from(Post))
+            q = select(Post, count).outerjoin(Comment, Comment.post_id == Post.id).where(*filters).group_by(Post.id)
+            total = await s.scalar(select(func.count()).select_from(Post).where(*filters))
             rows = (await s.execute(q.order_by(Post.created_at.desc()).limit(page_size).offset((page-1)*page_size))).all()
             return [{**_dict(p), "comment_count": c} for p,c in rows], total
     async def get_post(self, post_id):
@@ -33,15 +35,15 @@ class PostgresCommunityRepository(CommunityRepository):
     async def get_post_comments(self, post_id):
         async with self.sessions() as s:
             return [_dict(x) for x in (await s.scalars(select(Comment).where(Comment.post_id==post_id).order_by(Comment.created_at))).all()]
-    async def create_post(self, author, title, body, post_type="자유", youtube_video_id=None):
+    async def create_post(self, author, title, body, post_type="자유", characters=None, youtube_video_id=None):
         async with self.sessions() as s, s.begin():
-            row=Post(author=author,title=title,body=body,post_type=post_type,youtube_video_id=youtube_video_id); s.add(row); await s.flush(); await s.refresh(row); return _dict(row)
-    async def update_post(self, post_id, user, title, body, post_type, youtube_video_id):
+            row=Post(author=author,title=title,body=body,post_type=post_type,characters=list(characters or []),youtube_video_id=youtube_video_id); s.add(row); await s.flush(); await s.refresh(row); return _dict(row)
+    async def update_post(self, post_id, user, title, body, post_type, characters, youtube_video_id):
         async with self.sessions() as s, s.begin():
             row = await s.scalar(select(Post).where(Post.id == post_id).with_for_update())
             if row is None: raise PostNotFoundError("Post not found")
             if row.author != user: raise OwnershipError("Not your post")
-            row.title, row.body, row.post_type = title, body, post_type
+            row.title, row.body, row.post_type, row.characters = title, body, post_type, list(characters)
             row.youtube_video_id = youtube_video_id
             await s.flush()
             return {**_dict(row), "comment_count": await s.scalar(select(func.count()).select_from(Comment).where(Comment.post_id == post_id))}

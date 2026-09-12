@@ -43,7 +43,7 @@ def test_create_and_read_video_through_api(monkeypatch, video_id):
                 'title': 'test', 'body': 'body', 'youtube_video_id': video_id,
             }, headers={'X-Community-User': 'testuser'})
             assert response.status_code == 201
-            repo.create_post.assert_awaited_once_with('testuser', 'test', 'body', '자유', video_id)
+            repo.create_post.assert_awaited_once_with('testuser', 'test', 'body', '자유', [], video_id)
             assert response.json()['youtube_video_id'] == video_id
             assert client.get('/community/posts/987654').json()['youtube_video_id'] == video_id
             assert client.get('/community/posts').json()['posts'][0]['youtube_video_id'] == video_id

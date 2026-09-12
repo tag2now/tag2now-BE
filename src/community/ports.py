@@ -16,8 +16,11 @@ class CommunityRepository(ABC):
     # -- Posts ---------------------------------------------------------------
 
     @abstractmethod
-    async def list_posts(self, page: int, page_size: int, post_type: str | None = None) -> tuple[list[dict], int]:
-        """Return (posts, total_count). Each post dict includes a comment_count key."""
+    async def list_posts(self, page: int, page_size: int, post_type: str | None = None, characters: list[str] | None = None) -> tuple[list[dict], int]:
+        """Return (posts, total_count). Each post dict includes a comment_count key.
+
+        *characters* keeps posts tagged with every one of them, so two names find that team.
+        """
 
     @abstractmethod
     async def get_post(self, post_id: int) -> dict:
@@ -28,11 +31,11 @@ class CommunityRepository(ABC):
         """Return flat list of comments for *post_id*, ordered by created_at ASC."""
 
     @abstractmethod
-    async def create_post(self, author: str, title: str, body: str, post_type: str = "자유", youtube_video_id: str | None = None) -> dict:
+    async def create_post(self, author: str, title: str, body: str, post_type: str = "자유", characters: list[str] | None = None, youtube_video_id: str | None = None) -> dict:
         """Insert a new post and return it."""
 
     @abstractmethod
-    async def update_post(self, post_id: int, user: str, title: str, body: str, post_type: str, youtube_video_id: str | None) -> dict:
+    async def update_post(self, post_id: int, user: str, title: str, body: str, post_type: str, characters: list[str], youtube_video_id: str | None) -> dict:
         """Update editable fields of a post owned by user."""
 
     @abstractmethod

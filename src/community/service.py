@@ -7,8 +7,8 @@ from community.db import get_repo
 # Posts
 # ---------------------------------------------------------------------------
 
-async def list_posts(page: int, page_size: int, post_type: str | None = None) -> tuple[list[dict], int]:
-    return await get_repo().list_posts(page, page_size, post_type)
+async def list_posts(page: int, page_size: int, post_type: str | None = None, characters: list[str] | None = None) -> tuple[list[dict], int]:
+    return await get_repo().list_posts(page, page_size, post_type, characters)
 
 
 async def get_post(post_id: int) -> dict:
@@ -19,12 +19,12 @@ async def get_post_comments(post_id: int) -> list[dict]:
     return await get_repo().get_post_comments(post_id)
 
 
-async def create_post(author: str, title: str, body: str, post_type: str = "자유", youtube_video_id: str | None = None) -> dict:
-    return await get_repo().create_post(author, title, body, post_type, youtube_video_id)
+async def create_post(author: str, title: str, body: str, post_type: str = "자유", characters: list[str] | None = None, youtube_video_id: str | None = None) -> dict:
+    return await get_repo().create_post(author, title, body, post_type, characters, youtube_video_id)
 
 
-async def update_post(post_id: int, user: str, title: str, body: str, post_type: str, youtube_video_id: str | None) -> dict:
-    return await get_repo().update_post(post_id, user, title, body, post_type, youtube_video_id)
+async def update_post(post_id: int, user: str, title: str, body: str, post_type: str, characters: list[str], youtube_video_id: str | None) -> dict:
+    return await get_repo().update_post(post_id, user, title, body, post_type, characters, youtube_video_id)
 
 
 async def delete_post(post_id: int, user: str):

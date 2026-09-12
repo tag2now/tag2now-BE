@@ -37,6 +37,7 @@ def _item_to_post(item: dict) -> dict:
         "title": item.get("title", ""),
         "body": item["body"],
         "post_type": item.get("post_type", "자유"),
+        "characters": list(item.get("characters") or []),
         "youtube_video_id": item.get("youtube_video_id"),
         "thumbs_up": _decimal_to_int(item.get("thumbs_up", 0)),
         "thumbs_down": _decimal_to_int(item.get("thumbs_down", 0)),
@@ -129,16 +130,24 @@ class DynamoCommunityRepository(CommunityRepository):
 
     # -- Posts ---------------------------------------------------------------
 
-    async def list_posts(self, page: int, page_size: int, post_type: str | None = None) -> tuple[list[dict], int]:
+    async def list_posts(self, page: int, page_size: int, post_type: str | None = None, characters: list[str] | None = None) -> tuple[list[dict], int]:
         query_kwargs = {
             "IndexName": "GSI1",
             "KeyConditionExpression": "GSI1PK = :pk",
             "ExpressionAttributeValues": {":pk": "POSTS"},
             "ScanIndexForward": False,
         }
+        filters = []
         if post_type:
-            query_kwargs["FilterExpression"] = "post_type = :pt"
+            filters.append("post_type = :pt")
             query_kwargs["ExpressionAttributeValues"][":pt"] = post_type
+        for i, name in enumerate(characters or []):
+            filters.append(f"contains(#chars, :c{i})")
+            query_kwargs["ExpressionAttributeValues"][f":c{i}"] = name
+        if characters:
+            query_kwargs["ExpressionAttributeNames"] = {"#chars": "characters"}
+        if filters:
+            query_kwargs["FilterExpression"] = " AND ".join(filters)
         resp = await self._conn.table.query(**query_kwargs)
         all_items = resp.get("Items", [])
         total = len(all_items)
@@ -167,7 +176,7 @@ class DynamoCommunityRepository(CommunityRepository):
         items = sorted(resp.get("Items", []), key=lambda x: x["created_at"])
         return [_item_to_comment(item) for item in items]
 
-    async def create_post(self, author: str, title: str, body: str, post_type: str = "자유", youtube_video_id: str | None = None) -> dict:
+    async def create_post(self, author: str, title: str, body: str, post_type: str = "자유", characters: list[str] | None = None, youtube_video_id: str | None = None) -> dict:
         post_id = await _next_id(self._conn.table)
         now = _now_iso()
         item = {
@@ -180,6 +189,7 @@ class DynamoCommunityRepository(CommunityRepository):
             "title": title,
             "body": body,
             "post_type": post_type,
+            "characters": list(characters or []),
             "youtube_video_id": youtube_video_id,
             "thumbs_up": 0,
             "thumbs_down": 0,
@@ -189,16 +199,16 @@ class DynamoCommunityRepository(CommunityRepository):
         await self._conn.table.put_item(Item=item)
         return _item_to_post(item)
 
-    async def update_post(self, post_id: int, user: str, title: str, body: str, post_type: str, youtube_video_id: str | None) -> dict:
+    async def update_post(self, post_id: int, user: str, title: str, body: str, post_type: str, characters: list[str], youtube_video_id: str | None) -> dict:
         from botocore.exceptions import ClientError
 
         try:
             response = await self._conn.table.update_item(
                 Key={"PK": f"POST#{post_id}", "SK": "META"},
-                UpdateExpression="SET #title = :title, #body = :body, post_type = :type, youtube_video_id = :video",
+                UpdateExpression="SET #title = :title, #body = :body, post_type = :type, #chars = :chars, youtube_video_id = :video",
                 ConditionExpression="attribute_exists(PK) AND author = :user",
-                ExpressionAttributeNames={"#title": "title", "#body": "body"},
-                ExpressionAttributeValues={":title": title, ":body": body, ":type": post_type, ":video": youtube_video_id, ":user": user},
+                ExpressionAttributeNames={"#title": "title", "#body": "body", "#chars": "characters"},
+                ExpressionAttributeValues={":title": title, ":body": body, ":type": post_type, ":chars": list(characters), ":video": youtube_video_id, ":user": user},
                 ReturnValues="ALL_NEW",
             )
         except ClientError as error:

@@ -3,7 +3,7 @@ from datetime import datetime
 import pytest
 
 HEADERS = {'X-Community-User': 'edit-owner'}
-EDIT = {'title': '수정 제목', 'body': '수정 본문', 'post_type': '공략', 'youtube_video_id': 'aqz-KE-bpKQ'}
+EDIT = {'title': '수정 제목', 'body': '수정 본문', 'post_type': '공략', 'characters': ['Jin', 'Devil Jin'], 'youtube_video_id': 'aqz-KE-bpKQ'}
 
 
 def create(client):
@@ -50,7 +50,8 @@ def test_edit_requires_owner_and_existing_post(client):
 
 @pytest.mark.parametrize('change', [
     {'title': ''}, {'title': '   '}, {'title': 'x' * 101},
-    {'body': '\n  '}, {'body': 'x' * 1001}, {'post_type': 'invalid'},
+    {'body': '\n  '}, {'body': 'x' * 1001}, {'post_type': 'invalid'}, {'post_type': 'Jin'},
+    {'characters': ['Jin', 'Kazuya', 'Lars']}, {'characters': ['Jin', 'Jin']}, {'characters': ['invalid']},
     {'youtube_video_id': 'https://youtu.be/M7lc1UVf-VE'},
 ])
 def test_edit_rejects_invalid_fields_without_changing_post(client, change):
@@ -60,7 +61,8 @@ def test_edit_rejects_invalid_fields_without_changing_post(client, change):
     assert client.get(url).json()['title'] == 'original'
 
 
-def test_edit_requires_explicit_video_field(client):
+@pytest.mark.parametrize('field', ['youtube_video_id', 'characters'])
+def test_edit_requires_explicit_removable_fields(client, field):
     original = create(client)
-    payload = {key: value for key, value in EDIT.items() if key != 'youtube_video_id'}
+    payload = {key: value for key, value in EDIT.items() if key != field}
     assert client.patch(f"/community/posts/{original['id']}", headers=HEADERS, json=payload).status_code == 422

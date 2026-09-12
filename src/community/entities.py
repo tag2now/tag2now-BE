@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Identity, Index, Integer, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 from shared.database import Base
 
@@ -11,11 +12,15 @@ class Post(Base):
     __table_args__ = (
         CheckConstraint("length(title) <= 100", name="posts_title_check"),
         CheckConstraint("length(body) <= 1000", name="posts_body_check"),
+        CheckConstraint("cardinality(characters) <= 2", name="posts_characters_check"),
+        # GIN serves the `characters @> ARRAY[...]` filter.
+        Index("idx_posts_characters", "characters", postgresql_using="gin"),
     )
     author: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     post_type: Mapped[str] = mapped_column(Text, nullable=False, server_default="자유")
+    characters: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, server_default="{}")
     youtube_video_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     thumbs_up: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     thumbs_down: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")

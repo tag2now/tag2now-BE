@@ -6,10 +6,18 @@ from pydantic import BaseModel, Field, field_validator
 
 from matching.constants import TTT2_CHARACTERS
 
-VALID_POST_TYPES: set[str] = (
-    {"자유", "건의", "공략"}
-    | {name for name in TTT2_CHARACTERS.values() if name and name != "?"}
-)
+VALID_POST_TYPES: set[str] = {"자유", "건의", "공략"}
+CHARACTER_NAMES: frozenset[str] = frozenset(name for name in TTT2_CHARACTERS.values() if name and name != "?")
+# TTT2 is played as a two-character team, so a post can name both.
+MAX_POST_CHARACTERS = 2
+
+
+def _validate_characters(names: list[str]) -> list[str]:
+    if any(name not in CHARACTER_NAMES for name in names):
+        raise ValueError("캐릭터 값을 확인해 주세요.")
+    if len(set(names)) != len(names):
+        raise ValueError("같은 캐릭터를 두 번 선택할 수 없습니다.")
+    return names
 
 
 # --- Requests ---
@@ -22,21 +30,26 @@ class CreatePostRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=100)
     body: str = Field(..., min_length=1, max_length=1000)
     post_type: str = "자유"
+    characters: list[str] = Field(default_factory=list, max_length=MAX_POST_CHARACTERS)
     youtube_video_id: str | None = Field(default=None, min_length=11, max_length=11, pattern=r"^[A-Za-z0-9_-]{11}$")
 
     @field_validator("post_type")
     @classmethod
     def must_be_valid_post_type(cls, v: str) -> str:
         if v not in VALID_POST_TYPES:
-            # Not enumerated: VALID_POST_TYPES is the three board types plus
-            # every character name, and a 60-item list helps nobody.
             raise ValueError("게시글 종류 값을 확인해 주세요.")
         return v
+
+    @field_validator("characters")
+    @classmethod
+    def must_be_distinct_characters(cls, v: list[str]) -> list[str]:
+        return _validate_characters(v)
 
 
 class UpdatePostRequest(CreatePostRequest):
     """The edit form submits all editable fields, including an explicit video removal."""
     post_type: str
+    characters: list[str] = Field(..., max_length=MAX_POST_CHARACTERS)
     youtube_video_id: str | None = Field(..., min_length=11, max_length=11, pattern=r"^[A-Za-z0-9_-]{11}$")
 
     @field_validator("title", "body")
@@ -78,6 +91,7 @@ class PostSummary(BaseModel):
     title: str
     body: str
     post_type: str = "자유"
+    characters: list[str] = []
     youtube_video_id: str | None = Field(default=None, min_length=11, max_length=11, pattern=r"^[A-Za-z0-9_-]{11}$")
     thumbs_up: int
     thumbs_down: int
@@ -101,6 +115,7 @@ class PostDetail(BaseModel):
     title: str
     body: str
     post_type: str = "자유"
+    characters: list[str] = []
     youtube_video_id: str | None = Field(default=None, min_length=11, max_length=11, pattern=r"^[A-Za-z0-9_-]{11}$")
     thumbs_up: int
     thumbs_down: int
