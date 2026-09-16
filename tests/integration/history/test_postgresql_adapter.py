@@ -102,16 +102,17 @@ async def test_record_snapshot_upserts_hourly_stats(adapter, db_session):
 
 
 @pytest.mark.asyncio
-async def test_record_daily_matched_players_deduplicates_per_kst_day(adapter, db_session):
-    from datetime import datetime, timedelta, timezone
+async def test_record_daily_matched_players_deduplicates_per_stat_day(adapter, db_session):
+    from datetime import datetime, timezone
     from sqlalchemy import select
+    from history.adapters.postgresql import stat_day
     from history.entities import DailyMatchedPlayerRow
 
     observed_at = datetime.now(timezone.utc)
     await adapter.record_daily_matched_players(db_session, {"p1", "p2"}, observed_at)
     await adapter.record_daily_matched_players(db_session, {"p1"}, observed_at)
 
-    observed_date = (observed_at + timedelta(hours=9)).date()
+    observed_date = stat_day(observed_at)
     rows = (await db_session.execute(
         select(DailyMatchedPlayerRow).where(
             DailyMatchedPlayerRow.date == observed_date,
@@ -125,34 +126,37 @@ async def test_record_daily_matched_players_deduplicates_per_kst_day(adapter, db
 
 
 @pytest.mark.asyncio
-async def test_daily_matched_players_use_kst_calendar_days(adapter, db_session):
+async def test_daily_matched_players_roll_over_at_six_kst(adapter, db_session):
+    """05:59 KST still belongs to the previous day; 06:00 starts the new one."""
     from datetime import datetime, timezone
     from sqlalchemy import select
     from history.entities import DailyMatchedPlayerRow
 
+    # 2026-01-02 05:59 KST and 06:00 KST, expressed in UTC (KST = UTC+9).
     await adapter.record_daily_matched_players(
-        db_session, {"kst-boundary"}, datetime(2026, 1, 1, 14, 59, tzinfo=timezone.utc)
+        db_session, {"stat-day-boundary"}, datetime(2026, 1, 1, 20, 59, tzinfo=timezone.utc)
     )
     await adapter.record_daily_matched_players(
-        db_session, {"kst-boundary"}, datetime(2026, 1, 1, 15, 0, tzinfo=timezone.utc)
+        db_session, {"stat-day-boundary"}, datetime(2026, 1, 1, 21, 0, tzinfo=timezone.utc)
     )
 
     rows = (await db_session.execute(
-        select(DailyMatchedPlayerRow.date).where(DailyMatchedPlayerRow.npid == "kst-boundary")
+        select(DailyMatchedPlayerRow.date).where(DailyMatchedPlayerRow.npid == "stat-day-boundary")
     )).scalars().all()
     assert set(rows) == {datetime(2026, 1, 1).date(), datetime(2026, 1, 2).date()}
 
 
 @pytest.mark.asyncio
-async def test_daily_summary_counts_unique_players_in_requested_kst_days(adapter, db_session):
+async def test_daily_summary_counts_unique_players_in_requested_stat_days(adapter, db_session):
     from sqlalchemy import delete
+    from history.adapters.postgresql import stat_day, stat_day_start
     from history.entities import ActivitySnapshotRow, DailyMatchedPlayerRow
     from history.models import ActivitySnapshot
-    from datetime import datetime, time, timedelta, timezone
+    from datetime import datetime, timedelta, timezone
 
-    kst = timezone(timedelta(hours=9))
-    today = datetime.now(kst).date()
-    today_at = datetime.combine(today, time(12), tzinfo=kst).astimezone(timezone.utc)
+    today = stat_day(datetime.now(timezone.utc))
+    # Noon of the statistics day --- safely inside it whichever hour it is now.
+    today_at = stat_day_start(today) + timedelta(hours=12)
     yesterday_at = today_at - timedelta(days=1)
     today_players = {"summary-today-a", "summary-today-b"}
     yesterday_players = {"summary-yesterday"}
@@ -162,8 +166,8 @@ async def test_daily_summary_counts_unique_players_in_requested_kst_days(adapter
     # boundaries get_daily_summary groups by --- anchoring the delete to
     # yesterday_at instead would leave that day's earlier snapshots behind, and
     # their peak would outrank the one this test records.
-    yesterday_start = datetime.combine(today - timedelta(days=1), time(), tzinfo=kst).astimezone(timezone.utc)
-    tomorrow_start = datetime.combine(today + timedelta(days=1), time(), tzinfo=kst).astimezone(timezone.utc)
+    yesterday_start = stat_day_start(today - timedelta(days=1))
+    tomorrow_start = stat_day_start(today + timedelta(days=1))
     await db_session.execute(delete(ActivitySnapshotRow).where(
         ActivitySnapshotRow.sampled_at >= yesterday_start,
         ActivitySnapshotRow.sampled_at < tomorrow_start,
@@ -192,15 +196,15 @@ async def test_daily_summary_counts_unique_players_in_requested_kst_days(adapter
 
 
 @pytest.mark.asyncio
-async def test_daily_peak_snapshots_use_kst_calendar_days(adapter, db_session):
-    from datetime import datetime, time, timedelta, timezone
+async def test_daily_peak_snapshots_split_at_the_stat_day_start(adapter, db_session):
+    from datetime import datetime, timedelta, timezone
     from sqlalchemy import delete
+    from history.adapters.postgresql import stat_day, stat_day_start
     from history.entities import ActivitySnapshotRow
     from history.models import ActivitySnapshot
 
-    kst = timezone(timedelta(hours=9))
-    today = datetime.now(kst).date()
-    today_start = datetime.combine(today, time.min, tzinfo=kst).astimezone(timezone.utc)
+    today = stat_day(datetime.now(timezone.utc))
+    today_start = stat_day_start(today)
     yesterday = today - timedelta(days=1)
 
     await db_session.execute(delete(ActivitySnapshotRow).where(
@@ -226,10 +230,9 @@ async def test_record_snapshot_empty_list_noop(adapter, db_session):
 
 
 @pytest.mark.asyncio
-async def test_get_hourly_activity_returns_24_hours(adapter, db_session):
+async def test_get_hourly_activity_returns_24_hours_from_the_stat_day_start(adapter, db_session):
     result = await adapter.get_hourly_activity(db_session, days=7)
-    assert len(result) == 24
-    assert all(h.hour == i for i, h in enumerate(result))
+    assert [h.hour for h in result] == list(range(6, 24)) + list(range(6))
 
 
 @pytest.mark.asyncio
@@ -261,18 +264,35 @@ async def test_days_active_counts_kst_days_not_matches(adapter, db_session):
 
 
 @pytest.mark.asyncio
-async def test_days_active_uses_kst_day_boundary(adapter, db_session):
-    """01:00 and 23:00 KST on one day are one active day, though they straddle UTC midnight."""
+async def test_days_active_keeps_one_late_night_session_on_one_day(adapter, db_session):
+    """22:00 and 02:00 KST are one sitting, so they count as a single active day."""
     from datetime import datetime, timedelta, timezone
     KST = timezone(timedelta(hours=9))
-    day = (datetime.now(KST) - timedelta(days=2)).replace(hour=1, minute=0, second=0, microsecond=0)
+    evening = (datetime.now(KST) - timedelta(days=2)).replace(hour=22, minute=0, second=0, microsecond=0)
     await adapter.record_snapshot(db_session, [
-        _make_record(room_id=9101, user1_npid="kstday", created_dt=day),
-        _make_record(room_id=9102, user1_npid="kstday", created_dt=day + timedelta(hours=22)),
+        _make_record(room_id=9101, user1_npid="statday", created_dt=evening),
+        _make_record(room_id=9102, user1_npid="statday", created_dt=evening + timedelta(hours=4)),
     ])
 
-    stats = await adapter.get_player_stats(db_session, "kstday", days=7)
+    stats = await adapter.get_player_stats(db_session, "statday", days=7)
+    assert stats.times_seen == 2
     assert stats.days_active == 1
+
+
+@pytest.mark.asyncio
+async def test_days_active_separates_sittings_across_the_six_kst_boundary(adapter, db_session):
+    """05:59 and 06:00 KST fall on different statistics days."""
+    from datetime import datetime, timedelta, timezone
+    KST = timezone(timedelta(hours=9))
+    dawn = (datetime.now(KST) - timedelta(days=2)).replace(hour=5, minute=59, second=0, microsecond=0)
+    await adapter.record_snapshot(db_session, [
+        _make_record(room_id=9111, user1_npid="statboundary", created_dt=dawn),
+        _make_record(room_id=9112, user1_npid="statboundary", created_dt=dawn + timedelta(minutes=1)),
+    ])
+
+    stats = await adapter.get_player_stats(db_session, "statboundary", days=7)
+    assert stats.times_seen == 2
+    assert stats.days_active == 2
 
 
 @pytest.mark.asyncio

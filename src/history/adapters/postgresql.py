@@ -1,7 +1,7 @@
 """PostgreSQL adapter for the history module using SQLAlchemy ORM."""
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import Date, Integer, case, delete, func, or_, select, text, union_all
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -17,6 +17,14 @@ KST = timezone(timedelta(hours=9))
 _HOURLY_RETENTION_DAYS = 90
 _ACTIVITY_RETENTION_DAYS = 90
 
+# A statistics day runs 06:00 KST to 06:00 KST the next day, so a late-night
+# session stays on the day it started instead of splitting across midnight.
+STAT_DAY_START_HOUR = 6
+# Shifting the clock back by that many hours turns the 06:00 boundary into a
+# plain midnight one, which is what both Python's .date() and SQL's cast to
+# DATE already know how to find.
+STAT_DAY_TZ = timezone(timedelta(hours=9 - STAT_DAY_START_HOUR))
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -24,6 +32,21 @@ _ACTIVITY_RETENTION_DAYS = 90
 
 def _kst_hour_key() -> str:
 	return datetime.now(KST).strftime("%Y-%m-%dT%H")
+
+
+def stat_day(moment: datetime) -> date:
+	"""The 06:00-KST statistics day a moment belongs to."""
+	return moment.astimezone(STAT_DAY_TZ).date()
+
+
+def _sql_stat_day(column):
+	"""The same boundary in SQL, for grouping stored timestamps by day."""
+	return func.cast(func.timezone("Asia/Seoul", column) - text(f"interval '{STAT_DAY_START_HOUR} hours'"), Date)
+
+
+def stat_day_start(day: date) -> datetime:
+	"""The UTC instant a statistics day begins."""
+	return datetime.combine(day, datetime.min.time(), STAT_DAY_TZ).astimezone(timezone.utc)
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +65,7 @@ class PostgresHistoryAdapter(HistoryPort):
 			dict(
 				room_id=room.room_id,
 				created_dt=room.created_dt,
-				match_date=room.created_dt.astimezone(KST).date(),
+				match_date=stat_day(room.created_dt),
 				rank_id=room.rank_id,
 				user1_npid=room.user1_npid,
 				user1_online_name=room.user1_online_name,
@@ -87,9 +110,8 @@ class PostgresHistoryAdapter(HistoryPort):
 		if not valid_npids:
 			return
 
-		observed_kst = observed_at.astimezone(KST)
 		stmt = pg_insert(DailyMatchedPlayerRow).values([
-			dict(date=observed_kst.date(), npid=npid, first_seen_at=observed_at)
+			dict(date=stat_day(observed_at), npid=npid, first_seen_at=observed_at)
 			for npid in valid_npids
 		]).on_conflict_do_nothing(index_elements=["date", "npid"])
 		await session.execute(stmt)
@@ -128,14 +150,16 @@ class PostgresHistoryAdapter(HistoryPort):
 			for row in result
 		}
 
+		# Ordered from the statistics day's own start hour, so the late-night
+		# block reads as one run at the end instead of being cut at midnight.
 		return [
 			result_map.get(h, HourlyActivity(hour=h, avg_players=0, peak_players=0))
-			for h in range(24)
+			for h in ((STAT_DAY_START_HOUR + offset) % 24 for offset in range(24))
 		]
 
 	async def get_daily_summary(self, session: AsyncSession, days: int = 30) -> list[DailySummary]:
-		start_date = (datetime.now(KST) - timedelta(days=days - 1)).date()
-		start_at = datetime.combine(start_date, datetime.min.time(), KST).astimezone(timezone.utc)
+		start_date = stat_day(datetime.now(timezone.utc)) - timedelta(days=days - 1)
+		start_at = stat_day_start(start_date)
 		players = (
 			select(
 				DailyMatchedPlayerRow.date,
@@ -144,7 +168,7 @@ class PostgresHistoryAdapter(HistoryPort):
 			.where(DailyMatchedPlayerRow.date >= start_date)
 			.group_by(DailyMatchedPlayerRow.date)
 		).subquery()
-		snapshot_date = func.cast(func.timezone("Asia/Seoul", ActivitySnapshotRow.sampled_at), Date).label("date")
+		snapshot_date = _sql_stat_day(ActivitySnapshotRow.sampled_at).label("date")
 		snapshots = (
 			select(snapshot_date, func.max(ActivitySnapshotRow.total_players).label("peak_players"),
 				func.round(func.avg(ActivitySnapshotRow.total_players), 1).label("avg_players"),
@@ -187,9 +211,7 @@ class PostgresHistoryAdapter(HistoryPort):
 		)
 
 		stats_stmt = select(
-			func.count(func.distinct(
-				func.cast(func.timezone("Asia/Seoul", player_snapshots.c.created_dt), Date)
-			)).label("days_active"),
+			func.count(func.distinct(_sql_stat_day(player_snapshots.c.created_dt))).label("days_active"),
 			func.count().label("times_seen"),
 			func.min(player_snapshots.c.created_dt).label("first_seen"),
 			func.max(player_snapshots.c.created_dt).label("last_seen"),
@@ -219,9 +241,7 @@ class PostgresHistoryAdapter(HistoryPort):
 		hours_stmt = (
 			select(
 				func.extract("hour", func.timezone("Asia/Seoul", RankMatchSnapshotRow.created_dt)).cast(Integer).label("hour"),
-				func.count(func.distinct(
-					func.cast(func.timezone("Asia/Seoul", RankMatchSnapshotRow.created_dt), Date)
-				)).label("day_count"),
+				func.count(func.distinct(_sql_stat_day(RankMatchSnapshotRow.created_dt))).label("day_count"),
 			)
 			.where(
 				or_(RankMatchSnapshotRow.user1_npid == npid, RankMatchSnapshotRow.user2_npid == npid),
