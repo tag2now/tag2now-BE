@@ -33,7 +33,8 @@ Always use the project virtual environment when running Python commands:
 The ASGI app is `src/app.py:app`. Note `--app-dir src`, since packages live under `src/`.
 
 ```bash
-# Dev server with reload
+# Dev server with reload --- run it from tag2now-BE/, which is where the
+# config it needs (env/.env.local) lives.
 .venv/Scripts/python.exe -m uvicorn app:app --reload --app-dir src
 
 # Dependencies (Redis, PostgreSQL, DynamoDB Local) + both images
@@ -42,6 +43,24 @@ docker compose up
 # RPCN client CLI smoke test (connect + login + disconnect)
 .venv/Scripts/python.exe -m rpcn_client --user YOUR_USER --password YOUR_PASS
 ```
+
+**`env/` is resolved from the repository root, not your shell's cwd.**
+`settings.py` walks up from its own file (`src/shared/settings.py` → three
+parents → `tag2now-BE/env`), so the config is found wherever you launch from.
+Look for it at `tag2now-BE/env/.env.local`; a listing from the workspace root
+(`D:/project/tag2now`) shows no `env/` and means nothing.
+
+**`env/.env` does not exist, and is not supposed to.** Settings names two files,
+`env/.env` and `env/.env.{profile}`, and pydantic-settings treats a missing one
+as empty. `.env.local` alone is a complete config. Do not read the absence of
+`env/.env` --- or one failed `ls`/`cat` naming it --- as "there is no config":
+load `get_settings()` and look at the values before concluding anything.
+
+**A local run does not need its own RPCN account.** Production holds the same
+account around the clock, so startup may fail with `LoginAlreadyLoggedIn`. That
+is a self-announcing failure with a clear message, not a risk to production and
+not something to plan around --- just start the server and read the log. The
+RPCN *tests* are the case that genuinely collides (see Tests above).
 
 **Redis is optional.** `shared/cache.py` picks its backend from `redis_url`: set,
 and it is `RedisCache`; empty (the default), and it is `DictCache`, an
