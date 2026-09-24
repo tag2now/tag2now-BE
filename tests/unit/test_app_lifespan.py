@@ -16,8 +16,8 @@ async def test_lifespan_starts_and_cancels_the_match_history_collector(monkeypat
     sys.modules.pop("app", None)
     app_module = importlib.import_module("app")
 
-    initializers = ["init_database", "init_db", "init_reservation_db", "init_history_repo", "init_game_repo"]
-    closers = ["close_game_repo", "close_history_repo", "close_reservation_db", "close_db", "close_database"]
+    initializers = ["init_auth", "init_database", "init_db", "init_reservation_db", "init_history_repo", "init_game_repo"]
+    closers = ["close_game_repo", "close_history_repo", "close_reservation_db", "close_db", "close_database", "close_auth"]
     mocks = {name: AsyncMock() for name in initializers + closers}
     for name, mock in mocks.items():
         monkeypatch.setattr(app_module, name, mock)

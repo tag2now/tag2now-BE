@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import case, func, select, update
 from sqlalchemy.dialects.postgresql import aggregate_order_by
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from reservation.domain import (
@@ -23,7 +24,7 @@ from shared.database import get_session_factory
 def _comment(row: ReservationCommentRow) -> Comment:
     return Comment(
         id=row.id, reservation_id=row.reservation_id, author=row.author,
-        body=row.body, created_at=row.created_at,
+        body=row.body, created_at=row.created_at, author_username=row.author_subject,
     )
 
 
@@ -35,6 +36,7 @@ def _reservation(row: ReservationRow, participant_count: int, participants: list
         status=ReservationStatus(row.status), participant_count=participant_count,
         created_at=row.created_at,
         participants=[ParticipantSummary(**item) for item in (participants or [])],
+        host_username=row.host_subject,
     )
 
 
@@ -63,6 +65,7 @@ class PostgresReservationRepository(ReservationRepository):
             func.json_build_object(
                 "id", ReservationParticipantRow.id,
                 "display_name", ReservationParticipantRow.display_name,
+                "username", ReservationParticipantRow.subject,
             ),
             ReservationParticipantRow.joined_at, ReservationParticipantRow.id,
         )).filter(ReservationParticipantRow.id.is_not(None)).label("participants")
@@ -116,6 +119,16 @@ class PostgresReservationRepository(ReservationRepository):
         ) or 0
 
     @staticmethod
+    async def _active_participation(session: AsyncSession, reservation_id: int, subject: str) -> ReservationParticipantRow | None:
+        return await session.scalar(
+            select(ReservationParticipantRow).where(
+                ReservationParticipantRow.reservation_id == reservation_id,
+                ReservationParticipantRow.subject == subject,
+                ReservationParticipantRow.cancelled_at.is_(None),
+            )
+        )
+
+    @staticmethod
     async def _release_participants(session: AsyncSession, reservation_id: int, now: datetime) -> None:
         """A reservation that stops being live carries no active participants."""
         await session.execute(
@@ -160,9 +173,9 @@ class PostgresReservationRepository(ReservationRepository):
     async def create(self, **values) -> Reservation:
         async with self._sessions() as session, session.begin():
             row = ReservationRow(
-                start_at=values["start_at"],
+                start_at=values["start_at"], host_subject=values["host_subject"],
                 host_display_name=values["host_display_name"], host_ranks=values["host_ranks"],
-                host_token_hash=values["host_token_hash"], match_type=values["match_type"].value,
+                match_type=values["match_type"].value,
                 capacity=values["capacity"], memo=values["memo"],
             )
             session.add(row)
@@ -170,13 +183,13 @@ class PostgresReservationRepository(ReservationRepository):
             await session.refresh(row)
             return _reservation(row, 0)
 
-    async def update(self, reservation_id: int, host_token_hash: str, now: datetime, **changes) -> Reservation:
+    async def update(self, reservation_id: int, host_subject: str, now: datetime, **changes) -> Reservation:
         async with self._sessions() as session, session.begin():
             row = await session.scalar(select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update())
             if row is None:
                 raise ReservationNotFoundError("Reservation not found")
-            if row.host_token_hash != host_token_hash:
-                raise ReservationAccessError("Reservation cannot be edited with this credential")
+            if row.host_subject is None or row.host_subject != host_subject:
+                raise ReservationAccessError("예약한 사람만 수정할 수 있습니다.")
             count = await self._active_participant_count(session, reservation_id)
             ensure_editable(ReservationStatus(row.status), row.start_at, count, now)
 
@@ -192,7 +205,15 @@ class PostgresReservationRepository(ReservationRepository):
             await session.refresh(row)
             return _reservation(row, count)
 
-    async def join(self, reservation_id: int, *, display_name: str, ranks: list[str], participant_token_hash: str, now: datetime) -> tuple[Reservation, Participant]:
+    async def join(self, reservation_id: int, *, subject: str, display_name: str, ranks: list[str], now: datetime) -> tuple[Reservation, Participant]:
+        try:
+            return await self._join(reservation_id, subject=subject, display_name=display_name, ranks=ranks, now=now)
+        except IntegrityError as exc:
+            # The row lock serialises joins to one reservation, so the check
+            # below normally answers first; the unique index is the backstop.
+            raise ReservationStateError("이미 참가한 예약입니다.") from exc
+
+    async def _join(self, reservation_id: int, *, subject: str, display_name: str, ranks: list[str], now: datetime) -> tuple[Reservation, Participant]:
         async with self._sessions() as session, session.begin():
             row = await session.scalar(select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update())
             if row is None:
@@ -203,10 +224,13 @@ class PostgresReservationRepository(ReservationRepository):
                     ReservationParticipantRow.cancelled_at.is_(None),
                 )
             )
+            if row.host_subject == subject:
+                raise ReservationStateError("내가 만든 예약에는 참가할 수 없습니다.")
+            if await self._active_participation(session, reservation_id, subject) is not None:
+                raise ReservationStateError("이미 참가한 예약입니다.")
             ensure_joinable(ReservationStatus(row.status), row.start_at, count, row.capacity, now)
             participant = ReservationParticipantRow(
-                reservation_id=reservation_id, display_name=display_name, ranks=ranks,
-                participant_token_hash=participant_token_hash,
+                reservation_id=reservation_id, subject=subject, display_name=display_name, ranks=ranks,
             )
             session.add(participant)
             count += 1
@@ -221,21 +245,15 @@ class PostgresReservationRepository(ReservationRepository):
                 joined_at=participant.joined_at,
             )
 
-    async def cancel_participation(self, reservation_id: int, participant_token_hash: str, now: datetime) -> Reservation:
+    async def cancel_participation(self, reservation_id: int, subject: str, now: datetime) -> Reservation:
         async with self._sessions() as session, session.begin():
             row = await session.scalar(select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update())
             if row is None:
                 raise ReservationNotFoundError("Reservation not found")
             ensure_participation_cancellable(ReservationStatus(row.status), row.start_at, now)
-            participant = await session.scalar(
-                select(ReservationParticipantRow).where(
-                    ReservationParticipantRow.reservation_id == reservation_id,
-                    ReservationParticipantRow.participant_token_hash == participant_token_hash,
-                    ReservationParticipantRow.cancelled_at.is_(None),
-                )
-            )
+            participant = await self._active_participation(session, reservation_id, subject)
             if participant is None:
-                raise ReservationAccessError("Active participation not found")
+                raise ReservationAccessError("참가 중인 예약이 아닙니다.")
             participant.cancelled_at = now
             await session.flush()
             count = await session.scalar(
@@ -261,22 +279,21 @@ class PostgresReservationRepository(ReservationRepository):
             )
             return [_comment(row) for row in rows]
 
-    async def add_comment(self, reservation_id: int, *, author: str, body: str, author_token_hash: str) -> Comment:
+    async def add_comment(self, reservation_id: int, *, author_subject: str, author: str, body: str) -> Comment:
         async with self._sessions() as session, session.begin():
             reservation = await session.get(ReservationRow, reservation_id)
             if reservation is None:
                 raise ReservationNotFoundError("Reservation not found")
             ensure_commentable(ReservationStatus(reservation.status))
             row = ReservationCommentRow(
-                reservation_id=reservation_id, author=author, body=body,
-                author_token_hash=author_token_hash,
+                reservation_id=reservation_id, author_subject=author_subject, author=author, body=body,
             )
             session.add(row)
             await session.flush()
             await session.refresh(row)
             return _comment(row)
 
-    async def delete_comment(self, reservation_id: int, comment_id: int, author_token_hash: str, now: datetime) -> None:
+    async def delete_comment(self, reservation_id: int, comment_id: int, author_subject: str, now: datetime) -> None:
         """Soft delete, so a reply reading as an answer to nothing is at least rare.
 
         The row is kept rather than removed because the listing is ordered by
@@ -287,16 +304,18 @@ class PostgresReservationRepository(ReservationRepository):
             row = await session.get(ReservationCommentRow, comment_id)
             if row is None or row.reservation_id != reservation_id or row.deleted_at is not None:
                 raise ReservationNotFoundError("Comment not found")
-            if row.author_token_hash != author_token_hash:
-                raise ReservationAccessError("Comment cannot be deleted with this credential")
+            if row.author_subject is None or row.author_subject != author_subject:
+                raise ReservationAccessError("작성한 사람만 삭제할 수 있습니다.")
             row.deleted_at = now
 
-    async def cancel(self, reservation_id: int, host_token_hash: str, now: datetime) -> None:
+    async def cancel(self, reservation_id: int, host_subject: str, now: datetime) -> None:
         async with self._sessions() as session, session.begin():
             row = await session.scalar(select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update())
             if row is None:
                 raise ReservationNotFoundError("Reservation not found")
-            if row.host_token_hash != host_token_hash or row.status not in LIVE_STATUSES or row.start_at <= now:
-                raise ReservationAccessError("Reservation cannot be cancelled with this credential")
+            if row.host_subject is None or row.host_subject != host_subject:
+                raise ReservationAccessError("예약한 사람만 취소할 수 있습니다.")
+            if row.status not in LIVE_STATUSES or row.start_at <= now:
+                raise ReservationAccessError("이미 시작했거나 끝난 예약은 취소할 수 없습니다.")
             row.status, row.cancelled_at, row.updated_at = "cancelled", now, now
             await self._release_participants(session, reservation_id, now)

@@ -1,6 +1,8 @@
 """Character tags: a post names up to one team, and the list filters by it."""
 
-HEADERS = {'X-Community-User': 'tagger'}
+from . import signed_in
+
+HEADERS = signed_in('tagger')
 
 
 def create(client, title, characters, post_type='공략'):

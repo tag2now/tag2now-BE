@@ -2,7 +2,9 @@ from datetime import datetime
 
 import pytest
 
-HEADERS = {'X-Community-User': 'edit-owner'}
+from . import signed_in
+
+HEADERS = signed_in('edit-owner')
 EDIT = {'title': '수정 제목', 'body': '수정 본문', 'post_type': '공략', 'characters': ['Jin', 'Devil Jin'], 'youtube_video_id': 'aqz-KE-bpKQ'}
 
 
@@ -42,8 +44,8 @@ def test_edit_refreshes_cached_detail_and_filtered_lists_and_preserves_reactions
 def test_edit_requires_owner_and_existing_post(client):
     original = create(client)
     url = f"/community/posts/{original['id']}"
-    assert client.patch(url, headers={'X-Community-User': 'other'}, json=EDIT).status_code == 403
-    assert client.patch(url, json=EDIT).status_code == 400
+    assert client.patch(url, headers=signed_in('other'), json=EDIT).status_code == 403
+    assert client.patch(url, json=EDIT).status_code == 401
     assert client.get(url).json()['title'] == 'original'
     assert client.patch('/community/posts/9999999', headers=HEADERS, json=EDIT).status_code == 404
 

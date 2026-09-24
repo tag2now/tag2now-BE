@@ -35,9 +35,10 @@
 | 예외 | 상태 |
 |------|------|
 | `NotFoundError` | 404 |
+| `UnauthorizedError` (← `auth` 예외들) | 401, `WWW-Authenticate: Bearer` |
 | `ForbiddenError` | 403 |
 | `ValidationError` | 400 |
-| `ServiceUnavailableError` (← `RpcnUnavailableError`) | 502 |
+| `ServiceUnavailableError` (← `RpcnUnavailableError`, `AuthUnavailableError`) | 502 |
 
 FastAPI의 `RequestValidationError`는 422를 유지하되 응답을 재구성한다.
 기본 에러 배열 대신 `_FIELD_LABELS`로 **사용자가 화면에서 볼 수 있는 이름**을 넣은 한국어 한 문장을 반환한다.
@@ -89,6 +90,7 @@ FastAPI 의존성이 없는 독립 패키지. `python -m rpcn_client`로 단독 
 | 운영 | 인스턴스의 `.env.prod` | 미사용 |
 
 필수(기본값 없음): `rpcn_user`, `rpcn_password`, `rpcn_token`.
+로그인에는 `rpcn_stat_url`, `rpcn_external_api_key`, `jwt_secret`이 추가로 필요하다. 비어 있어도 기동은 되지만 로그인과 쓰기 라우트가 502다([07-auth.md](07-auth.md)).
 env 파일은 이미지에 굽지 않는다 — `env/.env.example`만 추적되고 Dockerfile은 `env/`를 복사하지 않는다.
 
 ## 테스트

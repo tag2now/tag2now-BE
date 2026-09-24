@@ -2,8 +2,8 @@
 
 These go through the HTTP layer rather than calling the handler directly: the
 message a user sees is the response body, and the handler alone cannot show
-that `loc` arrives as ("body", "name") — the shape that once labelled every
-username error "내용".
+that `loc` arrives as ("body", "username") — the shape that once labelled
+every username error "내용".
 """
 
 import logging
@@ -15,11 +15,12 @@ logging.disable(logging.CRITICAL)
 
 
 @pytest.fixture
-def client():
+def client(auth_headers):
+    """Signed in: the auth dependency answers 401 before the body is validated."""
     from app import app
 
     c = TestClient(app)
-    c.cookies.set("community_user", "tester")
+    c.headers.update(auth_headers("tester"))
     return c
 
 
@@ -28,7 +29,6 @@ def reservation_payload():
     """A valid body, so a test's own field is the only thing that fails."""
     return {
         "start_time": "20:00",
-        "display_name": "tester",
         "match_type": "any",
         "capacity": 2,
     }
@@ -37,13 +37,14 @@ def reservation_payload():
 @pytest.mark.parametrize(
     "payload, expected",
     [
-        ({"name": "A" * 51}, "유저명은 50자를 넘을 수 없습니다."),
-        ({"name": ""}, "유저명을 입력해 주세요."),
-        ({}, "유저명을 입력해 주세요."),
+        ({"username": "A" * 65, "password": "pw"}, "아이디는 64자를 넘을 수 없습니다."),
+        ({"username": "", "password": "pw"}, "아이디를 입력해 주세요."),
+        ({"password": "pw"}, "아이디를 입력해 주세요."),
+        ({"username": "alice"}, "비밀번호를 입력해 주세요."),
     ],
 )
-def test_identity_names_the_username_rule(client, payload, expected):
-    response = client.post("/community/identity", json=payload)
+def test_login_names_the_field_that_failed(client, payload, expected):
+    response = client.post("/auth/login", json=payload)
 
     assert response.status_code == 422
     assert response.json()["detail"] == expected
@@ -95,10 +96,10 @@ def test_reservation_names_the_bound_that_was_crossed(client, reservation_payloa
 
 def test_particle_agrees_with_the_label_it_follows(client, reservation_payload):
     """은/는 and 을/를 follow the last syllable, not a fixed "은(는)"."""
-    with_final = client.post("/community/identity", json={"name": "A" * 51})
+    with_final = client.post("/community/posts", json={"title": "t", "body": "A" * 1001})
     without_final = client.post("/reservations", json={**reservation_payload, "memo": "A" * 141})
 
-    assert with_final.json()["detail"].startswith("유저명은")
+    assert with_final.json()["detail"].startswith("내용은")
     assert without_final.json()["detail"].startswith("메모는")
 
 
@@ -108,3 +109,14 @@ def test_unmapped_field_still_answers_in_korean(client):
 
     assert response.status_code == 422
     assert response.json()["detail"] == "추천 방향 값을 확인해 주세요."
+
+
+def test_a_signed_in_route_answers_401_before_validating_the_body():
+    """No token, bad body: the caller must learn to sign in, not to fix a field."""
+    from app import app
+
+    response = TestClient(app).post("/reservations", json={"memo": "A" * 141})
+
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+    assert response.json()["detail"] == "로그인이 필요합니다."

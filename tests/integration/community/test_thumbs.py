@@ -1,7 +1,9 @@
 """Tests for community thumb toggle logic."""
 
+from . import signed_in
+
 USER = "testuser"
-HEADERS = {"X-Community-User": USER, "Content-Type": "application/json"}
+HEADERS = {**signed_in(USER), "Content-Type": "application/json"}
 
 
 def _create_post(client, body="test post"):

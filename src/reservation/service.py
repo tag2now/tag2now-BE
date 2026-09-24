@@ -1,8 +1,12 @@
-"""Reservation use cases depend only on repository, clock, and credentials ports."""
+"""Reservation use cases depend only on repository and clock ports.
+
+Every write names its actor by `subject` (the RPCN username) and
+`display_name` (what the listing shows). Ownership compares subjects; the
+router takes both from the signed-in user, never from the request body.
+"""
 
 from datetime import datetime, time
 
-from shared.security.credentials import CredentialManager, TokenCredentialManager, hash_credential
 from reservation.domain import Comment, MatchType, Reservation, ensure_conditions_valid, start_at_from
 from reservation.ports import Clock, ReservationRepository
 
@@ -14,14 +18,12 @@ class SystemClock(Clock):
 
 
 _clock: Clock = SystemClock()
-_credentials: CredentialManager = TokenCredentialManager()
 
 
-def configure(repository: ReservationRepository, clock: Clock | None = None, credentials: CredentialManager | None = None) -> None:
-    global _repo, _clock, _credentials
+def configure(repository: ReservationRepository, clock: Clock | None = None) -> None:
+    global _repo, _clock
     _repo = repository
     if clock is not None: _clock = clock
-    if credentials is not None: _credentials = credentials
 
 
 def _repository() -> ReservationRepository:
@@ -33,19 +35,17 @@ async def list_reservations() -> list[Reservation]:
     return await _repository().list_upcoming()
 
 
-async def create_reservation(*, start_time: time, display_name: str, ranks: list[str], match_type: MatchType, capacity: int, memo: str) -> tuple[Reservation, str]:
+async def create_reservation(*, subject: str, display_name: str, start_time: time, ranks: list[str], match_type: MatchType, capacity: int, memo: str) -> Reservation:
     ensure_conditions_valid(match_type, ranks, capacity)
     start_at = start_at_from(start_time, _clock.now())
-    token, token_hash = _credentials.issue()
-    reservation = await _repository().create(start_at=start_at, host_display_name=display_name.strip(), host_ranks=ranks, match_type=match_type, capacity=capacity, memo=memo.strip(), host_token_hash=token_hash)
-    return reservation, token
+    return await _repository().create(start_at=start_at, host_subject=subject, host_display_name=display_name, host_ranks=ranks, match_type=match_type, capacity=capacity, memo=memo.strip())
 
 
 async def get_reservation(reservation_id: int) -> Reservation:
     return await _repository().get(reservation_id)
 
 
-async def update_reservation(reservation_id: int, token: str, *, start_time: time | None = None, ranks: list[str] | None = None, match_type: MatchType | None = None, capacity: int | None = None, memo: str | None = None) -> Reservation:
+async def update_reservation(reservation_id: int, subject: str, *, start_time: time | None = None, ranks: list[str] | None = None, match_type: MatchType | None = None, capacity: int | None = None, memo: str | None = None) -> Reservation:
     """Apply a partial edit, validating the reservation as it will end up.
 
     A patch is only coherent against the rest of the reservation: switching to a
@@ -61,37 +61,32 @@ async def update_reservation(reservation_id: int, token: str, *, start_time: tim
     )
     start_at = start_at_from(start_time, _clock.now()) if start_time is not None else None
     return await _repository().update(
-        reservation_id, hash_credential(token), _clock.now(),
+        reservation_id, subject, _clock.now(),
         start_at=start_at, ranks=ranks,
         match_type=match_type, capacity=capacity, memo=memo.strip() if memo is not None else None,
     )
 
 
-async def join_reservation(reservation_id: int, *, display_name: str, ranks: list[str]) -> tuple[Reservation, str]:
-    token, token_hash = _credentials.issue()
-    reservation, _ = await _repository().join(reservation_id, display_name=display_name.strip(), ranks=ranks, participant_token_hash=token_hash, now=_clock.now())
-    return reservation, token
+async def join_reservation(reservation_id: int, *, subject: str, display_name: str, ranks: list[str]) -> Reservation:
+    reservation, _ = await _repository().join(reservation_id, subject=subject, display_name=display_name, ranks=ranks, now=_clock.now())
+    return reservation
 
 
-async def cancel_participation(reservation_id: int, token: str) -> Reservation:
-    return await _repository().cancel_participation(reservation_id, hash_credential(token), _clock.now())
+async def cancel_participation(reservation_id: int, subject: str) -> Reservation:
+    return await _repository().cancel_participation(reservation_id, subject, _clock.now())
 
 
 async def list_comments(reservation_id: int) -> list[Comment]:
     return await _repository().list_comments(reservation_id)
 
 
-async def add_comment(reservation_id: int, *, display_name: str, body: str) -> tuple[Comment, str]:
-    token, token_hash = _credentials.issue()
-    comment = await _repository().add_comment(
-        reservation_id, author=display_name.strip(), body=body.strip(), author_token_hash=token_hash,
-    )
-    return comment, token
+async def add_comment(reservation_id: int, *, subject: str, display_name: str, body: str) -> Comment:
+    return await _repository().add_comment(reservation_id, author_subject=subject, author=display_name, body=body.strip())
 
 
-async def delete_comment(reservation_id: int, comment_id: int, token: str) -> None:
-    await _repository().delete_comment(reservation_id, comment_id, hash_credential(token), _clock.now())
+async def delete_comment(reservation_id: int, comment_id: int, subject: str) -> None:
+    await _repository().delete_comment(reservation_id, comment_id, subject, _clock.now())
 
 
-async def cancel_reservation(reservation_id: int, token: str) -> None:
-    await _repository().cancel(reservation_id, hash_credential(token), _clock.now())
+async def cancel_reservation(reservation_id: int, subject: str) -> None:
+    await _repository().cancel(reservation_id, subject, _clock.now())

@@ -25,6 +25,9 @@ class ReservationStatus(StrEnum):
 class ParticipantSummary:
     id: int
     display_name: str
+    # The RPCN username, which is what "is this me" compares. None on rows
+    # written before login existed.
+    username: str | None = None
 
 
 @dataclass(frozen=True)
@@ -40,6 +43,7 @@ class Reservation:
     participant_count: int
     created_at: datetime
     participants: list[ParticipantSummary] = field(default_factory=list)
+    host_username: str | None = None
 
 
 @dataclass(frozen=True)
@@ -49,6 +53,7 @@ class Comment:
     author: str
     body: str
     created_at: datetime
+    author_username: str | None = None
 
 
 @dataclass(frozen=True)

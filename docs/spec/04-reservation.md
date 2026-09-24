@@ -2,7 +2,7 @@
 
 ## 목적
 
-"지금 상대가 없으면 시간을 약속한다." 계정 없이, 그날 하루 안에서 시각·매치 종류·계급 조건을 걸고
+"지금 상대가 없으면 시간을 약속한다." RPCN 계정으로 로그인해서, 그날 하루 안에서 시각·매치 종류·계급 조건을 걸고
 1~3명을 모집하는 경량 약속 기능.
 
 ## 도메인 규칙 (`reservation/domain.py`)
@@ -42,34 +42,46 @@
 **취소된 예약만** 거부한다. 시작했든 끝났든 그 약속은 실제로 있었던 일이고 페이지는 공유 가능하므로,
 사후에 "잘 뒀습니다"를 남길 곳이 있어야 한다. 취소된 예약은 애초에 일어나지 않았으니 논할 대상이 없다.
 
-## 소유권 — 계정 없는 능력 토큰
+## 소유권 — RPCN 계정
 
-`shared/security/credentials.py`의 `TokenCredentialManager`가 처리한다.
+쓰기(등록·수정·취소·참가·참가 취소·댓글)는 모두 로그인이 필요하다([07-auth.md](07-auth.md)).
+조회는 로그인 없이 된다.
 
-1. 예약 생성/참가 시 `secrets.token_urlsafe(32)`로 토큰을 발급한다.
-2. 서버는 **SHA-256 해시만** 저장한다. 원본 토큰은 응답 1회로만 전달된다.
-3. 이후 수정·취소는 `X-Reservation-Token` 헤더의 토큰을 해시해 비교한다.
+1. 방장·참가자·댓글 작성자는 **토큰의 사용자**다. 요청 body로 이름을 받지 않는다.
+2. 소유권은 RPCN `username`으로 비교한다 — `reservations.host_subject`,
+   `reservation_participants.subject`, `reservation_comments.author_subject`.
+3. 화면에 보이는 이름(`host_display_name`, 참가자 `display_name`, 댓글 `author`)은 `online_name`이다.
+4. 응답은 비교용 `host_username`, 참가자 `username`, 댓글 `author_username`을 함께 싣는다.
+   FE는 이것을 `/auth/me`의 `username`과 비교해 "내 예약인가"를 판단한다.
 
-FE는 `localStorage`에 `reservation-owner-{id}` / `reservation-participant-{id}`로 보관한다.
-따라서 `isOwner(id)`는 "이 브라우저가 토큰을 갖고 있는가"이지 "같은 사람인가"가 아니다.
+| 규칙 | 결과 |
+|------|------|
+| 방장이 자기 예약에 참가 | 400 `내가 만든 예약에는 참가할 수 없습니다.` |
+| 이미 참가 중인 계정이 다시 참가 | 400 `이미 참가한 예약입니다.` (부분 유니크 인덱스가 경쟁 상황도 막는다) |
+| 참가를 취소한 계정이 다시 참가 | 허용 |
+| 남의 예약 수정·취소, 남의 댓글 삭제 | 403 |
 
-**알려진 한계**: 사이트 데이터를 지우거나 브라우저를 바꾸면 예약 삭제 권한을 영구히 잃는다.
-복구 수단은 없다. 토큰 모델의 대가이지 버그가 아니다.
+**로그인 이전 데이터**: 마이그레이션 `f2c6a9d41e57`이 토큰 해시 컬럼을 지웠다. 그 전에 만든 예약·참가·댓글은
+`subject`가 null이라 **소유자가 없다** — 아무도 수정·취소·삭제할 수 없다. 예약은 다음 06:00이 지나면
+목록에서 빠지므로 영향은 전환 당일 밤의 예약에 그친다.
 
 ## API
 
 | 메서드 | 경로 | 설명 | 인증 |
 |--------|------|------|------|
 | GET | `/reservations` | 1시간 전부터 다음 06:00 KST까지의 `open`/`matched` 예약 목록 | 없음 |
-| POST | `/reservations` | 등록 → `{ reservation, owner_token }` (201) | 없음 |
+| POST | `/reservations` | 등록 → 예약 (201) | 로그인 |
 | GET | `/reservations/{id}` | 단건 조회 | 없음 |
-| PATCH | `/reservations/{id}` | 부분 수정 | 호스트 토큰 |
-| POST | `/reservations/{id}/participants` | 참가 → `{ reservation, participant_token }` (201) | 없음 |
-| DELETE | `/reservations/{id}/participants/me` | 참가 취소 | 참가자 토큰 |
-| DELETE | `/reservations/{id}` | 예약 취소 (204) | 호스트 토큰 |
+| PATCH | `/reservations/{id}` | 부분 수정 | 방장 |
+| POST | `/reservations/{id}/participants` | 참가 → 예약 (201) | 로그인 |
+| DELETE | `/reservations/{id}/participants/me` | 참가 취소 | 참가자 본인 |
+| DELETE | `/reservations/{id}` | 예약 취소 (204) | 방장 |
 | GET | `/reservations/{id}/comments` | 댓글 목록 (작성순) | 없음 |
-| POST | `/reservations/{id}/comments` | 댓글 등록 → `{ comment, author_token }` (201) | 없음 |
-| DELETE | `/reservations/{id}/comments/{comment_id}` | 댓글 삭제 (204) | 작성자 토큰 |
+| POST | `/reservations/{id}/comments` | 댓글 등록 → 댓글 (201) | 로그인 |
+| DELETE | `/reservations/{id}/comments/{comment_id}` | 댓글 삭제 (204) | 작성자 본인 |
+
+인증이 필요한 라우트는 `Authorization: Bearer <access_token>` 헤더를 받는다. 등록·참가·댓글 요청의
+body에는 이름이 없다(`display_name` 필드 삭제).
 
 ## 조회 조건
 
@@ -91,7 +103,7 @@ FE는 `localStorage`에 `reservation-owner-{id}` / `reservation-participant-{id}
 | 상태 | `open`, `matched`만 (`cancelled`·`ended` 제외) |
 | 정렬 | `start_at` 오름차순, 같은 시각이면 `open`이 `matched`보다 앞 |
 | `participant_count` | `cancelled_at IS NULL`인 참가자만 outer join으로 집계 |
-| `participants` | 같은 활성 참가자의 `{id, display_name}` 목록. `joined_at`, `id` 순으로 정렬하며 방장과 인증 정보는 제외 |
+| `participants` | 같은 활성 참가자의 `{id, display_name, username}` 목록. `joined_at`, `id` 순으로 정렬하며 방장과 계급은 제외 |
 
 예약 목록·단건·참가·참가 취소 응답에 명단을 포함한다. 참가자가 없으면 `[]`을 반환한다.
 인원수와 명단은 같은 쿼리로 조회해 일치시키며, 목록의 예약마다 추가 쿼리를 실행하지 않는다.
@@ -149,14 +161,11 @@ FE에는 단건 조회를 부르는 코드가 없고 상세 패널은 목록 배
 | 항목 | 값 |
 |------|-----|
 | 본문 | 1~500자. **공백은 검증 전에 제거된다** (`str_strip_whitespace`) — 공백 세 칸은 빈 댓글이다 |
-| 작성자명 | 1~50자. 요청마다 실어 보낸다 (예약 등록과 같은 방식) |
+| 작성자명 | 로그인한 계정의 `online_name`. 요청으로 받지 않는다 |
 | 정렬 | `created_at` 오름차순, 같으면 `id` |
 | 삭제 | 소프트 삭제(`deleted_at`). 목록은 `deleted_at IS NULL`만 반환 |
 
-**소유권은 예약과 같은 토큰 모델이다.** 등록 시 `author_token`을 1회 발급하고 서버는 SHA-256 해시만
-저장한다. FE는 `localStorage`의 `reservation-comment-{commentId}`에 담고, `isCommentAuthor(id)`는
-"이 브라우저가 토큰을 갖고 있는가"를 답한다. 커뮤니티식 이름 비교였다면 아무나 남의 이름을 적고
-지울 수 있다.
+**소유권은 예약과 같은 계정 모델이다.** `author_subject`(RPCN username)가 같은 사람만 지울 수 있다.
 
 **삭제가 소프트인 이유**: 목록이 작성순이고 사람들이 서로를 인용한다. 행을 지우면 답글이
 아무것도 아닌 것에 답하는 꼴이 되므로, 구멍이 남는 편이 읽기 쉽다.

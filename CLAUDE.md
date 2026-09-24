@@ -78,15 +78,15 @@ cached value.
 ```bash
 .venv/Scripts/python.exe -m pytest tests/unit/ -v                        # no external services needed
 docker compose -f compose.test.yml up -d --wait                          # Redis + PostgreSQL
-.venv/Scripts/python.exe -m pytest tests/integration/ -v -m "not rpcn"   # 86, services only
-.venv/Scripts/python.exe -m pytest tests/integration/ -v                 # all 99, adds live RPCN
+.venv/Scripts/python.exe -m pytest tests/integration/ -v -m "not rpcn"   # 116, services only
+.venv/Scripts/python.exe -m pytest tests/integration/ -v                 # all 129, adds live RPCN
 ```
 
 - `tests/unit/` — pure logic; no network, no database.
 - `tests/integration/` — requires Redis and PostgreSQL from `compose.test.yml`. `tests/integration/test_rpcn_client.py` and `tests/integration/matching/test_service_integration.py` additionally hit the live RPCN server and need valid `RPCN_*` credentials.
 
 **The `rpcn` marker separates those two.** Both live-RPCN modules carry a
-module-level `pytestmark = pytest.mark.rpcn`, so `-m "not rpcn"` leaves 86 tests
+module-level `pytestmark = pytest.mark.rpcn`, so `-m "not rpcn"` leaves 116 tests
 that need nothing but the two containers. CI runs exactly that: it cannot hold
 the account (production is logged in as that user around the clock, and two
 overlapping runs would collide with each other besides), so the 13 marked tests
@@ -170,11 +170,18 @@ Check what yours actually holds before assuming a service is configured.
 Required with no default: `rpcn_user`, `rpcn_password`, `rpcn_token`. Everything
 else has one — `redis_url` defaults to `""`, which selects the dict cache.
 
+Login needs `rpcn_stat_url`, `rpcn_external_api_key` and `jwt_secret` (32+
+bytes). They default to empty so the app still boots without them, but then
+`/auth/login` and every signed-in route answer 502. The last two are
+`SecretStr`, because `app.py` logs the whole settings object at startup. Tests
+get a `JWT_SECRET` from `tests/conftest.py`, which also provides the
+`auth_headers(username)` fixture for signed-in requests.
+
 Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leaderboard`, `cache_ttl_rooms`, `cache_ttl_rooms_all`, `cache_ttl_community`, `cache_ttl_activity`, `cache_ttl_player_hours`, `matchmaking_ttl`.
 
 ## Architecture
 
-Five domain modules under `src/`, plus a `shared/` layer and the standalone `rpcn_client` package.
+Six modules under `src/` --- five domains plus `auth/` --- a `shared/` layer and the standalone `rpcn_client` package.
 
 | Module | Responsibility |
 |--------|----------------|
@@ -182,13 +189,25 @@ Five domain modules under `src/`, plus a `shared/` layer and the standalone `rpc
 | `history/` | Persisted snapshots, time-series statistics, the match collector |
 | `community/` | Message board — posts, comments, thumbs |
 | `reservation/` | Appointments — create, join, edit, cancel |
-| `shared/` | Settings, cache, database, event bus, exceptions, `security/` |
+| `auth/` | RPCN account login; stateless bearer tokens other routers depend on |
+| `shared/` | Settings, cache, database, event bus, exceptions |
 | `rpcn_client/` | Standalone RPCN protocol client (no FastAPI dependency) |
 
-`shared/security/credentials.py` issues the opaque tokens that give a
-reservation an owner without an account: `TokenCredentialManager.issue()`
-returns the client's token and the SHA-256 form that is stored, so possession
-of the token is the whole proof of ownership.
+### Authentication
+
+`auth/` verifies a username and password against RPCN's stat server
+(rpcn-narco's `external/users/verify`, via the `AccountVerifier` port) and signs
+the answer as an HS256 JWT. Nothing is stored: no session table, no cache
+entry. Logout is the client discarding the token, and rotating `jwt_secret`
+is the only way to revoke early.
+
+Routers get the caller from `auth.dependencies.current_user` (401 when absent)
+or `optional_user`, never by reading a header themselves. **Ownership keys on
+`user.username`** --- RPCN's canonical, unique spelling --- stored as
+`host_subject` / `subject` / `author_subject` in reservations and as `author` /
+`voter` on the board. `online_name` is only ever displayed. Because the
+dependency resolves before the body, a signed-in route answers 401, not 422,
+to an anonymous request with a bad body. Spec: `docs/spec/07-auth.md`.
 
 ### Hexagonal layering
 
@@ -297,6 +316,7 @@ Domain code raises the exceptions in `shared/exceptions.py`; `app.py` registers 
 | Exception | Status |
 |-----------|--------|
 | `NotFoundError` | 404 |
+| `UnauthorizedError` | 401, with `WWW-Authenticate: Bearer` |
 | `ForbiddenError` | 403 |
 | `ValidationError` | 400 |
 | `ServiceUnavailableError` | 502 |
@@ -310,13 +330,14 @@ error array. A new user-facing request field belongs in that map.
 
 | Prefix | Router |
 |--------|--------|
+| `/auth` | `auth/router.py` — `POST /login`, `GET /me` |
 | *(none)* | `matching/router.py` — `/servers`, `/rooms/all`, `/leaderboard`, `/players/{npid}` |
 | `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/stats/weekly-top`, `/players/{npid}` |
-| `/community` | `community/router.py` — posts, comments, thumbs, identity |
+| `/community` | `community/router.py` — posts, comments, thumbs |
 | `/reservations` | `reservation/router.py` — list, create, read one (`GET /{id}`), edit (`PATCH`), join, cancel |
 | *(none)* | `/health` in `app.py`, excluded from the schema |
 
-Community identity is not authentication: `_get_user` reads the `X-Community-User` header or the `community_user` cookie, truncated to 50 characters. There is no verification of who the caller claims to be.
+Every write in `community` and `reservation` requires a bearer token; every read is public.
 
 ## RPCN protocol (`rpcn_client/`)
 

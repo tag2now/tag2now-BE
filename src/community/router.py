@@ -2,10 +2,11 @@
 
 import asyncio
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query
 
+from auth.dependencies import current_user
+from auth.models import AuthUser
 from community import models, service
-from fastapi import HTTPException, Request
 from shared.cache import cache_get, cache_set, cache_delete_pattern
 from shared.settings import get_settings
 
@@ -21,23 +22,13 @@ def _invalidate_posts():
 def _invalidate_post(post_id: int):
     cache_delete_pattern(f"community:post:{post_id}")
 
-def _get_user(request: Request) -> str:
-    """Resolve username from header or cookie. Raises 400 if absent."""
-    name = request.headers.get("X-Community-User") or request.cookies.get("community_user")
-    if not name or not name.strip():
-        raise HTTPException(status_code=400, detail="User identity required (X-Community-User header or community_user cookie)")
-    name = name.strip()[:50]
-    return name
+def _get_user(user: AuthUser = Depends(current_user)) -> str:
+    """The signed-in RPCN username: the author on writes, the owner on edits.
 
-
-# ---------------------------------------------------------------------------
-# Identity
-# ---------------------------------------------------------------------------
-
-@router.post("/identity")
-def set_identity(req: models.SetIdentityRequest, response: Response):
-    response.set_cookie("community_user", req.name.strip()[:50], httponly=True, samesite="lax")
-    return {"user": req.name.strip()[:50]}
+    The board stores one name per post and compares it for ownership, so it
+    must be the unique, unchangeable username rather than the online name.
+    """
+    return user.username
 
 
 # ---------------------------------------------------------------------------

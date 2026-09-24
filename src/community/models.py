@@ -22,10 +22,6 @@ def _validate_characters(names: list[str]) -> list[str]:
 
 # --- Requests ---
 
-class SetIdentityRequest(BaseModel):
-    name: str = Field(..., min_length=1, max_length=50)
-
-
 class CreatePostRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=100)
     body: str = Field(..., min_length=1, max_length=1000)

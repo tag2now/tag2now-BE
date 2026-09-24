@@ -23,7 +23,9 @@ from fastapi.responses import JSONResponse
 
 from shared.cache import redis_health_check
 from shared.database import init_database, close_database
-from shared.exceptions import NotFoundError, ForbiddenError, ValidationError, ServiceUnavailableError
+from shared.exceptions import NotFoundError, UnauthorizedError, ForbiddenError, ValidationError, ServiceUnavailableError
+from auth.db import init_auth, close_auth
+from auth.router import router as auth_router
 from history import init_history_repo, close_history_repo
 from history.collector import run_collector, stop_collector
 from history.router import router as history_router
@@ -51,6 +53,7 @@ except Exception:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await init_auth()
     await init_database()
     await init_db()
     await init_reservation_db()
@@ -66,6 +69,7 @@ async def lifespan(app: FastAPI):
     await close_reservation_db()
     await close_db()
     await close_database()
+    await close_auth()
 
 
 app = FastAPI(
@@ -81,6 +85,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(ttt2_router)
 app.include_router(history_router)
 app.include_router(community_router, prefix="/community", tags=["community"])
@@ -90,6 +95,11 @@ app.include_router(reservation_router)
 @app.exception_handler(NotFoundError)
 async def not_found_handler(request, exc):
     return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(UnauthorizedError)
+async def unauthorized_handler(request, exc):
+    return JSONResponse(status_code=401, content={"detail": str(exc)}, headers={"WWW-Authenticate": "Bearer"})
 
 
 @app.exception_handler(ForbiddenError)
@@ -105,11 +115,11 @@ async def validation_handler(request, exc):
 # Field labels for request-schema violations, so a 422 names the input a user
 # can actually see rather than the wire field. Every field of every *Request
 # model belongs here: a field missing from this map falls through to the
-# generic message, which is what made "입력값을 확인해 주세요." the answer to a
-# too-long username --- `name` was absent while `display_name` was present.
+# generic message --- which is what once made "입력값을 확인해 주세요." the
+# answer to a too-long username, whose field was missing here.
 _FIELD_LABELS = {
-    "name": "유저명",
-    "display_name": "유저명",
+    "username": "아이디",
+    "password": "비밀번호",
     "title": "제목",
     "body": "내용",
     "post_type": "게시글 종류",
@@ -191,7 +201,7 @@ async def request_validation_handler(request, exc):
 
     Pydantic reports every violation; a form shows one line. The first error
     that yields a specific sentence wins, so the user is told the concrete rule
-    ("유저명은 50자를 넘을 수 없습니다.") rather than that something, somewhere,
+    ("메모는 140자를 넘을 수 없습니다.") rather than that something, somewhere,
     was wrong.
     """
     for error in exc.errors():

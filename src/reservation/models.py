@@ -14,8 +14,9 @@ def _reject_duplicate_ranks(ranks: list[str] | None) -> list[str] | None:
 
 
 class CreateReservationRequest(BaseModel):
+    """The host is the signed-in user; nothing here names them."""
+
     start_time: time
-    display_name: str = Field(..., min_length=1, max_length=50)
     ranks: list[str] = Field(default_factory=list, max_length=20)
     match_type: MatchType
     capacity: int = Field(1, ge=1, le=3)
@@ -41,7 +42,6 @@ class UpdateReservationRequest(BaseModel):
 
 
 class JoinReservationRequest(BaseModel):
-    display_name: str = Field(..., min_length=1, max_length=50)
     ranks: list[str] = Field(default_factory=list, max_length=20)
 
 
@@ -53,7 +53,6 @@ class CreateCommentRequest(BaseModel):
     repository either way.
     """
 
-    display_name: str = Field(..., min_length=1, max_length=50)
     body: str = Field(..., min_length=1, max_length=500)
 
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -63,24 +62,24 @@ class CommentOut(BaseModel):
     id: int
     reservation_id: int
     author: str
+    # Compared against /auth/me to decide whether to offer deletion. Null on
+    # comments from before login, which nobody can delete any more.
+    author_username: str | None
     body: str
     created_at: datetime
-
-
-class CreateCommentOut(BaseModel):
-    comment: CommentOut
-    author_token: str
 
 
 class ParticipantSummaryOut(BaseModel):
     id: int
     display_name: str
+    username: str | None
 
 
 class ReservationOut(BaseModel):
     id: int
     start_at: datetime
     host_display_name: str
+    host_username: str | None
     host_ranks: list[str]
     match_type: MatchType
     capacity: int
@@ -89,13 +88,3 @@ class ReservationOut(BaseModel):
     participant_count: int
     participants: list[ParticipantSummaryOut]
     created_at: datetime
-
-
-class CreateReservationOut(BaseModel):
-    reservation: ReservationOut
-    owner_token: str
-
-
-class JoinReservationOut(BaseModel):
-    reservation: ReservationOut
-    participant_token: str

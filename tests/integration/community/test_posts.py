@@ -1,7 +1,9 @@
 """Tests for community post CRUD."""
 
+from . import signed_in
+
 USER = "testuser"
-HEADERS = {"X-Community-User": USER, "Content-Type": "application/json"}
+HEADERS = {**signed_in(USER), "Content-Type": "application/json"}
 
 
 def test_create_and_list_posts(client):
@@ -46,14 +48,20 @@ def test_delete_post_forbidden(client):
     r = client.post("/community/posts", json={"title": "test", "body": "not yours"}, headers=HEADERS)
     post_id = r.json()["id"]
 
-    other = {"X-Community-User": "other", "Content-Type": "application/json"}
+    other = {**signed_in("other"), "Content-Type": "application/json"}
     r = client.delete(f"/community/posts/{post_id}", headers=other)
     assert r.status_code == 403
 
 
-def test_create_post_no_identity(client):
+def test_create_post_without_signing_in(client):
     r = client.post("/community/posts", json={"title": "test", "body": "anon"})
-    assert r.status_code == 400
+    assert r.status_code == 401
+
+
+def test_a_name_header_is_no_longer_an_identity(client):
+    """The old X-Community-User header must not sign anyone in."""
+    r = client.post("/community/posts", json={"title": "test", "body": "anon"}, headers={"X-Community-User": USER})
+    assert r.status_code == 401
 
 
 def test_post_body_too_long(client):

@@ -17,9 +17,10 @@ Tekken Tag Tournament 2(TTT2)의 RPCN 온라인 현황을 보여주는 웹 서�
 | [01-live-rooms.md](01-live-rooms.md) | 실시간 방 목록, 매치메이킹 감지(팬텀 룸), 탭 구성 |
 | [02-leaderboard.md](02-leaderboard.md) | 랭킹 보드, 캐릭터/계급 정보, 플레이어 조회 |
 | [03-statistics.md](03-statistics.md) | 접속 통계 수집·집계, 주간 top, 개요(Overview) 탭 |
-| [04-reservation.md](04-reservation.md) | 매치 예약 등록·참가·수정·취소, 토큰 소유권 |
-| [05-community.md](05-community.md) | 게시판 글·댓글·추천, 익명 식별 |
+| [04-reservation.md](04-reservation.md) | 매치 예약 등록·참가·수정·취소, 계정 소유권 |
+| [05-community.md](05-community.md) | 게시판 글·댓글·추천 |
 | [06-cross-cutting.md](06-cross-cutting.md) | 캐시, 에러 응답, 폴링, 배포·릴리스 |
+| [07-auth.md](07-auth.md) | RPCN 계정 로그인, Bearer 토큰 |
 
 ## 시스템 구성
 
@@ -29,9 +30,9 @@ RPCS3 유저 ──▶ RPCN 서버 (바이너리 프로토콜, TLS)
                     │ rpcn_client (단일 세션, 스레드 락)
               ┌─────┴──────────────────────────────┐
               │ tag2now-BE (FastAPI)               │
-              │  matching / history /              │
+              │  auth / matching / history /       │
               │  community / reservation           │
-              │  + shared(cache, events, security) │
+              │  + shared(cache, events)           │
               └─────┬───────────────┬──────────────┘
                     │               │
              Redis(캐시)      PostgreSQL(이력·게시판·예약)

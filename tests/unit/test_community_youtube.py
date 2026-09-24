@@ -21,7 +21,7 @@ def test_existing_request_has_no_video():
 
 
 @pytest.mark.parametrize('video_id', [None, 'dQw4w9WgXcQ'])
-def test_create_and_read_video_through_api(monkeypatch, video_id):
+def test_create_and_read_video_through_api(monkeypatch, video_id, auth_headers):
     from community import service
     from shared.cache import cache_delete_pattern
 
@@ -41,7 +41,7 @@ def test_create_and_read_video_through_api(monkeypatch, video_id):
         with TestClient(app) as client:
             response = client.post('/community/posts', json={
                 'title': 'test', 'body': 'body', 'youtube_video_id': video_id,
-            }, headers={'X-Community-User': 'testuser'})
+            }, headers=auth_headers('testuser'))
             assert response.status_code == 201
             repo.create_post.assert_awaited_once_with('testuser', 'test', 'body', '자유', [], video_id)
             assert response.json()['youtube_video_id'] == video_id
@@ -49,7 +49,7 @@ def test_create_and_read_video_through_api(monkeypatch, video_id):
             assert client.get('/community/posts').json()['posts'][0]['youtube_video_id'] == video_id
             invalid = client.post('/community/posts', json={
                 'title': 'test', 'body': 'body', 'youtube_video_id': '<iframe>',
-            }, headers={'X-Community-User': 'testuser'})
+            }, headers=auth_headers('testuser'))
             assert invalid.status_code == 422
             assert repo.create_post.await_count == 1
     finally:

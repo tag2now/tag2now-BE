@@ -1,19 +1,16 @@
 # 05. 커뮤니티 게시판
 
-## 식별 — 인증이 아니다
+## 식별 — RPCN 계정
 
-로그인이 없다. 사용자는 닉네임만 정한다.
+쓰기(글 작성·수정·삭제, 댓글, 추천)는 로그인이 필요하다([07-auth.md](07-auth.md)). 조회는 로그인 없이 된다.
 
-1. FE가 `POST /community/identity`로 닉네임을 등록한다 → 서버가 `community_user` 쿠키(HttpOnly, SameSite=Lax) 설정.
-2. 이후 쓰기 요청에서 서버는 `X-Community-User` 헤더 또는 `community_user` 쿠키를 읽는다(최대 50자로 잘림).
-3. 값이 없으면 **400**.
+- 서버는 `Authorization: Bearer` 토큰의 **RPCN `username`** 을 작성자(`author`)와 추천자(`voter`)로 쓴다.
+  게시판은 이름 하나로 표시와 소유권을 겸하므로, 바꿀 수 있는 `online_name`이 아니라 고유한 `username`을 쓴다.
+- 토큰이 없거나 잘못되면 **401**. 예전의 `X-Community-User` 헤더, `community_user` 쿠키,
+  `POST /community/identity`는 삭제되었다.
 
-**검증은 전혀 없다.** 다른 사람 닉네임을 그대로 보내면 그 사람으로 글을 쓰고 지울 수 있다.
-현재 신뢰 모델은 "소규모 커뮤니티의 선의"이며, 계정 체계가 들어오기 전까지의 임시 구조다.
-
-FE는 `useIdentity().ensureIdentity()`로 세션당 1회만 등록하고(`useRef` 가드),
-모든 쓰기 전에 `await ensureIdentity()`를 호출한다. 닉네임이 없으면 한국어 에러를 던진다.
-`fetch`는 쿠키 전송을 위해 항상 `credentials: 'include'`다.
+**로그인 이전 글**: 예전 글의 `author`는 자유 입력 닉네임이다. 그 닉네임이 어떤 RPCN `username`과
+우연히 같으면 그 계정이 해당 글의 소유자가 된다. 같지 않은 글은 아무도 수정·삭제할 수 없다.
 
 ## 게시글
 

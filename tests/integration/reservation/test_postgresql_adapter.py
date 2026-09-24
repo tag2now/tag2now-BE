@@ -40,7 +40,7 @@ async def _create_open_reservation(repo, capacity: int = 1):
         match_type=MatchType.RANK if capacity == 1 else MatchType.PLAYER,
         capacity=capacity,
         memo="",
-        host_token_hash="owner",
+        host_subject="owner",
     )
 
 
@@ -49,8 +49,8 @@ async def test_concurrent_join_never_exceeds_capacity(repository):
     reservation = await _create_open_reservation(repository)
     now = datetime.now(timezone.utc)
 
-    async def join(token):
-        return await repository.join(reservation.id, display_name=token, ranks=[], participant_token_hash=token, now=now)
+    async def join(subject):
+        return await repository.join(reservation.id, subject=subject, display_name=subject, ranks=[], now=now)
 
     outcomes = await asyncio.gather(join("participant-a"), join("participant-b"), return_exceptions=True)
 
@@ -68,7 +68,7 @@ async def test_concurrent_join_never_exceeds_capacity(repository):
 async def test_participant_cancellation_reopens_a_matched_reservation(repository):
     reservation = await _create_open_reservation(repository)
     now = datetime.now(timezone.utc)
-    await repository.join(reservation.id, display_name="Joiner", ranks=[], participant_token_hash="participant", now=now)
+    await repository.join(reservation.id, subject="participant", display_name="Joiner", ranks=[], now=now)
 
     reopened = await repository.cancel_participation(reservation.id, "participant", now)
 
@@ -80,7 +80,7 @@ async def test_participant_cancellation_reopens_a_matched_reservation(repository
 async def test_participant_cancellation_does_not_revive_a_cancelled_reservation(repository):
     reservation = await _create_open_reservation(repository)
     now = datetime.now(timezone.utc)
-    await repository.join(reservation.id, display_name="Joiner", ranks=[], participant_token_hash="participant", now=now)
+    await repository.join(reservation.id, subject="participant", display_name="Joiner", ranks=[], now=now)
     await repository.cancel(reservation.id, "owner", now)
 
     with pytest.raises(ReservationStateError):
@@ -104,7 +104,7 @@ async def _active_participant_count(reservation_id: int) -> int:
 async def test_cancelling_a_reservation_also_releases_its_participants(repository):
     reservation = await _create_open_reservation(repository)
     now = datetime.now(timezone.utc)
-    await repository.join(reservation.id, display_name="Joiner", ranks=[], participant_token_hash="participant", now=now)
+    await repository.join(reservation.id, subject="participant", display_name="Joiner", ranks=[], now=now)
 
     await repository.cancel(reservation.id, "owner", now)
 
@@ -116,9 +116,9 @@ async def test_expiring_a_reservation_also_releases_its_participants(repository)
     past = datetime.now(timezone.utc) - timedelta(hours=3)
     reservation = await repository.create(
         start_at=past, host_display_name="Host", host_ranks=["Brawler"],
-        match_type=MatchType.RANK, capacity=1, memo="", host_token_hash="owner",
+        match_type=MatchType.RANK, capacity=1, memo="", host_subject="owner",
     )
-    await repository.join(reservation.id, display_name="Joiner", ranks=[], participant_token_hash="participant", now=past - timedelta(minutes=1))
+    await repository.join(reservation.id, subject="participant", display_name="Joiner", ranks=[], now=past - timedelta(minutes=1))
 
     await repository.list_upcoming()
 
@@ -126,13 +126,13 @@ async def test_expiring_a_reservation_also_releases_its_participants(repository)
     assert await _active_participant_count(reservation.id) == 0
 
 
-async def _expired_reservation(repo, token: str):
+async def _expired_reservation(repo, host: str):
     past = datetime.now(timezone.utc) - timedelta(hours=3)
     reservation = await repo.create(
         start_at=past, host_display_name="Host", host_ranks=["Brawler"],
-        match_type=MatchType.RANK, capacity=1, memo="", host_token_hash=token,
+        match_type=MatchType.RANK, capacity=1, memo="", host_subject=host,
     )
-    await repo.join(reservation.id, display_name="Joiner", ranks=[], participant_token_hash=token, now=past - timedelta(minutes=1))
+    await repo.join(reservation.id, subject=f"{host}-joiner", display_name="Joiner", ranks=[], now=past - timedelta(minutes=1))
     return reservation
 
 
@@ -186,15 +186,15 @@ async def test_the_listing_covers_the_grace_hour_until_the_next_dawn(repository)
     upcoming = await _create_open_reservation(repository)
     running = await repository.create(
         start_at=now - timedelta(minutes=5), host_display_name="Host",
-        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_token_hash="running",
+        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_subject="running",
     )
     long_over = await repository.create(
         start_at=now - LISTING_GRACE - timedelta(minutes=1), host_display_name="Host",
-        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_token_hash="over",
+        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_subject="over",
     )
     beyond = await repository.create(
         start_at=window_end(now) + timedelta(minutes=1), host_display_name="Host",
-        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_token_hash="beyond",
+        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_subject="beyond",
     )
 
     listed = [item.id for item in await repository.list_upcoming()]
@@ -211,7 +211,7 @@ async def test_a_reservation_is_retired_once_its_grace_hour_runs_out(repository)
     now = datetime.now(timezone.utc)
     stale = await repository.create(
         start_at=now - LISTING_GRACE - timedelta(minutes=1), host_display_name="Host",
-        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_token_hash="stale",
+        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_subject="stale",
     )
 
     await repository.list_upcoming()
@@ -253,7 +253,7 @@ async def test_an_edit_can_switch_the_match_type(repository):
 
 
 @pytest.mark.asyncio
-async def test_someone_elses_token_cannot_edit_a_reservation(repository):
+async def test_someone_else_cannot_edit_a_reservation(repository):
     reservation = await _create_open_reservation(repository)
     now = datetime.now(timezone.utc)
 
@@ -267,7 +267,7 @@ async def test_someone_elses_token_cannot_edit_a_reservation(repository):
 async def test_a_reservation_with_a_participant_cannot_be_edited(repository):
     reservation = await _create_open_reservation(repository, capacity=2)
     now = datetime.now(timezone.utc)
-    await repository.join(reservation.id, display_name="Joiner", ranks=[], participant_token_hash="participant", now=now)
+    await repository.join(reservation.id, subject="participant", display_name="Joiner", ranks=[], now=now)
 
     with pytest.raises(ReservationStateError, match="참가자가 있는 예약"):
         await repository.update(reservation.id, "owner", now, memo="too late")
@@ -288,7 +288,7 @@ async def test_a_deleted_comment_is_kept_but_stops_being_listed(repository):
     """Soft delete: the listing is ordered by creation and people quote each other."""
     reservation = await _create_open_reservation(repository)
     comment = await repository.add_comment(
-        reservation.id, author="Author", body="곧 갑니다", author_token_hash="author",
+        reservation.id, author="Author", body="곧 갑니다", author_subject="author",
     )
 
     await repository.delete_comment(reservation.id, comment.id, "author", datetime.now(timezone.utc))
@@ -304,10 +304,10 @@ async def test_a_comment_id_from_another_reservation_is_not_found(repository):
     mine = await _create_open_reservation(repository)
     theirs = await repository.create(
         start_at=datetime.now(timezone.utc) + timedelta(hours=2), host_display_name="Other",
-        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_token_hash="other",
+        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_subject="other",
     )
     comment = await repository.add_comment(
-        theirs.id, author="Author", body="여기요", author_token_hash="author",
+        theirs.id, author="Author", body="여기요", author_subject="author",
     )
 
     with pytest.raises(ReservationNotFoundError):
@@ -321,10 +321,42 @@ async def test_cancelling_a_reservation_takes_its_comments_with_it(repository):
     """The rows go with the parent row --- the FK is ON DELETE CASCADE."""
     reservation = await _create_open_reservation(repository)
     await repository.add_comment(
-        reservation.id, author="Author", body="갑니다", author_token_hash="author",
+        reservation.id, author="Author", body="갑니다", author_subject="author",
     )
 
     async with get_session_factory()() as session, session.begin():
         await session.execute(delete(ReservationRow).where(ReservationRow.id == reservation.id))
 
     assert await repository.list_comments(reservation.id) == []
+
+
+@pytest.mark.asyncio
+async def test_the_host_cannot_take_a_seat_in_their_own_reservation(repository):
+    reservation = await _create_open_reservation(repository, capacity=2)
+
+    with pytest.raises(ReservationStateError, match="내가 만든 예약"):
+        await repository.join(reservation.id, subject="owner", display_name="Host", ranks=[], now=datetime.now(timezone.utc))
+
+
+@pytest.mark.asyncio
+async def test_an_account_cannot_hold_two_live_seats(repository):
+    reservation = await _create_open_reservation(repository, capacity=3)
+    now = datetime.now(timezone.utc)
+    await repository.join(reservation.id, subject="joiner", display_name="Joiner", ranks=[], now=now)
+
+    with pytest.raises(ReservationStateError, match="이미 참가한"):
+        await repository.join(reservation.id, subject="joiner", display_name="Joiner", ranks=[], now=now)
+
+    assert (await repository.get(reservation.id)).participant_count == 1
+
+
+@pytest.mark.asyncio
+async def test_a_row_from_before_login_has_no_owner(repository):
+    """host_subject is null on legacy rows; null must never equal anyone."""
+    reservation = await _create_open_reservation(repository)
+    async with get_session_factory()() as session, session.begin():
+        row = await session.get(ReservationRow, reservation.id)
+        row.host_subject = None
+
+    with pytest.raises(ReservationAccessError):
+        await repository.cancel(reservation.id, "owner", datetime.now(timezone.utc))
