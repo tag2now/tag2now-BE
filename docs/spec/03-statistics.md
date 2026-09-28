@@ -2,24 +2,10 @@
 
 ## 수집
 
-관측 데이터는 **서로 독립적인 두 경로**로 쌓인다. 하나가 죽어도 다른 하나가 남는다.
+관측 데이터는 **수집기 하나**로만 쌓인다. HTTP 요청은 아무것도 기록하지 않으므로,
+사이트를 보는 사람이 없어도 통계는 같은 간격으로 쌓인다.
 
-### (a) 이벤트 버스 — 요청에 편승
-
-```
-matching.service._fetch_rooms_all()
-  → publish(ActivitySnapshot(rooms))
-    → history.event_handlers._handle_activity_snapshot()
-      → history.service.record_snapshot()
-```
-
-`/rooms/all`이 **캐시 미스로 실제 조회**될 때만 발행된다. 즉 방문자가 있을 때의 관측이다.
-
-핸들러는 인원 2명인 랭크 방(= 대전 성사)만 골라내고, 그중 **직전 관측에 없던 방(신규)** 만 기록한다.
-같은 대전이 폴링마다 중복 적재되는 것을 막기 위해 `_prev_gaming_room_ids`를 모듈 상태로 들고 비교한다.
-핸들러 예외는 로깅만 하고 발행자에게 전파하지 않는다(통계 실패가 방 목록을 깨지 않는다).
-
-### (b) 수집기 — 자체 클럭
+### 수집기 — 자체 클럭
 
 `history/collector.py`가 lifespan에서 백그라운드 asyncio 태스크로 뜬다.
 `match_history_collection_interval_seconds`(기본 30s)마다:
@@ -27,9 +13,21 @@ matching.service._fetch_rooms_all()
 1. `matching.service.collect_activity_observation()` — HTTP 응답 캐시를 **우회**해 RPCN에서 직접 조회
 2. 랭크 방(인원 1명 이상) 참가자 npid 집합을 `record_daily_matched_players()`로 기록
 3. 전체/랭크의 인원 수·방 수를 `record_activity_snapshot()`으로 기록
+4. 인원 2명인 랭크 방(= 대전 성사) 중 **직전 사이클에 없던 방(신규)** 만 `record_snapshot()`으로 기록
 
 수집은 방문자 유무와 무관하게 돌아야 하므로 응답 캐시를 타지 않는다.
 한 사이클이 실패해도 로깅 후 건너뛴다. 루프는 절대 죽지 않는다.
+
+### 대전 중복 방지
+
+같은 대전이 사이클마다 다시 적재되지 않도록 두 겹으로 막는다.
+
+- **메모리 diff** — 직전 사이클의 대전 방 id를 `_prev_rank_match_ids`로 들고 신규만 쓴다.
+  쓰기가 커밋된 뒤에만 갱신하므로, 쓰기가 실패한 대전은 다음 사이클에 다시 시도된다.
+- **유니크 키** — `(room_id, user1_npid, user2_npid, match_date)`.
+  재시작으로 메모리 diff가 비었을 때 다시 관측되는 진행 중 대전을 걸러낸다.
+
+관측 간격이 30초이므로, 인원 2명 상태가 30초보다 짧게 끝난 방은 놓칠 수 있다.
 
 ## 저장 스키마 (PostgreSQL)
 

@@ -33,22 +33,20 @@ def test_get_server_world_tree_cache_hit(mock_game_repo, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_rooms_all_publishes_activity_snapshot(mock_cache, mock_game_repo, monkeypatch):
+async def test_get_rooms_all_groups_rooms_and_merges_matchmaking_phantoms(mock_cache, mock_game_repo, monkeypatch):
+    from matching.models import Rank, RoomInfoDTO
     from matching.service import get_rooms_all
-    from matching.models import RoomInfoDTO
     monkeypatch.setattr("matching.service.get_server_world_tree", lambda com_id: {"1": [10]})
-    from matching.models import Rank
-    room = RoomInfoDTO.phantom("p1", "P1", RoomType.RANK_MATCH, Rank(id=1))
-    mock_game_repo.search_rooms_all.return_value = [room]
-
-    published = []
-    monkeypatch.setattr("matching.service.publish", lambda e: published.append(e))
-    monkeypatch.setattr("matching.service.update_and_get_matchmaking", lambda rooms: [])
+    ranked = RoomInfoDTO.phantom("ranked", "Ranked", RoomType.RANK_MATCH, Rank(id=5))
+    casual = RoomInfoDTO.phantom("casual", "Casual", RoomType.PLAYER_MATCH, None)
+    searching = RoomInfoDTO.phantom("searching", "Searching", RoomType.RANK_MATCH, Rank(id=2))
+    mock_game_repo.search_rooms_all.return_value = [ranked, casual]
+    monkeypatch.setattr("matching.service.update_and_get_matchmaking", lambda rooms: [searching])
 
     result = await get_rooms_all("NPWR02973_00")
-    assert len(published) == 1
-    from matching.events import ActivitySnapshot
-    assert isinstance(published[0], ActivitySnapshot)
+
+    assert [r["owner_npid"] for r in result["player_match"]] == ["casual"]
+    assert [r["owner_npid"] for r in result["rank_match"]] == ["searching", "ranked"]
 
 
 @pytest.mark.asyncio
@@ -76,6 +74,7 @@ async def test_collect_activity_observation_bypasses_http_cache(mock_game_repo, 
     assert observation.rank_player_npids == {"solo", "first", "second"}
     assert (observation.total_players, observation.total_rooms) == (4, 4)
     assert (observation.rank_players, observation.rank_rooms) == (3, 2)
+    assert observation.rank_matches == [full_ranked]
     mock_game_repo.search_rooms_all.assert_called_once_with("NPWR02973_00", [10])
 
 

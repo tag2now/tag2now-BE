@@ -143,6 +143,8 @@ class ActivityObservation:
 	total_rooms: int
 	rank_players: int
 	rank_rooms: int
+	# Two-member rank rooms: matches in progress at the moment of observation.
+	rank_matches: list["RoomInfoDTO"]
 
 
 @dataclass

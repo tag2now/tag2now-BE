@@ -237,18 +237,9 @@ without touching `db.py`.
 
 ### Event bus
 
-`shared/events.py` is a minimal in-process pub/sub used to decouple modules. Handlers register with `subscribe(EventType, handler)`; producers call `publish(event)`. Async handlers are scheduled as tasks; handler exceptions are logged, never propagated to the publisher.
+`shared/events.py` is a minimal in-process pub/sub. Handlers register with `subscribe(EventType, handler)`; producers call `publish(event)`. Async handlers are scheduled as tasks; handler exceptions are logged, never propagated to the publisher.
 
-This is how `history` observes `matching` without `matching` importing `history`:
-
-```
-matching.service._fetch_rooms_all()
-  → publish(ActivitySnapshot(rooms))
-    → history.event_handlers._handle_activity_snapshot()
-      → history.service.record_snapshot()
-```
-
-Event types live in `matching/events.py`: `MatchmakingDetected`, `MatchmakingResolved`, `ActivitySnapshot`. Handlers are registered in `history/db.py:init_history_repo()` via `subscribe_events()`.
+The only events are `MatchmakingDetected` and `MatchmakingResolved` in `matching/events.py`, published by the matchmaking tracker. **Nothing subscribes to them.** History no longer listens to the bus: it pulls from `matching` through the collector below.
 
 ### Caching
 
@@ -288,13 +279,25 @@ The tracker holds module-level state (`_prev_rooms`, `_matchmaking_players`) —
 `history/collector.py` runs as a background asyncio task started in `lifespan`
 and cancelled before the database closes. Every
 `match_history_collection_interval_seconds` (default 30) it calls
-`matching.service.collect_completed_rank_player_ids()` and records the result
-via `history.service.record_daily_matched_players()`. A failed cycle is logged
-and skipped — the loop is never allowed to die on one bad poll.
+`matching.service.collect_activity_observation()`, which reads RPCN directly and
+bypasses the `/rooms/all` response cache, then records three things:
 
-This is a second, independent path from the event bus below: the bus reacts to
-whatever `_fetch_rooms_all()` happens to observe, while the collector polls on
-its own clock.
+1. ranked-room participants — `record_daily_matched_players()`
+2. player and room counts — `record_activity_snapshot()`
+3. rank matches that were not in progress on the previous cycle — `record_snapshot()`
+
+A failed cycle is logged and skipped — the loop is never allowed to die on one
+bad poll.
+
+**This is the only writer of history.** Nothing is recorded from HTTP traffic,
+so statistics do not depend on anyone having the site open.
+
+A rank match is a two-member `RANK_MATCH` room. The collector keeps the room ids
+of the previous cycle in `_prev_rank_match_ids` and writes only the new ones;
+the set advances after the write commits, so a failed write is retried next
+cycle. A restart empties it, and the unique key
+`(room_id, user1_npid, user2_npid, match_date)` on `rank_match_snapshots`
+absorbs the matches then seen again.
 
 ### RPCN client lifecycle
 

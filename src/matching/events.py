@@ -1,8 +1,8 @@
 """Domain event types for the matching module."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from matching.models import RoomInfoDTO, RoomType
+from matching.models import RoomType
 
 
 @dataclass
@@ -19,9 +19,3 @@ class MatchmakingResolved:
 	npid: str
 	reason: str  # "found_opponent" | "rejoined_room" | "expired"
 	timestamp: float
-
-
-@dataclass
-class ActivitySnapshot:
-	"""A room snapshot was taken — contains all room DTOs for consumers."""
-	rooms: list[RoomInfoDTO] = field(default_factory=list)

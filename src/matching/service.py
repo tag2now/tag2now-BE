@@ -6,9 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi.encoders import jsonable_encoder
 
-from matching.events import ActivitySnapshot
 from shared.cache import cache_get, cache_set
-from shared.events import publish
 from shared.settings import get_settings
 from matching.db import get_game_server_repo
 from matching.matchmaking_tracker import update_and_get_matchmaking
@@ -71,7 +69,7 @@ def _fetch_rooms_all(com_id: str):
 	phantom_rooms = update_and_get_matchmaking(all_room_dtos)
 	grouped[RoomType.RANK_MATCH.value].extend(phantom_rooms)
 	grouped[RoomType.RANK_MATCH.value].sort(key=lambda r: r.rank_info.id if r.rank_info else -1)
-	return grouped, all_room_dtos
+	return grouped
 
 
 def _fetch_activity_observation(com_id: str) -> ActivityObservation:
@@ -92,6 +90,7 @@ def _fetch_activity_observation(com_id: str) -> ActivityObservation:
 		},
 		total_players=sum(len(room.users) for room in rooms), total_rooms=len(rooms),
 		rank_players=sum(len(room.users) for room in rank_rooms), rank_rooms=len(rank_rooms),
+		rank_matches=[room for room in rank_rooms if room.current_members == 2],
 	)
 
 
@@ -106,11 +105,7 @@ async def get_rooms_all(com_id: str) -> dict:
 	if cached := cache_get(key):
 		return cached
 
-	result, all_room_dtos = await asyncio.to_thread(_fetch_rooms_all, com_id)
-
-	# Publish snapshot event for history and other consumers
-	publish(ActivitySnapshot(rooms=all_room_dtos))
-
+	result = await asyncio.to_thread(_fetch_rooms_all, com_id)
 	encoded = jsonable_encoder(result)
 	cache_set(key, encoded, get_settings().cache_ttl_rooms_all)
 	return encoded

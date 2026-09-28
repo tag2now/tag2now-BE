@@ -7,6 +7,13 @@ import pytest
 
 from history.models import RankMatchSnapshotRecord
 from history.ports import HistoryPort
+import history.collector as collector_mod
+
+
+@pytest.fixture(autouse=True)
+def reset_rank_match_diff():
+    yield
+    collector_mod._prev_rank_match_ids = set()
 
 
 @pytest.fixture

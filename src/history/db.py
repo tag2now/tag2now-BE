@@ -17,11 +17,6 @@ def _create_repo() -> HistoryPort:
 async def init_history_repo() -> None:
 	global _repo
 	_repo = _create_repo()
-
-	# Subscribe to matching events
-	from history.event_handlers import subscribe_events
-	subscribe_events()
-
 	logger.info("History repository ready")
 
 
