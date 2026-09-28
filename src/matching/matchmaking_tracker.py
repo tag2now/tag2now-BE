@@ -11,8 +11,6 @@ from dataclasses import dataclass
 
 from rpcn_client import UserInfo
 from shared.settings import get_settings
-from matching.events import MatchmakingDetected, MatchmakingResolved
-from shared.events import publish
 from matching.models import Rank, RoomInfoDTO, RoomType
 
 
@@ -29,9 +27,6 @@ class _SnapshotRoom:
 	room_type: str
 	rank_info: Rank | None
 	users: list[UserInfo]
-
-	def is_gaming(self) -> bool:
-		return self.room_type == RoomType.RANK_MATCH and self.current_members == 2
 
 @dataclass
 class _MatchmakingPlayer:
@@ -92,15 +87,11 @@ def update_and_get_matchmaking(current_rooms: list[RoomInfoDTO]) -> list[RoomInf
 				last_seen=now,
 				first_searching=existing.first_searching if existing else now,
 			)
-			if not existing:
-				publish(MatchmakingDetected(npid=user.npid, room_type=RoomType.RANK_MATCH, timestamp=now))
 
+	# A player seen in any room again, in a match or not, is no longer searching
 	for room in current.values():
 		for user in room.users:
-			if user.npid in list(_matchmaking_players):
-				_matchmaking_players.pop(user.npid)
-				reason = "found_opponent" if room.is_gaming() else "rejoined_room"
-				publish(MatchmakingResolved(npid=user.npid, reason=reason, timestamp=now))
+			_matchmaking_players.pop(user.npid, None)
 
 	# Evict stale entries
 	ttl = get_settings().matchmaking_ttl
@@ -108,7 +99,6 @@ def update_and_get_matchmaking(current_rooms: list[RoomInfoDTO]) -> list[RoomInf
 		mp = _matchmaking_players[npid]
 		if now - mp.last_seen > ttl:
 			del _matchmaking_players[npid]
-			publish(MatchmakingResolved(npid=npid, reason="expired", timestamp=now))
 
 	_prev_rooms = current
 

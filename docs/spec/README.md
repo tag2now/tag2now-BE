@@ -32,7 +32,7 @@ RPCS3 유저 ──▶ RPCN 서버 (바이너리 프로토콜, TLS)
               │ tag2now-BE (FastAPI)               │
               │  auth / matching / history /       │
               │  community / reservation           │
-              │  + shared(cache, events)           │
+              │  + shared(cache, database)         │
               └─────┬───────────────┬──────────────┘
                     │               │
              Redis(캐시)      PostgreSQL(이력·게시판·예약)
@@ -41,7 +41,7 @@ RPCS3 유저 ──▶ RPCN 서버 (바이너리 프로토콜, TLS)
 ```
 
 - 백엔드 도메인 모듈은 헥사고날 구조(`ports.py` / `adapters/` / `service.py` / `router.py`)를 따른다.
-- 모듈 간 결합은 인프로세스 이벤트 버스(`shared/events.py`)로 끊는다. `matching` → `history` 방향의 스냅샷 전달이 유일한 사용처다.
+- `history`는 이력을 `matching`에서 직접 가져온다. 수집기(`history/collector.py`)가 30초마다 RPCN을 조회하며, HTTP 요청이 이력을 쓰는 경로는 없다.
 - 프로덕션은 AWS Lightsail 단일 인스턴스의 docker compose(`fe`, `be`, `redis`, `postgres`, `dynamodb-local`)다. 단일 프로세스를 전제로 한 모듈 레벨 상태(매치메이킹 트래커, RPCN 클라이언트 싱글턴)가 있으므로 수평 확장은 현재 불가하다.
 
 ## 기능 한눈에 보기

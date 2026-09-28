@@ -190,7 +190,7 @@ Six modules under `src/` --- five domains plus `auth/` --- a `shared/` layer and
 | `community/` | Message board — posts, comments, thumbs |
 | `reservation/` | Appointments — create, join, edit, cancel |
 | `auth/` | RPCN account login; stateless bearer tokens other routers depend on |
-| `shared/` | Settings, cache, database, event bus, exceptions |
+| `shared/` | Settings, cache, database, exceptions |
 | `rpcn_client/` | Standalone RPCN protocol client (no FastAPI dependency) |
 
 ### Authentication
@@ -234,12 +234,6 @@ module unless you want the injection seam that makes the service testable
 without touching `db.py`.
 
 `community/db.py` selects its adapter at runtime from the `db_type` setting (`postgresql` or `dynamodb`), importing the adapter lazily inside the branch. The `db_type` setting is marked for removal in the source.
-
-### Event bus
-
-`shared/events.py` is a minimal in-process pub/sub. Handlers register with `subscribe(EventType, handler)`; producers call `publish(event)`. Async handlers are scheduled as tasks; handler exceptions are logged, never propagated to the publisher.
-
-The only events are `MatchmakingDetected` and `MatchmakingResolved` in `matching/events.py`, published by the matchmaking tracker. **Nothing subscribes to them.** History no longer listens to the bus: it pulls from `matching` through the collector below.
 
 ### Caching
 

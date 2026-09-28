@@ -38,9 +38,8 @@ RPCN은 "매칭 검색 중" 상태를 노출하지 않는다. TTT2 클라이언�
 
 | 규칙 | 동작 |
 |------|------|
-| 직전 스냅샷에 있던 `RANK_MATCH` 방이 사라짐 (인원 2명이 아님) | 방장을 "검색 중"으로 등록, `MatchmakingDetected` 발행 |
-| 인원 2명인 랭크 방은 대전 중(`is_gaming`) | 검색 중으로 보지 않음 |
-| 다시 실제 방에 등장 | 검색 목록에서 제거, `MatchmakingResolved` 발행 |
+| 직전 스냅샷에 있던 `RANK_MATCH` 방이 사라짐 (1인·2인 모두) | 방 안의 모든 유저를 "검색 중"으로 등록 |
+| 다시 실제 방에 등장 (대전 중인 2인 방 포함) | 검색 목록에서 제거 |
 | `matchmaking_ttl`(기본 60s) 동안 재등장 없음 | 만료 제거 |
 
 검색 중인 플레이어는 `RoomInfoDTO.phantom()`으로 만든 가짜 방(`room_id=0`, `current_members=1`, `max_slots=2`)으로
