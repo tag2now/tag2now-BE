@@ -264,9 +264,17 @@ Routers own cache invalidation on writes (see `community/router.py:_invalidate_p
 
 ### Matchmaking detection
 
-`matching/matchmaking_tracker.py` infers who is searching for a match, since RPCN exposes no such state. Players cycling through the TTT2 matchmaking loop (`searchRoom → createRoom → wait → quit`) are only visible while their solo room exists. Consecutive room snapshots are diffed: a player whose `RANK_MATCH` room disappeared is presumed to be searching, and is surfaced as a **phantom room** — built by the `RoomInfoDTO.phantom()` classmethod — merged into the rank-match group. Entries expire after `matchmaking_ttl` seconds.
+`matching/matchmaking_tracker.py` infers matchmaking players RPCN cannot show. A player in the TTT2 matchmaking loop (`searchRoom → createRoom → wait → quit`) is in one of three states — the terms are the owner's, use them exactly:
 
-The tracker holds module-level state (`_prev_rooms`, `_matchmaking_players`) — it is stateful across requests and not safe to run in multiple processes without coordination.
+| State | Meaning | In `search_rooms` |
+|-------|---------|-------------------|
+| **hosting** | waiting in their own solo `RANK_MATCH` room (`createRoom`) | visible |
+| **searching** | browsing other rooms with none of their own (`searchRoom`) | invisible |
+| **in match** | in a two-member `RANK_MATCH` room | visible |
+
+Consecutive snapshots are diffed: everyone in a `RANK_MATCH` room that disappeared, hosting or in match, is presumed searching until they appear in a real room again or `matchmaking_ttl` passes. Each searching player is surfaced as a **phantom room** — built by `RoomInfoDTO.phantom()` and merged into the rank-match group. A phantom is how a searching player is shown, not a state of its own.
+
+The tracker holds module-level state (`_prev_rooms`, `_searching_players`) — it is stateful across requests and not safe to run in multiple processes without coordination.
 
 ### Match-history collector
 

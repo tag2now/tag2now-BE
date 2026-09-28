@@ -4,7 +4,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from matching.models import Rank, RoomInfoDTO, RoomType
 import matching.matchmaking_tracker as tracker_mod
 
 
@@ -12,14 +11,7 @@ import matching.matchmaking_tracker as tracker_mod
 def reset_matchmaking_state():
     yield
     tracker_mod._prev_rooms = None
-    tracker_mod._matchmaking_players = {}
-
-
-@pytest.fixture
-def make_phantom_room():
-    def _factory(npid="player1", name="Player1", room_type=RoomType.RANK_MATCH, rank_info=None):
-        return RoomInfoDTO.phantom(npid, name, room_type, rank_info)
-    return _factory
+    tracker_mod._searching_players = {}
 
 
 @pytest.fixture

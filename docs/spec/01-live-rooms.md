@@ -30,22 +30,33 @@ RPCN에 현재 존재하는 TTT2 방을 모아 "지금 누가 무슨 매치를 �
 
 ## 매치메이킹 감지 (팬텀 룸)
 
-RPCN은 "매칭 검색 중" 상태를 노출하지 않는다. TTT2 클라이언트는
-`searchRoom → createRoom → 대기 → quit` 루프를 돌기 때문에, 검색 중인 플레이어는
-자기 방이 존재하는 짧은 순간에만 보인다.
+TTT2 클라이언트는 매칭(matchmaking) 동안 `searchRoom → createRoom → 대기 → quit` 루프를 돌며,
+플레이어는 다음 세 상태를 오간다.
 
-`matching/matchmaking_tracker.py`가 연속 스냅샷을 diff해서 이를 추론한다.
+| 상태 | 뜻 | `search_rooms`에 |
+|------|----|------------------|
+| **hosting** (방 대기) | `createRoom`으로 만든 자기 1인 랭크 방에서 상대를 기다림 | 보임 |
+| **searching** (방 탐색) | 자기 방 없이 `searchRoom`으로 남의 방을 찾음 | 안 보임 |
+| **in match** (대전 중) | 2인 랭크 방 | 보임 |
 
-| 규칙 | 동작 |
+RPCN은 방만 나열하므로 searching 플레이어는 목록에서 사라진다.
+`matching/matchmaking_tracker.py`가 연속 스냅샷을 diff해서 이들을 추론한다.
+
+| 관측 | 전이 |
 |------|------|
-| 직전 스냅샷에 있던 `RANK_MATCH` 방이 사라짐 (1인·2인 모두) | 방 안의 모든 유저를 "검색 중"으로 등록 |
-| 다시 실제 방에 등장 (대전 중인 2인 방 포함) | 검색 목록에서 제거 |
-| `matchmaking_ttl`(기본 60s) 동안 재등장 없음 | 만료 제거 |
+| 직전 스냅샷에 있던 `RANK_MATCH` 1인 방이 사라짐 | 방장: hosting → searching |
+| 직전 스냅샷에 있던 `RANK_MATCH` 2인 방이 사라짐 | 두 사람: in match → searching |
+| searching 플레이어가 자기 1인 방에 보임 | searching → hosting |
+| searching 플레이어가 2인 방에 보임 | searching → in match |
+| `matchmaking_ttl`(기본 60s) 동안 어떤 방에도 안 보임 | 루프를 떠난 것으로 보고 제거 |
 
-검색 중인 플레이어는 `RoomInfoDTO.phantom()`으로 만든 가짜 방(`room_id=0`, `current_members=1`, `max_slots=2`)으로
-랭크 매치 그룹에 합쳐져 노출된다.
+플레이어 매치 방이 사라지는 것은 매칭과 무관하므로 무시한다.
+방이 하나도 없는 스냅샷도 정상 관측으로 취급한다. 첫 스냅샷만 비교 기준이 없어 아무것도 추론하지 않는다.
 
-**제약**: 트래커는 모듈 레벨 상태(`_prev_rooms`, `_matchmaking_players`)를 들고 있다.
+searching 플레이어는 `RoomInfoDTO.phantom()`으로 만든 **phantom 방**(`room_id=0`, `current_members=1`, `max_slots=2`,
+마지막으로 있던 방의 계급)으로 랭크 매치 그룹에 합쳐져 노출된다. phantom은 상태가 아니라 searching 플레이어를 보여 주는 표현이다.
+
+**제약**: 트래커는 모듈 레벨 상태(`_prev_rooms`, `_searching_players`)를 들고 있다.
 프로세스가 여러 개면 스냅샷이 갈라져 감지가 어긋난다. 현재 단일 프로세스 배포가 전제 조건이다.
 
 ## 화면 (FE)

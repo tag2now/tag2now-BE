@@ -41,7 +41,7 @@ async def test_get_rooms_all_groups_rooms_and_merges_matchmaking_phantoms(mock_c
     casual = RoomInfoDTO.phantom("casual", "Casual", RoomType.PLAYER_MATCH, None)
     searching = RoomInfoDTO.phantom("searching", "Searching", RoomType.RANK_MATCH, Rank(id=2))
     mock_game_repo.search_rooms_all.return_value = [ranked, casual]
-    monkeypatch.setattr("matching.service.update_and_get_matchmaking", lambda rooms: [searching])
+    monkeypatch.setattr("matching.service.update_and_get_phantoms", lambda rooms: [searching])
 
     result = await get_rooms_all("NPWR02973_00")
 

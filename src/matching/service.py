@@ -9,7 +9,7 @@ from fastapi.encoders import jsonable_encoder
 from shared.cache import cache_get, cache_set
 from shared.settings import get_settings
 from matching.db import get_game_server_repo
-from matching.matchmaking_tracker import update_and_get_matchmaking
+from matching.matchmaking_tracker import update_and_get_phantoms
 from matching.models import (
 	PlayerLookupResponse,
 	PlayerOnlineStatus,
@@ -66,7 +66,7 @@ def _fetch_rooms_all(com_id: str):
 	grouped = _group_rooms_by_type(rooms)
 
 	all_room_dtos = grouped[RoomType.PLAYER_MATCH.value] + grouped[RoomType.RANK_MATCH.value]
-	phantom_rooms = update_and_get_matchmaking(all_room_dtos)
+	phantom_rooms = update_and_get_phantoms(all_room_dtos)
 	grouped[RoomType.RANK_MATCH.value].extend(phantom_rooms)
 	grouped[RoomType.RANK_MATCH.value].sort(key=lambda r: r.rank_info.id if r.rank_info else -1)
 	return grouped

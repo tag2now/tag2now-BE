@@ -189,7 +189,7 @@ class RoomInfoDTO:
 
 	@classmethod
 	def phantom(cls, owner_npid: str, owner_online_name: str, room_type: RoomType, rank_info: Rank | None):
-		"""Create a phantom room for a matchmaking player not currently in any room."""
+		"""Create a phantom room for a searching player, who has no room of their own to list."""
 		obj = object.__new__(cls)
 		obj.room_id = 0
 		obj.owner_npid = owner_npid
