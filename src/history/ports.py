@@ -16,7 +16,7 @@ class HistoryPort(ABC):
 
 	@abstractmethod
 	async def record_snapshot(self, session: AsyncSession, rooms: list[RankMatchSnapshotRecord]) -> None:
-		"""Persist a room snapshot and update hourly aggregates."""
+		"""Persist newly started rank matches."""
 
 	@abstractmethod
 	async def record_daily_matched_players(self, session: AsyncSession, npids: set[str], observed_at: datetime) -> None:

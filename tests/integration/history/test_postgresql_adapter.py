@@ -86,22 +86,6 @@ async def test_record_snapshot_deduplicates_reobserved_room(adapter, db_session)
 
 
 @pytest.mark.asyncio
-async def test_record_snapshot_upserts_hourly_stats(adapter, db_session):
-    records = [_make_record()]
-    await adapter.record_snapshot(db_session, records)
-    await adapter.record_snapshot(db_session, records)  # second call should upsert
-
-    from history.entities import HourlyStatsRow
-    from sqlalchemy import select
-    rows = (await db_session.execute(select(HourlyStatsRow))).scalars().all()
-    # There should be exactly one row for the current hour key
-    from datetime import datetime, timedelta, timezone
-    expected_key = datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%dT%H")
-    hour_keys = [r.hour_key for r in rows]
-    assert hour_keys.count(expected_key) == 1
-
-
-@pytest.mark.asyncio
 async def test_record_daily_matched_players_deduplicates_per_stat_day(adapter, db_session):
     from datetime import datetime, timezone
     from sqlalchemy import select
@@ -233,6 +217,69 @@ async def test_record_snapshot_empty_list_noop(adapter, db_session):
 async def test_get_hourly_activity_returns_24_hours_from_the_stat_day_start(adapter, db_session):
     result = await adapter.get_hourly_activity(db_session, days=7)
     assert [h.hour for h in result] == list(range(6, 24)) + list(range(6))
+
+
+@pytest.mark.asyncio
+async def test_get_hourly_activity_averages_every_sample_in_the_kst_hour(adapter, db_session):
+    """An idle sample still counts toward its hour, and hours are read on the KST clock."""
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import delete
+    from history.entities import ActivitySnapshotRow
+    from history.models import ActivitySnapshot
+    KST = timezone(timedelta(hours=9))
+
+    # 03:00 KST two days ago --- well inside a 7-day window whatever the time now.
+    three_am = (datetime.now(KST) - timedelta(days=2)).replace(hour=3, minute=0, second=0, microsecond=0)
+    day_before = three_am - timedelta(days=1)
+    await db_session.execute(delete(ActivitySnapshotRow).where(
+        ActivitySnapshotRow.sampled_at >= three_am - timedelta(days=9),
+    ))
+    for sampled_at, players in [
+        (day_before + timedelta(minutes=10), 0),
+        (day_before + timedelta(minutes=40), 4),
+        (three_am + timedelta(minutes=20), 8),
+        (three_am + timedelta(hours=1), 20),
+        (three_am - timedelta(days=8), 99),  # outside the 7-day window
+    ]:
+        await adapter.record_activity_snapshot(db_session, ActivitySnapshot(sampled_at, players, 0, 0, 0))
+
+    by_hour = {h.hour: h for h in await adapter.get_hourly_activity(db_session, days=7)}
+
+    assert (by_hour[3].avg_players, by_hour[3].peak_players) == (4.0, 8)
+    assert (by_hour[4].avg_players, by_hour[4].peak_players) == (20.0, 20)
+    assert (by_hour[5].avg_players, by_hour[5].peak_players) == (0, 0)
+
+
+@pytest.mark.asyncio
+async def test_hourly_peak_matches_the_daily_peak_over_the_same_samples(adapter, db_session):
+    """Both charts read the same samples, so the busiest moment is one number on each."""
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import delete
+    from history.adapters.postgresql import stat_day, stat_day_start
+    from history.entities import ActivitySnapshotRow, DailyMatchedPlayerRow
+    from history.models import ActivitySnapshot
+
+    today = stat_day(datetime.now(timezone.utc))
+    # A retained participant row with no snapshot beside it would add a day
+    # whose peak is None to the daily summary.
+    await db_session.execute(delete(ActivitySnapshotRow).where(
+        ActivitySnapshotRow.sampled_at >= stat_day_start(today - timedelta(days=7)),
+    ))
+    await db_session.execute(delete(DailyMatchedPlayerRow).where(
+        DailyMatchedPlayerRow.date >= today - timedelta(days=7),
+    ))
+    two_days_ago = stat_day_start(today - timedelta(days=2))
+    for sampled_at, players in [
+        (two_days_ago + timedelta(hours=6), 17),
+        (two_days_ago + timedelta(hours=15), 35),
+        (two_days_ago + timedelta(hours=15, minutes=30), 6),
+    ]:
+        await adapter.record_activity_snapshot(db_session, ActivitySnapshot(sampled_at, players, 0, 0, 0))
+
+    hourly = await adapter.get_hourly_activity(db_session, days=7)
+    daily = await adapter.get_daily_summary(db_session, days=7)
+
+    assert max(h.peak_players for h in hourly) == max(d.peak_players for d in daily) == 35
 
 
 @pytest.mark.asyncio

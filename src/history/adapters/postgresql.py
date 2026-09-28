@@ -7,14 +7,12 @@ from sqlalchemy import Date, Integer, case, delete, func, or_, select, text, uni
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from history.entities import ActivitySnapshotRow, DailyMatchedPlayerRow, HourlyStatsRow, RankMatchSnapshotRow
+from history.entities import ActivitySnapshotRow, DailyMatchedPlayerRow, RankMatchSnapshotRow
 from history.models import ActivitySnapshot, CoPlayer, DailySummary, HourlyActivity, PlayerStats, RankMatchSnapshotRecord, TopPlayer
 from history.ports import HistoryPort
 
 logger = logging.getLogger(__name__)
 
-KST = timezone(timedelta(hours=9))
-_HOURLY_RETENTION_DAYS = 90
 _ACTIVITY_RETENTION_DAYS = 90
 
 # A statistics day runs 06:00 KST to 06:00 KST the next day, so a late-night
@@ -29,10 +27,6 @@ STAT_DAY_TZ = timezone(timedelta(hours=9 - STAT_DAY_START_HOUR))
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-def _kst_hour_key() -> str:
-	return datetime.now(KST).strftime("%Y-%m-%dT%H")
-
 
 def stat_day(moment: datetime) -> date:
 	"""The 06:00-KST statistics day a moment belongs to."""
@@ -79,29 +73,6 @@ class PostgresHistoryAdapter(HistoryPort):
 		await session.execute(stmt)
 		await session.flush()
 
-		# Upsert hourly stats
-		hour_key = _kst_hour_key()
-		stmt = pg_insert(HourlyStatsRow).values(
-			hour_key=hour_key,
-			total_players=len(rooms) * 2,
-			total_rooms=len(rooms),
-		)
-		stmt = stmt.on_conflict_do_update(
-			index_elements=["hour_key"],
-			set_={
-				"total_players": func.greatest(HourlyStatsRow.total_players, stmt.excluded.total_players),
-				"total_rooms": func.greatest(HourlyStatsRow.total_rooms, stmt.excluded.total_rooms),
-			},
-		)
-		await session.execute(stmt)
-
-		# Cleanup old hourly aggregates (raw snapshots are kept indefinitely)
-		await session.execute(
-			delete(HourlyStatsRow).where(
-				HourlyStatsRow.captured_at < func.now() - timedelta(days=_HOURLY_RETENTION_DAYS)
-			)
-		)
-
 	async def record_daily_matched_players(
 		self, session: AsyncSession, npids: set[str], observed_at: datetime
 	) -> None:
@@ -131,17 +102,16 @@ class PostgresHistoryAdapter(HistoryPort):
 	# -- Read: global stats --------------------------------------------------
 
 	async def get_hourly_activity(self, session: AsyncSession, days: int = 7) -> list[HourlyActivity]:
-		start_key = (datetime.now(KST) - timedelta(days=days)).strftime("%Y-%m-%dT%H")
-
+		# The collector's samples, the same ones the daily summary reads, so an
+		# hour's peak here and a day's peak there are the same measurement.
 		stmt = (
 			select(
-				func.cast(func.split_part(HourlyStatsRow.hour_key, "T", 2), Integer).label("hour"),
-				func.round(func.avg(HourlyStatsRow.total_players), 1).label("avg_players"),
-				func.max(HourlyStatsRow.total_players).label("peak_players"),
+				func.extract("hour", func.timezone("Asia/Seoul", ActivitySnapshotRow.sampled_at)).cast(Integer).label("hour"),
+				func.round(func.avg(ActivitySnapshotRow.total_players), 1).label("avg_players"),
+				func.max(ActivitySnapshotRow.total_players).label("peak_players"),
 			)
-			.where(HourlyStatsRow.hour_key >= start_key)
+			.where(ActivitySnapshotRow.sampled_at >= func.now() - timedelta(days=days))
 			.group_by("hour")
-			.order_by("hour")
 		)
 
 		result = await session.execute(stmt)
