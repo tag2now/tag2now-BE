@@ -11,7 +11,7 @@ import matching.matchmaking_tracker as tracker_mod
 @pytest.fixture(autouse=True)
 def reset_matchmaking_state():
     yield
-    tracker_mod._prev_rooms = {}
+    tracker_mod._prev_rooms = None
     tracker_mod._matchmaking_players = {}
 
 

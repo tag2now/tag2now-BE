@@ -115,3 +115,11 @@ def test_phantom_rooms_correct_fields(mock_settings):
     assert p.current_members == 1
     assert p.max_slots == 2
     assert p.owner_online_name == "Player1"
+
+
+def test_phantom_survives_a_snapshot_with_no_rooms(mock_settings):
+    """An empty server is a real observation, not a missing baseline."""
+    update_and_get_matchmaking([_make_room(1, "p1")])
+    update_and_get_matchmaking([])
+    phantoms = update_and_get_matchmaking([])
+    assert {p.owner_online_name for p in phantoms} == {"p1"}

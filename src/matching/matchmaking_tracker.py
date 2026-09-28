@@ -38,7 +38,8 @@ class _MatchmakingPlayer:
 	first_searching: float # time.time()
 
 
-_prev_rooms: dict[int, _SnapshotRoom] = {}
+# None until the first snapshot; an empty dict is a real observation of an empty server.
+_prev_rooms: dict[int, _SnapshotRoom] | None = None
 _matchmaking_players: dict[str, _MatchmakingPlayer] = {}  # keyed by npid
 
 
@@ -64,7 +65,7 @@ def update_and_get_matchmaking(current_rooms: list[RoomInfoDTO]) -> list[RoomInf
 		for room in current_rooms
 	}
 
-	if not _prev_rooms:
+	if _prev_rooms is None:
 		_prev_rooms = current
 		return []
 
