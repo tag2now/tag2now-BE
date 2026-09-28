@@ -148,3 +148,54 @@ async def test_lookup_player_aggregates_sources(mock_cache, monkeypatch):
     assert result.npid == "p1"
     assert result.usual_playing_hours_kst == []
     assert result.online_status.is_online is False
+
+
+def _listed_room(room_id, *npids, rank_id):
+    """A room as RPCN lists it. rank_id 0 is a player match."""
+    from types import SimpleNamespace
+    from matching.models import RoomInfoDTO
+    from rpcn_client.models import UserInfo
+
+    return RoomInfoDTO(SimpleNamespace(
+        room_id=room_id, owner_npid=npids[0], owner_online_name=npids[0],
+        current_members=len(npids), max_slots=2,
+        int_attrs={4: SimpleNamespace(value=rank_id)},
+        users=[UserInfo(npid=npid, online_name=npid, avatar_url="") for npid in npids],
+    ))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("npid, in_matchmaking", [
+    ("host", True),       # hosting: own solo rank room
+    ("searcher", True),   # searching: listed only as a phantom room
+    ("guest", True),      # in match: two-member rank room
+    ("casual", False),    # player match is not matchmaking
+    ("nobody", False),
+])
+async def test_lookup_player_reads_matchmaking_from_the_cached_room_list(
+    mock_game_repo, monkeypatch, npid, in_matchmaking,
+):
+    """The cache is filled by get_rooms_all itself, so lookup reads the shape it really stores."""
+    from history.models import PlayerStats
+    from matching.models import Rank, RoomInfoDTO
+    from matching.service import get_rooms_all, lookup_player
+
+    store = {}
+    monkeypatch.setattr("matching.service.cache_get", store.get)
+    monkeypatch.setattr("matching.service.cache_set", lambda key, value, ttl: store.__setitem__(key, value))
+    monkeypatch.setattr("matching.service.get_server_world_tree", lambda com_id: {"1": [10]})
+    mock_game_repo.search_rooms_all.return_value = [
+        _listed_room(1, "host", rank_id=10),
+        _listed_room(2, "owner", "guest", rank_id=10),
+        _listed_room(3, "casual", rank_id=0),
+    ]
+    searcher = RoomInfoDTO.phantom("searcher", "searcher", RoomType.RANK_MATCH, Rank(id=10))
+    monkeypatch.setattr("matching.service.update_and_get_phantoms", lambda rooms: [searcher])
+    never_recorded = PlayerStats(npid=npid, days_active=0, times_seen=0, first_seen=None, last_seen=None)
+    monkeypatch.setattr("history.service.get_player_stats", AsyncMock(return_value=never_recorded))
+
+    await get_rooms_all("NPWR02973_00")
+    result = await lookup_player(npid)
+
+    assert result.online_status.is_matchmaking is in_matchmaking
+    assert result.online_status.is_online is in_matchmaking

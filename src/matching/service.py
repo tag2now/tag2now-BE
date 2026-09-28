@@ -144,21 +144,21 @@ def _find_leaderboard_entry(npid: str) -> TTT2LeaderboardEntry | None:
 	return None
 
 
+def _is_matchmaking(npid: str) -> bool:
+	"""Hosting, searching or in a match: listed in the cached rank-match group.
+
+	Cache-only. Searching players are there as phantom rooms; player matches are not matchmaking.
+	"""
+	rooms = cache_get(f"ttt2:rooms_all:{TTT2_COM_ID}") or {}
+	return any(user["npid"] == npid for room in rooms.get(RoomType.RANK_MATCH.value, []) for user in room["users"])
+
+
 async def lookup_player(npid: str) -> PlayerLookupResponse:
 	"""Look up a player by NPID using cached room/leaderboard data + history."""
 
 	# 1. Online status from cached /rooms/all + last_seen from history
 	from history import service as history_service
-	is_matchmaking = False
-
-	rooms_cached = cache_get(f"ttt2:rooms_all:{TTT2_COM_ID}")
-	if rooms_cached:
-		for room_type_key in ("player_match", "rank_match"):
-			for room in rooms_cached.get(room_type_key, []):
-				members = [u.get("user_id", "") for u in room.get("users", [])]
-				if npid in members:
-					is_matchmaking = True
-					break
+	is_matchmaking = _is_matchmaking(npid)
 
 	player_stats = await history_service.get_player_stats(npid)
 	last_seen = player_stats.last_seen
