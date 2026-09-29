@@ -90,7 +90,7 @@ FastAPI 의존성이 없는 독립 패키지. `python -m rpcn_client`로 단독 
 | 운영 | 인스턴스의 `.env.prod` | 미사용 |
 
 필수(기본값 없음): `rpcn_user`, `rpcn_password`, `rpcn_token`.
-로그인에는 `rpcn_stat_url`, `rpcn_external_api_key`, `jwt_secret`이 추가로 필요하다. 비어 있어도 기동은 되지만 로그인과 쓰기 라우트가 502다([07-auth.md](07-auth.md)).
+로그인에는 `rpcn_api_server_url`, `rpcn_api_server_key`, `jwt_secret`이 추가로 필요하다. 비어 있어도 기동은 되지만 로그인과 쓰기 라우트가 502다([07-auth.md](07-auth.md)).
 env 파일은 이미지에 굽지 않는다 — `env/.env.example`만 추적되고 Dockerfile은 `env/`를 복사하지 않는다.
 
 ## 테스트

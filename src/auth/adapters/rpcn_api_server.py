@@ -1,4 +1,4 @@
-"""RPCN stat server's external user API (rpcn-narco `external/users/verify`).
+"""rpcn-narco API server's external user API (`external/users/verify`).
 
 The endpoint checks the password against RPCN's own account table and returns
 the account; it creates no session on the RPCN side, so verifying never
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 _VERIFY_PATH = "/external/users/verify"
 
 
-class RpcnStatAccountVerifier(AccountVerifier):
+class RpcnApiServerAccountVerifier(AccountVerifier):
     def __init__(self, base_url: str, api_key: str, timeout: float, transport: httpx.AsyncBaseTransport | None = None):
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key

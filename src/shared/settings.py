@@ -45,13 +45,13 @@ class Settings(BaseSettings):
 
     rpcn_metric_enable: bool = False
 
-    # Account login. RPCN's stat server verifies the password; this service only
-    # signs the result. Base URL up to and including StatServerPath, e.g.
-    # http://127.0.0.1:31314/rpcn_stats. Login answers 502 while any of the three is empty.
-    rpcn_stat_url: str = ""
+    # Account login. rpcn-narco's API server verifies the password; this service
+    # only signs the result. Base URL with no path, e.g. http://127.0.0.1:31315.
+    # Login answers 502 while any of the three is empty.
+    rpcn_api_server_url: str = ""
     # SecretStr: app.py logs the settings at startup, and these must not be in it.
-    rpcn_external_api_key: SecretStr = SecretStr("")
-    rpcn_stat_timeout_seconds: float = 5.0
+    rpcn_api_server_key: SecretStr = SecretStr("")
+    rpcn_api_server_timeout_seconds: float = 5.0
     # HS256 key for access tokens; at least 32 bytes. Rotating it signs everyone out.
     jwt_secret: SecretStr = SecretStr("")
     jwt_ttl_seconds: int = 7 * 24 * 3600

@@ -7,7 +7,7 @@ import httpx
 import pytest
 
 from auth import db, service, tokens
-from auth.adapters.rpcn_stat import RpcnStatAccountVerifier
+from auth.adapters.rpcn_api_server import RpcnApiServerAccountVerifier
 from auth.exceptions import AccountBannedError, AuthUnavailableError, InvalidCredentialsError, InvalidTokenError
 from auth.models import AuthUser
 from shared.settings import get_settings
@@ -23,8 +23,8 @@ def _rpcn(status: int = 200, body: dict | None = None, seen: list | None = None)
     return httpx.MockTransport(handler)
 
 
-async def _verifier(transport, base_url="http://rpcn/rpcn_stats", api_key="key") -> RpcnStatAccountVerifier:
-    verifier = RpcnStatAccountVerifier(base_url, api_key, 1.0, transport=transport)
+async def _verifier(transport, base_url="http://rpcn:31315", api_key="key") -> RpcnApiServerAccountVerifier:
+    verifier = RpcnApiServerAccountVerifier(base_url, api_key, 1.0, transport=transport)
     await verifier.init()
     return verifier
 
@@ -56,7 +56,7 @@ async def test_verify_posts_the_credentials_with_the_api_key():
     account = await verifier.verify("alice", "pw")
 
     request = seen[0]
-    assert str(request.url) == "http://rpcn/rpcn_stats/external/users/verify"
+    assert str(request.url) == "http://rpcn:31315/external/users/verify"
     assert request.headers["X-API-Key"] == "key"
     assert json.loads(request.content) == {"username": "alice", "password": "pw"}
     assert account.username == "Alice"  # RPCN's spelling, not the typed one

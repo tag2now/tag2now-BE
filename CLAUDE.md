@@ -170,7 +170,7 @@ Check what yours actually holds before assuming a service is configured.
 Required with no default: `rpcn_user`, `rpcn_password`, `rpcn_token`. Everything
 else has one — `redis_url` defaults to `""`, which selects the dict cache.
 
-Login needs `rpcn_stat_url`, `rpcn_external_api_key` and `jwt_secret` (32+
+Login needs `rpcn_api_server_url`, `rpcn_api_server_key` and `jwt_secret` (32+
 bytes). They default to empty so the app still boots without them, but then
 `/auth/login` and every signed-in route answer 502. The last two are
 `SecretStr`, because `app.py` logs the whole settings object at startup. Tests
@@ -195,8 +195,8 @@ Six modules under `src/` --- five domains plus `auth/` --- a `shared/` layer and
 
 ### Authentication
 
-`auth/` verifies a username and password against RPCN's stat server
-(rpcn-narco's `external/users/verify`, via the `AccountVerifier` port) and signs
+`auth/` verifies a username and password against rpcn-narco's API server
+(`external/users/verify`, via the `AccountVerifier` port) and signs
 the answer as an HS256 JWT. Nothing is stored: no session table, no cache
 entry. Logout is the client discarding the token, and rotating `jwt_secret`
 is the only way to revoke early.

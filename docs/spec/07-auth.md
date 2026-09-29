@@ -9,10 +9,10 @@ RPCS3에서 쓰는 RPCN 아이디와 비밀번호로 로그인한다.
 
 ```
 FE ──POST /auth/login {username, password}──▶ tag2now-BE
-                                                 │ POST {StatServerPath}/external/users/verify
-                                                 │ X-API-Key: RPCN_EXTERNAL_API_KEY
+                                                 │ POST /external/users/verify
+                                                 │ X-API-Key: RPCN_API_SERVER_KEY
                                                  ▼
-                                          RPCN stat server (rpcn-narco)
+                                          rpcn-narco API server
                                                  │ {username, online_name, avatar_url, admin, banned}
 FE ◀──{access_token, expires_in, user}─── tag2now-BE (JWT 서명)
 FE ──Authorization: Bearer <access_token>──▶ 쓰기 API
@@ -91,13 +91,13 @@ FastAPI는 의존성을 body 검증보다 먼저 풀기 때문에, 로그인이 
 
 | 설정 | 설명 |
 |------|------|
-| `RPCN_STAT_URL` | stat server 기준 URL, `StatServerPath`까지 포함 (예: `http://127.0.0.1:31314/rpcn_stats`) |
-| `RPCN_EXTERNAL_API_KEY` | rpcn.cfg의 `ExternalUserApiKey`와 같은 값 |
-| `RPCN_STAT_TIMEOUT_SECONDS` | 기본 5초 |
+| `RPCN_API_SERVER_URL` | rpcn-narco API 서버 기준 URL, 경로 없음 (예: `http://127.0.0.1:31315`) |
+| `RPCN_API_SERVER_KEY` | rpcn.cfg의 `ApiServerApiKey`와 같은 값 |
+| `RPCN_API_SERVER_TIMEOUT_SECONDS` | 기본 5초 |
 | `JWT_SECRET` | HS256 서명 키, 32바이트 이상 |
 | `JWT_TTL_SECONDS` | 기본 604800 (7일) |
 
-stat server는 **평문 HTTP**다. 비밀번호와 API 키가 지나가므로 BE와 같은 호스트의 `127.0.0.1`로 붙거나,
+API 서버는 **평문 HTTP**다. 비밀번호와 API 키가 지나가므로 BE와 같은 호스트의 `127.0.0.1`로 붙거나,
 HTTPS 리버스 프록시를 거쳐야 한다. 인터넷에 그대로 노출된 HTTP 주소를 넣지 않는다.
 
 비밀값 두 개는 `SecretStr`이라 기동 시 설정 덤프 로그에 `**********`로 찍힌다.

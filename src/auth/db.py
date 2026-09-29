@@ -2,7 +2,7 @@
 
 import logging
 
-from auth.adapters.rpcn_stat import RpcnStatAccountVerifier
+from auth.adapters.rpcn_api_server import RpcnApiServerAccountVerifier
 from auth.ports import AccountVerifier
 from shared.settings import get_settings
 
@@ -14,11 +14,11 @@ _verifier: AccountVerifier | None = None
 async def init_auth() -> None:
     global _verifier
     settings = get_settings()
-    if not settings.rpcn_stat_url or not settings.rpcn_external_api_key.get_secret_value() or not settings.jwt_secret.get_secret_value():
+    if not settings.rpcn_api_server_url or not settings.rpcn_api_server_key.get_secret_value() or not settings.jwt_secret.get_secret_value():
         # Everything but login keeps working; login and every signed-in route
         # answer 502 until the settings are filled in.
-        logger.warning("Login is not configured: set RPCN_STAT_URL, RPCN_EXTERNAL_API_KEY and JWT_SECRET")
-    _verifier = RpcnStatAccountVerifier(settings.rpcn_stat_url, settings.rpcn_external_api_key.get_secret_value(), settings.rpcn_stat_timeout_seconds)
+        logger.warning("Login is not configured: set RPCN_API_SERVER_URL, RPCN_API_SERVER_KEY and JWT_SECRET")
+    _verifier = RpcnApiServerAccountVerifier(settings.rpcn_api_server_url, settings.rpcn_api_server_key.get_secret_value(), settings.rpcn_api_server_timeout_seconds)
     await _verifier.init()
 
 
