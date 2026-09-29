@@ -92,7 +92,8 @@ async def get_weekly_top_players(limit: int = 10) -> list[TopPlayer]:
 
 @read_only
 async def _get_weekly_top_players(session: AsyncSession, limit: int) -> list[TopPlayer]:
-	return await get_history_repo().get_weekly_top_players(session, limit)
+	excluded = get_settings().ranking_excluded_npids
+	return await get_history_repo().get_weekly_top_players(session, limit, excluded)
 
 
 # -- Read: per-player stats --------------------------------------------------

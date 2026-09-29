@@ -1,6 +1,7 @@
 """PostgreSQL adapter for the history module using SQLAlchemy ORM."""
 
 import logging
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import Date, Integer, case, delete, func, or_, select, text, union_all
@@ -236,8 +237,12 @@ class PostgresHistoryAdapter(HistoryPort):
 			active_hours=active_hours,
 		)
 
-	async def get_weekly_top_players(self, session: AsyncSession, limit: int = 10) -> list[TopPlayer]:
+	async def get_weekly_top_players(
+		self, session: AsyncSession, limit: int = 10, excluded_npids: Sequence[str] = (),
+	) -> list[TopPlayer]:
 		cutoff = func.now() - timedelta(days=7)
+		# RPCN usernames are unique case-insensitively, so the list is too.
+		excluded = [npid.lower() for npid in excluded_npids]
 
 		user1_q = select(
 			RankMatchSnapshotRow.user1_npid.label("npid"),
@@ -256,6 +261,7 @@ class PostgresHistoryAdapter(HistoryPort):
 				func.max(sub.c.online_name).label("online_name"),
 				func.count().label("match_count"),
 			)
+			.where(func.lower(sub.c.npid).not_in(excluded))
 			.group_by(sub.c.npid)
 			.order_by(func.count().desc())
 			.limit(limit)

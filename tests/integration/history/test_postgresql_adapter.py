@@ -360,3 +360,42 @@ async def test_active_hours_requires_two_distinct_days(adapter, db_session):
     stats = await adapter.get_player_stats(db_session, "hours", days=7)
     assert 21 in stats.active_hours
     assert 15 not in stats.active_hours
+
+
+async def _record_weekly_matches(adapter, db_session):
+    """Two test accounts sparring 100 times, and a regular with 90 matches."""
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone(timedelta(hours=9)))
+    spar = [
+        _make_record(room_id=9300 + i, user1_npid="tester_a", user2_npid="tester_b", created_dt=now - timedelta(minutes=i))
+        for i in range(100)
+    ]
+    regular = [
+        _make_record(room_id=9500 + i, user1_npid="regular", user2_npid=f"guest{i}", created_dt=now - timedelta(minutes=i))
+        for i in range(90)
+    ]
+    await adapter.record_snapshot(db_session, spar + regular)
+
+
+@pytest.mark.asyncio
+async def test_weekly_top_ranks_by_match_count(adapter, db_session):
+    await _record_weekly_matches(adapter, db_session)
+
+    top = await adapter.get_weekly_top_players(db_session, limit=3)
+
+    # The two testers tie, and a tie has no defined order.
+    assert {(p.npid, p.match_count) for p in top[:2]} == {("tester_a", 100), ("tester_b", 100)}
+    assert (top[2].npid, top[2].match_count) == ("regular", 90)
+
+
+@pytest.mark.asyncio
+async def test_weekly_top_skips_excluded_npids_before_the_limit(adapter, db_session):
+    """Excluded accounts leave no gap: the next player moves up into the limit.
+
+    Matched case-insensitively, as RPCN usernames are.
+    """
+    await _record_weekly_matches(adapter, db_session)
+
+    top = await adapter.get_weekly_top_players(db_session, limit=1, excluded_npids=["TESTER_A", "tester_b"])
+
+    assert [p.npid for p in top] == ["regular"]

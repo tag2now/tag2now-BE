@@ -1,6 +1,7 @@
 """Port interface for the history module."""
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,5 +44,7 @@ class HistoryPort(ABC):
 		"""Return aggregated stats for a single player."""
 
 	@abstractmethod
-	async def get_weekly_top_players(self, session: AsyncSession, limit: int = 10) -> list[TopPlayer]:
-		"""Return the top N most frequently seen players in the last 7 days."""
+	async def get_weekly_top_players(
+		self, session: AsyncSession, limit: int = 10, excluded_npids: Sequence[str] = (),
+	) -> list[TopPlayer]:
+		"""Return the top N most frequently seen players in the last 7 days, skipping excluded npids."""
