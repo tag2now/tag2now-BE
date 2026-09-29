@@ -31,6 +31,11 @@ services:
       FAST_API_PROFILE: prod
     env_file:
       - ./.env.prod
+    # rpcn runs on this instance with network_mode: host, so its API server is
+    # on the host, not on this compose network. 127.0.0.1 here is be itself;
+    # RPCN_API_SERVER_URL=http://host.docker.internal:31315 reaches the host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
