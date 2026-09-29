@@ -5,6 +5,7 @@ client discarding it; rotating the secret is the only way to revoke early, and
 it revokes everyone.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -12,6 +13,8 @@ import jwt
 from auth.exceptions import AuthUnavailableError, InvalidTokenError
 from auth.models import AuthUser
 from shared.settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 _ALGORITHM = "HS256"
 _ISSUER = "tag2now"
@@ -22,6 +25,7 @@ _MIN_SECRET_BYTES = 32
 def _secret() -> str:
     secret = get_settings().jwt_secret.get_secret_value()
     if len(secret.encode()) < _MIN_SECRET_BYTES:
+        logger.error("Login is not configured: JWT_SECRET is shorter than %d bytes", _MIN_SECRET_BYTES)
         raise AuthUnavailableError("로그인이 설정되지 않았습니다.")
     return secret
 

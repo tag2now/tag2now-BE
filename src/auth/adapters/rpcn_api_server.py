@@ -39,6 +39,7 @@ class RpcnApiServerAccountVerifier(AccountVerifier):
         if self._client is None:
             raise RuntimeError("RPCN account verifier not initialized")
         if not self._base_url or not self._api_key:
+            logger.error("Login is not configured: RPCN_API_SERVER_URL or RPCN_API_SERVER_KEY is empty")
             raise AuthUnavailableError("로그인이 설정되지 않았습니다.")
         try:
             response = await self._client.post(
