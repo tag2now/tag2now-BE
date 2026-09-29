@@ -49,7 +49,7 @@ async def use_verifier():
 
 # --- RPCN adapter -----------------------------------------------------------
 
-async def test_verify_posts_the_credentials_with_the_api_key():
+async def test_verify_derives_the_typed_password_before_posting_with_the_api_key():
     seen = []
     verifier = await _verifier(_rpcn(seen=seen))
 
@@ -58,7 +58,10 @@ async def test_verify_posts_the_credentials_with_the_api_key():
     request = seen[0]
     assert str(request.url) == "http://rpcn:31315/external/users/verify"
     assert request.headers["X-API-Key"] == "key"
-    assert json.loads(request.content) == {"username": "alice", "password": "pw"}
+    assert json.loads(request.content) == {
+        "username": "alice",
+        "password": "11E34BA86A98ED6A7DEBCA858864FAE02BC9C16AA4D99AAAB116311BDC6BFB01",
+    }
     assert account.username == "Alice"  # RPCN's spelling, not the typed one
     await verifier.close()
 

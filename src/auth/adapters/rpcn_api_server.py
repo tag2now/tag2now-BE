@@ -12,6 +12,7 @@ import httpx
 from auth.exceptions import AuthUnavailableError, InvalidCredentialsError
 from auth.models import VerifiedAccount
 from auth.ports import AccountVerifier
+from shared.rpcn_password import derive_rpcn_password
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class RpcnApiServerAccountVerifier(AccountVerifier):
         try:
             response = await self._client.post(
                 _VERIFY_PATH,
-                json={"username": username, "password": password},
+                json={"username": username, "password": derive_rpcn_password(password)},
                 headers={"X-API-Key": self._api_key},
             )
         except httpx.HTTPError as exc:
