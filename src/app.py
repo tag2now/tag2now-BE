@@ -24,6 +24,8 @@ from fastapi.responses import JSONResponse
 from shared.cache import redis_health_check
 from shared.database import init_database, close_database
 from shared.exceptions import NotFoundError, UnauthorizedError, ForbiddenError, ValidationError, ServiceUnavailableError
+from admin.db import init_admin, close_admin
+from admin.router import router as admin_router
 from auth.db import init_auth, close_auth
 from auth.router import router as auth_router
 from history import init_history_repo, close_history_repo
@@ -54,6 +56,7 @@ except Exception:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_auth()
+    await init_admin()
     await init_database()
     await init_db()
     await init_reservation_db()
@@ -69,6 +72,7 @@ async def lifespan(app: FastAPI):
     await close_reservation_db()
     await close_db()
     await close_database()
+    await close_admin()
     await close_auth()
 
 
@@ -86,6 +90,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(admin_router)
 app.include_router(ttt2_router)
 app.include_router(history_router)
 app.include_router(community_router, prefix="/community", tags=["community"])

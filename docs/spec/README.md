@@ -21,6 +21,7 @@ Tekken Tag Tournament 2(TTT2)의 RPCN 온라인 현황을 보여주는 웹 서�
 | [05-community.md](05-community.md) | 게시판 글·댓글·추천 |
 | [06-cross-cutting.md](06-cross-cutting.md) | 캐시, 에러 응답, 폴링, 배포·릴리스 |
 | [07-auth.md](07-auth.md) | RPCN 계정 로그인, Bearer 토큰 |
+| [08-admin.md](08-admin.md) | 관리자 — RPCN 계정 조회·밴 |
 
 ## 시스템 구성
 
@@ -30,8 +31,8 @@ RPCS3 유저 ──▶ RPCN 서버 (바이너리 프로토콜, TLS)
                     │ rpcn_client (단일 세션, 스레드 락)
               ┌─────┴──────────────────────────────┐
               │ tag2now-BE (FastAPI)               │
-              │  auth / matching / history /       │
-              │  community / reservation           │
+              │  auth / admin / matching /         │
+              │  history / community / reservation │
               │  + shared(cache, database)         │
               └─────┬───────────────┬──────────────┘
                     │               │

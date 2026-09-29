@@ -1,6 +1,92 @@
 {
   "components": {
     "schemas": {
+      "AccountStatusOut": {
+        "properties": {
+          "admin": {
+            "title": "Admin",
+            "type": "boolean"
+          },
+          "avatar_url": {
+            "title": "Avatar Url",
+            "type": "string"
+          },
+          "banned": {
+            "title": "Banned",
+            "type": "boolean"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          },
+          "online": {
+            "title": "Online",
+            "type": "boolean"
+          },
+          "online_name": {
+            "title": "Online Name",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "online_name",
+          "avatar_url",
+          "admin",
+          "banned",
+          "online",
+          "created_at",
+          "last_login_at"
+        ],
+        "title": "AccountStatusOut",
+        "type": "object"
+      },
+      "AdminActionRequest": {
+        "properties": {
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "AdminActionRequest",
+        "type": "object"
+      },
       "AuthUser": {
         "description": "The signed-in user, as recovered from a verified access token.",
         "properties": {
@@ -28,6 +114,29 @@
           "online_name"
         ],
         "title": "AuthUser",
+        "type": "object"
+      },
+      "BanOut": {
+        "properties": {
+          "banned": {
+            "default": true,
+            "title": "Banned",
+            "type": "boolean"
+          },
+          "kicked": {
+            "title": "Kicked",
+            "type": "boolean"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "kicked"
+        ],
+        "title": "BanOut",
         "type": "object"
       },
       "CreatePostRequest": {
@@ -844,6 +953,100 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/admin/users/ban": {
+      "post": {
+        "description": "Ban an RPCN account and disconnect it if it is in-game.\n\nThe ban is RPCN's: RPCS3 and this site's login both refuse the account from\nthen on. A site token it already holds stays valid until it expires.",
+        "operationId": "ban_admin_users_ban_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BanOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ban",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/users/lookup": {
+      "post": {
+        "description": "An RPCN account's standing: role, ban, whether it is in-game now.",
+        "operationId": "lookup_admin_users_lookup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Lookup",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/auth/login": {
       "post": {
         "description": "Verify an RPCN account and issue an access token.\n\nThere is no logout route: the token is stateless, so signing out is the\nclient discarding it.",

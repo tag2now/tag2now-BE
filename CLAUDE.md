@@ -181,7 +181,7 @@ Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leade
 
 ## Architecture
 
-Six modules under `src/` --- five domains plus `auth/` --- a `shared/` layer and the standalone `rpcn_client` package.
+Seven modules under `src/` --- five domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
 
 | Module | Responsibility |
 |--------|----------------|
@@ -190,6 +190,7 @@ Six modules under `src/` --- five domains plus `auth/` --- a `shared/` layer and
 | `community/` | Message board — posts, comments, thumbs |
 | `reservation/` | Appointments — create, join, edit, cancel |
 | `auth/` | RPCN account login; stateless bearer tokens other routers depend on |
+| `admin/` | RPCN account moderation (lookup, ban) through rpcn-narco's admin API |
 | `shared/` | Settings, cache, database, exceptions |
 | `rpcn_client/` | Standalone RPCN protocol client (no FastAPI dependency) |
 
@@ -208,6 +209,18 @@ or `optional_user`, never by reading a header themselves. **Ownership keys on
 `voter` on the board. `online_name` is only ever displayed. Because the
 dependency resolves before the body, a signed-in route answers 401, not 422,
 to an anonymous request with a bad body. Spec: `docs/spec/07-auth.md`.
+
+### Admin
+
+`admin/` forwards to rpcn-narco's `admin/users/info` and `admin/users/ban`,
+which want an admin's **password on every call**. This service holds none, so
+the admin re-enters it per action and it is passed through, derived, never kept.
+`admin.dependencies.admin_user` checks the token's `admin` claim first, but
+that claim can be a token's lifetime old: RPCN re-checks the role each time.
+
+A wrong admin password answers **400, not 401** --- the frontend ends the
+session on any 401 to a signed-in request. A ban does not revoke the target's
+site token; it lapses at expiry. Spec: `docs/spec/08-admin.md`.
 
 ### Hexagonal layering
 
@@ -336,6 +349,7 @@ error array. A new user-facing request field belongs in that map.
 | Prefix | Router |
 |--------|--------|
 | `/auth` | `auth/router.py` — `POST /login`, `GET /me` |
+| `/admin` | `admin/router.py` — `POST /users/lookup`, `POST /users/ban`; admins only |
 | *(none)* | `matching/router.py` — `/servers`, `/rooms/all`, `/leaderboard`, `/players/{npid}` |
 | `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/stats/weekly-top`, `/players/{npid}` |
 | `/community` | `community/router.py` — posts, comments, thumbs |

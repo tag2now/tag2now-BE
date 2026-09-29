@@ -21,8 +21,8 @@ def auth_headers():
     from auth.models import AuthUser
     from auth.tokens import issue_token
 
-    def make(username: str = "tester", online_name: str | None = None) -> dict[str, str]:
-        token, _ = issue_token(AuthUser(username=username, online_name=online_name or username))
+    def make(username: str = "tester", online_name: str | None = None, admin: bool = False) -> dict[str, str]:
+        token, _ = issue_token(AuthUser(username=username, online_name=online_name or username, admin=admin))
         return {"Authorization": f"Bearer {token}"}
 
     return make
