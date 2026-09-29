@@ -1,6 +1,7 @@
 """Login and token handling, with RPCN replaced by an httpx mock transport."""
 
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -93,6 +94,35 @@ async def test_verify_maps_a_network_failure_to_unavailable():
     with pytest.raises(AuthUnavailableError):
         await verifier.verify("alice", "pw")
     await verifier.close()
+
+
+@pytest.fixture
+def logging_enabled():
+    """Two test modules call logging.disable(CRITICAL) at import, silencing
+    every record for the whole run. Through logging.disable, not by setting
+    the level directly: only the function clears the loggers' cached
+    isEnabledFor answers."""
+    previous = logging.root.manager.disable
+    logging.disable(logging.NOTSET)
+    yield
+    logging.disable(previous)
+
+
+async def test_verify_logs_where_it_could_not_reach(caplog, logging_enabled):
+    """The log has to say which address failed, and how, to be acted on."""
+    def unresolvable(request):
+        raise httpx.ConnectError("[Errno -2] Name does not resolve", request=request)
+
+    verifier = await _verifier(httpx.MockTransport(unresolvable), base_url="http://rpcn-api:31315")
+
+    with pytest.raises(AuthUnavailableError):
+        await verifier.verify("alice", "pw")
+    await verifier.close()
+
+    message = caplog.records[-1].getMessage()
+    assert "http://rpcn-api:31315/external/users/verify" in message
+    assert "ConnectError" in message
+    assert "RPCN_API_SERVER_URL" in message
 
 
 async def test_verify_refuses_to_run_unconfigured():

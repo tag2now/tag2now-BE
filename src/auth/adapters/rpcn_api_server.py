@@ -48,7 +48,13 @@ class RpcnApiServerAccountVerifier(AccountVerifier):
                 headers={"X-API-Key": self._api_key},
             )
         except httpx.HTTPError as exc:
-            logger.warning("RPCN account verification unreachable: %s", exc)
+            # The address and the kind of failure, not just the message: a bare
+            # "[Errno -2] Name does not resolve" says a lookup failed without
+            # saying which host, or that the host came from this setting.
+            logger.warning(
+                "RPCN account verification unreachable at %s%s (%s: %s); check RPCN_API_SERVER_URL",
+                self._base_url, _VERIFY_PATH, type(exc).__name__, exc,
+            )
             raise AuthUnavailableError("로그인 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.") from exc
 
         if response.status_code == 401:
