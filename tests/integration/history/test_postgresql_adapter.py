@@ -45,15 +45,20 @@ def _make_record(**overrides):
 
 @pytest.mark.asyncio
 async def test_record_snapshot_inserts_rows(adapter, db_session):
-    records = [_make_record(), _make_record(room_id=101, user1_npid="p3", user2_npid="p4")]
+    records = [
+        _make_record(user1_npid="insert1", user2_npid="insert2"),
+        _make_record(room_id=101, user1_npid="insert3", user2_npid="insert4"),
+    ]
     await adapter.record_snapshot(db_session, records)
 
+    # By npid, not room_id: RPCN hands out small room ids too, so a collected
+    # match can share one with this test.
     from history.entities import RankMatchSnapshotRow
     from sqlalchemy import select
     rows = (await db_session.execute(
-        select(RankMatchSnapshotRow).where(RankMatchSnapshotRow.room_id.in_([100, 101]))
+        select(RankMatchSnapshotRow).where(RankMatchSnapshotRow.user1_npid.in_(["insert1", "insert3"]))
     )).scalars().all()
-    assert len(rows) == 2
+    assert {r.room_id for r in rows} == {100, 101}
 
 
 @pytest.mark.asyncio

@@ -6,9 +6,20 @@ Run `docker compose -f compose.test.yml up -d` before executing these tests.
 
 import os
 
-import pytest
-from rpcn_client import RpcnClient
-from shared.settings import get_settings
+# compose.test.yml's stack, not whatever env/.env.local names: that file is a
+# dev server's config, and sharing its database let the server's collector
+# write live matches under the tests while their TRUNCATEs wiped its posts.
+# Set before get_settings() is first called, which caches for the run; an
+# exported variable, as CI sets, still wins.
+os.environ.setdefault("DB_URL", "127.0.0.1:5433")
+os.environ.setdefault("DB_USER", "tag2now")
+os.environ.setdefault("DB_PASSWORD", "tag2now")
+os.environ.setdefault("DB_NAME", "tag2now")
+os.environ.setdefault("REDIS_URL", "redis://127.0.0.1:6380/0")
+
+import pytest  # noqa: E402
+from rpcn_client import RpcnClient  # noqa: E402
+from shared.settings import get_settings  # noqa: E402
 
 _settings = get_settings()
 HOST = _settings.rpcn_host

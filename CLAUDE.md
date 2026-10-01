@@ -78,6 +78,7 @@ cached value.
 ```bash
 .venv/Scripts/python.exe -m pytest tests/unit/ -v                        # no external services needed
 docker compose -f compose.test.yml up -d --wait                          # Redis + PostgreSQL
+DATABASE_URL=postgresql+psycopg://tag2now:tag2now@127.0.0.1:5433/tag2now .venv/Scripts/python.exe -m alembic upgrade head
 .venv/Scripts/python.exe -m pytest tests/integration/ -v -m "not rpcn"   # 116, services only
 .venv/Scripts/python.exe -m pytest tests/integration/ -v                 # all 129, adds live RPCN
 ```
@@ -85,7 +86,15 @@ docker compose -f compose.test.yml up -d --wait                          # Redis
 - `tests/unit/` — pure logic; no network, no database.
 - `tests/integration/` — requires Redis and PostgreSQL from `compose.test.yml`. `tests/integration/test_rpcn_client.py` and `tests/integration/matching/test_service_integration.py` additionally hit the live RPCN server and need valid `RPCN_*` credentials.
 
-**The `rpcn` marker separates those two.** Both live-RPCN modules carry a
+**The test stack is not the dev stack.** `compose.test.yml` is its own compose
+project (`tag2now-be-test`) on host ports **5433** and **6380**, and
+`tests/integration/conftest.py` points the tests there, overriding
+`env/.env.local`. They once shared `tag2now-be`/5432 with `compose.yml`: a dev
+server's collector wrote live matches into the test database, and the
+community tests' `TRUNCATE` wiped the dev server's posts. Startup creates no
+tables, hence the `alembic` line above, once per fresh container.
+
+**The `rpcn` marker separates the live-RPCN modules from the rest.** Both live-RPCN modules carry a
 module-level `pytestmark = pytest.mark.rpcn`, so `-m "not rpcn"` leaves 116 tests
 that need nothing but the two containers. CI runs exactly that: it cannot hold
 the account (production is logged in as that user around the clock, and two

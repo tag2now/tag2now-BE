@@ -328,10 +328,12 @@ A standalone smoke test against a live server:
 ## Tests
 
 `tests/unit/` runs without external services. `tests/integration/` needs
-PostgreSQL and Redis — `compose.test.yml` provides both:
+PostgreSQL and Redis — `compose.test.yml` provides both, on ports 5433 and 6380
+so they stay apart from a dev stack on the defaults:
 
 ```bash
-docker compose -f compose.test.yml up -d
+docker compose -f compose.test.yml up -d --wait
+DATABASE_URL=postgresql+psycopg://tag2now:tag2now@127.0.0.1:5433/tag2now .venv/Scripts/python.exe -m alembic upgrade head
 .venv/Scripts/python.exe -m pytest tests/ -v
 ```
 
