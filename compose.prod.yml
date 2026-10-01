@@ -55,10 +55,13 @@ services:
       RPCN_API_URL: http://host.docker.internal:31315
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # ec2-user, who owns the saves and the backups on the host. As root, the
+    # backup directories and files it creates would lock the host CLI, which
+    # runs as ec2-user, out of writing next to them.
+    user: "1000:1000"
     # RPCN's data, at the same paths as on the host: the CLI on the host reads
     # back the backup paths this writes into the audit log. They must match
     # rpcn-narco's RPCN_DATA_PATH and the paths in tag2now-save-admin.
-    # Runs as root, like rpcn, which owns the save files.
     volumes:
       - /home/ec2-user/rpcn-data/db:/home/ec2-user/rpcn-data/db
       - /home/ec2-user/rpcn-data/tus_data:/home/ec2-user/rpcn-data/tus_data
