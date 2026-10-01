@@ -1,6 +1,24 @@
 {
   "components": {
     "schemas": {
+      "AccountRankChangeOut": {
+        "properties": {
+          "after": {
+            "title": "After",
+            "type": "integer"
+          },
+          "before": {
+            "title": "Before",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "before",
+          "after"
+        ],
+        "title": "AccountRankChangeOut",
+        "type": "object"
+      },
       "AccountStatusOut": {
         "properties": {
           "admin": {
@@ -87,6 +105,40 @@
         "title": "AdminActionRequest",
         "type": "object"
       },
+      "AuditRecordOut": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "user": {
+            "title": "User",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ts",
+          "user",
+          "action",
+          "username",
+          "details"
+        ],
+        "title": "AuditRecordOut",
+        "type": "object"
+      },
       "AuthUser": {
         "description": "The signed-in user, as recovered from a verified access token.",
         "properties": {
@@ -116,6 +168,59 @@
         "title": "AuthUser",
         "type": "object"
       },
+      "BackupOut": {
+        "properties": {
+          "account_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Rank"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "label",
+          "total",
+          "account_rank"
+        ],
+        "title": "BackupOut",
+        "type": "object"
+      },
+      "BackupsOut": {
+        "properties": {
+          "backups": {
+            "items": {
+              "$ref": "#/components/schemas/BackupOut"
+            },
+            "title": "Backups",
+            "type": "array"
+          }
+        },
+        "required": [
+          "backups"
+        ],
+        "title": "BackupsOut",
+        "type": "object"
+      },
       "BanOut": {
         "properties": {
           "banned": {
@@ -137,6 +242,32 @@
           "kicked"
         ],
         "title": "BanOut",
+        "type": "object"
+      },
+      "CharChangeOut": {
+        "properties": {
+          "after": {
+            "$ref": "#/components/schemas/SlotStateOut"
+          },
+          "before": {
+            "$ref": "#/components/schemas/SlotStateOut"
+          },
+          "character": {
+            "title": "Character",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "character",
+          "before",
+          "after"
+        ],
+        "title": "CharChangeOut",
         "type": "object"
       },
       "CreatePostRequest": {
@@ -226,6 +357,155 @@
           "match_type"
         ],
         "title": "CreateReservationRequest",
+        "type": "object"
+      },
+      "FloorOut": {
+        "properties": {
+          "floor": {
+            "title": "Floor",
+            "type": "integer"
+          },
+          "likely_demoted": {
+            "title": "Likely Demoted",
+            "type": "boolean"
+          },
+          "points_fixed": {
+            "title": "Points Fixed",
+            "type": "integer"
+          },
+          "raised": {
+            "title": "Raised",
+            "type": "integer"
+          },
+          "reached": {
+            "title": "Reached",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reached",
+          "floor",
+          "raised",
+          "points_fixed",
+          "likely_demoted"
+        ],
+        "title": "FloorOut",
+        "type": "object"
+      },
+      "FloorRequest": {
+        "properties": {
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "expect_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expect Sha256"
+          },
+          "fix_points": {
+            "default": false,
+            "title": "Fix Points",
+            "type": "boolean"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "maximum": 42.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "refloor": {
+            "default": false,
+            "title": "Refloor",
+            "type": "boolean"
+          },
+          "username": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "FloorRequest",
+        "type": "object"
+      },
+      "FloorWriteOut": {
+        "properties": {
+          "applied": {
+            "title": "Applied",
+            "type": "boolean"
+          },
+          "changes": {
+            "$ref": "#/components/schemas/SaveChangesOut"
+          },
+          "floor": {
+            "$ref": "#/components/schemas/FloorOut"
+          },
+          "online": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Online"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WriteResultOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "sha256",
+          "online",
+          "changes",
+          "applied",
+          "result",
+          "floor"
+        ],
+        "title": "FloorWriteOut",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -620,6 +900,509 @@
         "title": "ReservationStatus",
         "type": "string"
       },
+      "RestoreRequest": {
+        "properties": {
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "expect_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expect Sha256"
+          },
+          "label": {
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9_-][A-Za-z0-9_.-]*$",
+            "title": "Label",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password",
+          "label"
+        ],
+        "title": "RestoreRequest",
+        "type": "object"
+      },
+      "SaveChangesOut": {
+        "properties": {
+          "account_rank": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AccountRankChangeOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "chars": {
+            "items": {
+              "$ref": "#/components/schemas/CharChangeOut"
+            },
+            "title": "Chars",
+            "type": "array"
+          }
+        },
+        "required": [
+          "account_rank",
+          "chars"
+        ],
+        "title": "SaveChangesOut",
+        "type": "object"
+      },
+      "SaveCharOut": {
+        "properties": {
+          "character": {
+            "title": "Character",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "losses": {
+            "title": "Losses",
+            "type": "integer"
+          },
+          "points": {
+            "title": "Points",
+            "type": "integer"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "rank_name": {
+            "title": "Rank Name",
+            "type": "string"
+          },
+          "streak": {
+            "title": "Streak",
+            "type": "integer"
+          },
+          "tier": {
+            "title": "Tier",
+            "type": "string"
+          },
+          "wins": {
+            "title": "Wins",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "character",
+          "rank",
+          "rank_name",
+          "tier",
+          "points",
+          "streak",
+          "wins",
+          "losses"
+        ],
+        "title": "SaveCharOut",
+        "type": "object"
+      },
+      "SaveLogOut": {
+        "properties": {
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/AuditRecordOut"
+            },
+            "title": "Records",
+            "type": "array"
+          }
+        },
+        "required": [
+          "records"
+        ],
+        "title": "SaveLogOut",
+        "type": "object"
+      },
+      "SaveLogRequest": {
+        "properties": {
+          "n": {
+            "default": 50,
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "N",
+            "type": "integer"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "title": "SaveLogRequest",
+        "type": "object"
+      },
+      "SaveOut": {
+        "properties": {
+          "account_rank": {
+            "title": "Account Rank",
+            "type": "integer"
+          },
+          "chars": {
+            "items": {
+              "$ref": "#/components/schemas/SaveCharOut"
+            },
+            "title": "Chars",
+            "type": "array"
+          },
+          "checksum_ok": {
+            "title": "Checksum Ok",
+            "type": "boolean"
+          },
+          "data_id": {
+            "title": "Data Id",
+            "type": "integer"
+          },
+          "losses": {
+            "title": "Losses",
+            "type": "integer"
+          },
+          "online": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Online"
+          },
+          "progress": {
+            "title": "Progress",
+            "type": "integer"
+          },
+          "saved_at": {
+            "format": "date-time",
+            "title": "Saved At",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          },
+          "wins": {
+            "title": "Wins",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "username",
+          "data_id",
+          "saved_at",
+          "sha256",
+          "checksum_ok",
+          "account_rank",
+          "progress",
+          "total",
+          "wins",
+          "losses",
+          "online",
+          "chars"
+        ],
+        "title": "SaveOut",
+        "type": "object"
+      },
+      "SaveRequest": {
+        "properties": {
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "SaveRequest",
+        "type": "object"
+      },
+      "SaveWriteOut": {
+        "properties": {
+          "applied": {
+            "title": "Applied",
+            "type": "boolean"
+          },
+          "changes": {
+            "$ref": "#/components/schemas/SaveChangesOut"
+          },
+          "online": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Online"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WriteResultOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "sha256",
+          "online",
+          "changes",
+          "applied",
+          "result"
+        ],
+        "title": "SaveWriteOut",
+        "type": "object"
+      },
+      "SetAccountRankRequest": {
+        "properties": {
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "expect_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expect Sha256"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "rank": {
+            "maximum": 42.0,
+            "minimum": 0.0,
+            "title": "Rank",
+            "type": "integer"
+          },
+          "username": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password",
+          "rank"
+        ],
+        "title": "SetAccountRankRequest",
+        "type": "object"
+      },
+      "SetRankRequest": {
+        "properties": {
+          "char": {
+            "anyOf": [
+              {
+                "maximum": 58.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "const": "all",
+                "type": "string"
+              }
+            ],
+            "title": "Char"
+          },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "expect_sha256": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expect Sha256"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "points": {
+            "anyOf": [
+              {
+                "maximum": 65535.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points"
+          },
+          "rank": {
+            "maximum": 42.0,
+            "minimum": 0.0,
+            "title": "Rank",
+            "type": "integer"
+          },
+          "username": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password",
+          "char",
+          "rank"
+        ],
+        "title": "SetRankRequest",
+        "type": "object"
+      },
+      "ShowSaveRequest": {
+        "properties": {
+          "all_chars": {
+            "default": false,
+            "title": "All Chars",
+            "type": "boolean"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "ShowSaveRequest",
+        "type": "object"
+      },
+      "SlotStateOut": {
+        "properties": {
+          "points": {
+            "title": "Points",
+            "type": "integer"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "rank_name": {
+            "title": "Rank Name",
+            "type": "string"
+          },
+          "streak": {
+            "title": "Streak",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rank",
+          "rank_name",
+          "points",
+          "streak"
+        ],
+        "title": "SlotStateOut",
+        "type": "object"
+      },
       "ThumbRequest": {
         "properties": {
           "direction": {
@@ -795,6 +1578,34 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "WriteResultOut": {
+        "properties": {
+          "backup": {
+            "title": "Backup",
+            "type": "string"
+          },
+          "checksum": {
+            "title": "Checksum",
+            "type": "string"
+          },
+          "data_id": {
+            "title": "Data Id",
+            "type": "integer"
+          },
+          "landed": {
+            "title": "Landed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "backup",
+          "checksum",
+          "data_id",
+          "landed"
+        ],
+        "title": "WriteResultOut",
+        "type": "object"
+      },
       "community__models__CommentOut": {
         "properties": {
           "author": {
@@ -953,6 +1764,335 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/admin/saves/backups": {
+      "post": {
+        "description": "The backups of a player's save, oldest first; every write takes one.",
+        "operationId": "list_backups_admin_saves_backups_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Backups",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/saves/floor": {
+      "post": {
+        "description": "Raise every character below the floor to it, with floor points.",
+        "operationId": "floor_admin_saves_floor_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FloorRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FloorWriteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Floor",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/saves/log": {
+      "post": {
+        "description": "Save edits from the site and the command line, most recent last.",
+        "operationId": "read_save_log_admin_saves_log_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveLogRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveLogOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Save Log",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/saves/restore": {
+      "post": {
+        "description": "Put a backup back as the live save; the save it replaces is backed up first.",
+        "operationId": "restore_admin_saves_restore_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveWriteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Restore",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/saves/set-account-rank": {
+      "post": {
+        "description": "The account rank, which the game never lowers.",
+        "operationId": "set_account_rank_admin_saves_set_account_rank_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAccountRankRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveWriteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Account Rank",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/saves/set-rank": {
+      "post": {
+        "description": "One character's rank (and points), or every character's and the account rank.",
+        "operationId": "set_rank_admin_saves_set_rank_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRankRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveWriteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Rank",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/saves/show": {
+      "post": {
+        "description": "A player's TTT2 save: account rank, record and every character's rank.",
+        "operationId": "show_save_admin_saves_show_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShowSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Show Save",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/admin/users/ban": {
       "post": {
         "description": "Ban an RPCN account and disconnect it if it is in-game.\n\nThe ban is RPCN's: RPCS3 and this site's login both refuse the account from\nthen on. A site token it already holds stays valid until it expires.",

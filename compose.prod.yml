@@ -29,6 +29,7 @@ services:
       - "8000:8000"
     environment:
       FAST_API_PROFILE: prod
+      SAVE_ADMIN_URL: http://save-admin:8000
     env_file:
       - ./.env.prod
     # rpcn runs on this instance with network_mode: host, so its API server is
@@ -39,6 +40,29 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  # TTT2 save admin (tag2now-save-admin), which be calls for the admin page.
+  # Released by that repository: it pins SAVE_ADMIN_IMAGE_TAG and restarts only
+  # this service. No published port: only be, on this network, can reach it.
+  save-admin:
+    image: 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com/tag2now/save-admin:${SAVE_ADMIN_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      # The same key be reads from .env.prod as SAVE_ADMIN_KEY.
+      TDT_ADMIN_API_KEY: ${SAVE_ADMIN_KEY}
+      RPCN_STAT_API_KEY: ${RPCN_API_SERVER_KEY}
+      RPCN_API_URL: http://host.docker.internal:31315
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # RPCN's data, at the same paths as on the host: the CLI on the host reads
+    # back the backup paths this writes into the audit log. They must match
+    # rpcn-narco's RPCN_DATA_PATH and the paths in tag2now-save-admin.
+    # Runs as root, like rpcn, which owns the save files.
+    volumes:
+      - /home/ec2-user/rpcn-data/db:/home/ec2-user/rpcn-data/db
+      - /home/ec2-user/rpcn-data/tus_data:/home/ec2-user/rpcn-data/tus_data
+      - /home/ec2-user/backup/tdt:/home/ec2-user/backup/tdt
 
   fe:
     image: 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com/tag2-now/fe:${FE_IMAGE_TAG:-latest}

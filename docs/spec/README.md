@@ -22,6 +22,7 @@ Tekken Tag Tournament 2(TTT2)의 RPCN 온라인 현황을 보여주는 웹 서�
 | [06-cross-cutting.md](06-cross-cutting.md) | 캐시, 에러 응답, 폴링, 배포·릴리스 |
 | [07-auth.md](07-auth.md) | RPCN 계정 로그인, Bearer 토큰 |
 | [08-admin.md](08-admin.md) | 관리자 — RPCN 계정 조회·밴 |
+| [09-save-admin.md](09-save-admin.md) | 관리자 — TTT2 세이브 조회·계급 수정 (tag2now-save-admin) |
 
 ## 시스템 구성
 

@@ -23,7 +23,7 @@ from fastapi.responses import JSONResponse
 
 from shared.cache import redis_health_check
 from shared.database import init_database, close_database
-from shared.exceptions import NotFoundError, UnauthorizedError, ForbiddenError, ValidationError, ServiceUnavailableError
+from shared.exceptions import NotFoundError, UnauthorizedError, ForbiddenError, ValidationError, ConflictError, ServiceUnavailableError
 from admin.db import init_admin, close_admin
 from admin.router import router as admin_router
 from auth.db import init_auth, close_auth
@@ -117,6 +117,11 @@ async def validation_handler(request, exc):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
+@app.exception_handler(ConflictError)
+async def conflict_handler(request, exc):
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
 # Field labels for request-schema violations, so a 422 names the input a user
 # can actually see rather than the wire field. Every field of every *Request
 # model belongs here: a field missing from this map falls through to the
@@ -137,6 +142,16 @@ _FIELD_LABELS = {
     "capacity": "모집 인원",
     "ranks": "보유 계급",
     "memo": "메모",
+    "all_chars": "전체 캐릭터 표시",
+    "n": "개수",
+    "char": "캐릭터",
+    "rank": "계급",
+    "points": "점수",
+    "dry_run": "미리보기",
+    "expect_sha256": "세이브 확인값",
+    "fix_points": "점수 보정",
+    "refloor": "강등 캐릭터 재적용",
+    "label": "백업 이름",
 }
 
 

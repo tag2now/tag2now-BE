@@ -199,7 +199,7 @@ Seven modules under `src/` --- five domains plus `auth/` and `admin/` --- a `sha
 | `community/` | Message board — posts, comments, thumbs |
 | `reservation/` | Appointments — create, join, edit, cancel |
 | `auth/` | RPCN account login; stateless bearer tokens other routers depend on |
-| `admin/` | RPCN account moderation (lookup, ban) through rpcn-narco's admin API |
+| `admin/` | RPCN account moderation (lookup, ban) through rpcn-narco's admin API, and TTT2 save editing through tag2now-save-admin |
 | `shared/` | Settings, cache, database, exceptions |
 | `rpcn_client/` | Standalone RPCN protocol client (no FastAPI dependency) |
 
@@ -230,6 +230,15 @@ that claim can be a token's lifetime old: RPCN re-checks the role each time.
 A wrong admin password answers **400, not 401** --- the frontend ends the
 session on any 401 to a signed-in request. A ban does not revoke the target's
 site token; it lapses at expiry. Spec: `docs/spec/08-admin.md`.
+
+`admin/` also forwards `/admin/saves/*` to the `save-admin` service
+([tag2now-save-admin](https://github.com/tag2now/tag2now-save-admin)), which
+reads and edits TTT2 save files on the RPCN host. It runs in this repo's
+`compose.prod.yml` with no published port, so only `be` reaches it, at
+`SAVE_ADMIN_URL`. Same password-per-action rule. An edit is two calls ---
+`dry_run`, then `expect_sha256` set to the sha256 the preview answered --- and
+an online player is a **409** (`ConflictError`), since the game would overwrite
+the edit. Spec: `docs/spec/09-save-admin.md`.
 
 ### Hexagonal layering
 
@@ -346,6 +355,7 @@ Domain code raises the exceptions in `shared/exceptions.py`; `app.py` registers 
 | `UnauthorizedError` | 401, with `WWW-Authenticate: Bearer` |
 | `ForbiddenError` | 403 |
 | `ValidationError` | 400 |
+| `ConflictError` | 409 |
 | `ServiceUnavailableError` | 502 |
 
 FastAPI's own `RequestValidationError` keeps its 422 but is reshaped by a
@@ -358,7 +368,7 @@ error array. A new user-facing request field belongs in that map.
 | Prefix | Router |
 |--------|--------|
 | `/auth` | `auth/router.py` — `POST /login`, `GET /me` |
-| `/admin` | `admin/router.py` — `POST /users/lookup`, `POST /users/ban`; admins only |
+| `/admin` | `admin/router.py` — `POST /users/lookup`, `POST /users/ban`, `POST /saves/*`; admins only |
 | *(none)* | `matching/router.py` — `/servers`, `/rooms/all`, `/leaderboard`, `/players/{npid}` |
 | `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/stats/weekly-top`, `/players/{npid}` |
 | `/community` | `community/router.py` — posts, comments, thumbs |

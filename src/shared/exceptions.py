@@ -21,5 +21,9 @@ class ValidationError(DomainError):
     """Domain rule violated."""
 
 
+class ConflictError(DomainError):
+    """The request is valid but the current state refuses it; retrying later may work."""
+
+
 class ServiceUnavailableError(DomainError):
     """External service is down or unreachable."""

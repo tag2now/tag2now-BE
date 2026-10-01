@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     # SecretStr: app.py logs the settings at startup, and these must not be in it.
     rpcn_api_server_key: SecretStr = SecretStr("")
     rpcn_api_server_timeout_seconds: float = 5.0
+    # tag2now-save-admin's server; empty leaves the save admin routes answering 502.
+    save_admin_url: str = ""
+    save_admin_key: SecretStr = SecretStr("")
+    # A write waits on RPCN twice (admin check, online check) before it lands.
+    save_admin_timeout_seconds: float = 20.0
     # HS256 key for access tokens; at least 32 bytes. Rotating it signs everyone out.
     jwt_secret: SecretStr = SecretStr("")
     jwt_ttl_seconds: int = 7 * 24 * 3600
