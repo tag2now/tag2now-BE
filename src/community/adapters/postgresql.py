@@ -3,6 +3,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from community.entities import Comment, Post, Thumb
 from community.exceptions import CommentNotFoundError, NestingDepthError, OwnershipError, PostNotFoundError
+from community.models import NOTICE_POST_TYPE
 from community.ports import CommunityRepository
 from shared.database import get_session_factory
 
@@ -20,7 +21,8 @@ class PostgresCommunityRepository(CommunityRepository):
     async def list_posts(self, page, page_size, post_type=None, characters=None):
         async with self.sessions() as s:
             filters = []
-            if post_type: filters.append(Post.post_type == post_type)
+            # Notices are pinned above the list, so the unfiltered list leaves them out.
+            filters.append(Post.post_type == post_type if post_type else Post.post_type != NOTICE_POST_TYPE)
             if characters: filters.append(Post.characters.contains(characters))
             count = func.count(Comment.id).label("comment_count")
             q = select(Post, count).outerjoin(Comment, Comment.post_id == Post.id).where(*filters).group_by(Post.id)

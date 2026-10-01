@@ -15,5 +15,9 @@ class OwnershipError(ForbiddenError):
     """Caller does not own the target resource."""
 
 
+class NoticeAdminOnlyError(ForbiddenError):
+    """A non-admin tried to post a notice, or to turn a post into one."""
+
+
 class NestingDepthError(ValidationError):
     """Comment nesting depth exceeded."""

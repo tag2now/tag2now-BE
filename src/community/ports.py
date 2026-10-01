@@ -20,6 +20,8 @@ class CommunityRepository(ABC):
         """Return (posts, total_count). Each post dict includes a comment_count key.
 
         *characters* keeps posts tagged with every one of them, so two names find that team.
+        Without *post_type* the list leaves out notices, which are pinned above it and
+        fetched with ``post_type=NOTICE_POST_TYPE``.
         """
 
     @abstractmethod

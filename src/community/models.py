@@ -6,7 +6,9 @@ from pydantic import BaseModel, Field, field_validator
 
 from matching.constants import TTT2_CHARACTERS
 
-VALID_POST_TYPES: set[str] = {"자유", "건의", "공략"}
+# Pinned above the board and kept out of its list, so only an admin may post one.
+NOTICE_POST_TYPE = "공지"
+VALID_POST_TYPES: set[str] = {"자유", "건의", "공략", NOTICE_POST_TYPE}
 CHARACTER_NAMES: frozenset[str] = frozenset(name for name in TTT2_CHARACTERS.values() if name and name != "?")
 # TTT2 is played as a two-character team, so a post can name both.
 MAX_POST_CHARACTERS = 2
