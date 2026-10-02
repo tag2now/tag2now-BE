@@ -26,7 +26,11 @@ FE ◀──{changes, applied, result}──────────────
   남기지 않는다. 관리자 여부는 save-admin이 RPCN에 다시 묻는다.
 - save-admin은 `compose.prod.yml`의 서비스이고 포트를 열지 않는다. `be`만 `http://save-admin:8000`으로 닿는다.
 - 설정: `SAVE_ADMIN_URL`(compose가 지정), `SAVE_ADMIN_KEY`(`.env.prod`, save-admin에도 같은 값이 간다),
-  `SAVE_ADMIN_TIMEOUT_SECONDS`(기본 20). URL이나 키가 비면 모든 `/admin/saves/*`가 502다.
+  `SAVE_ADMIN_TIMEOUT_SECONDS`(기본 20). URL이나 키가 비면 모든 `/admin/saves/*`와 아래의
+  `/saves/players/{npid}`가 502다.
+- 백엔드 코드는 `saves/` 모듈 하나다. adapter 하나(save-admin 클라이언트 하나)가 관리자 호출과 공개 조회를
+  모두 맡고, 라우터가 둘이다(`/admin/saves/*`, `/saves/players/{npid}`). 관리자 확인(`admin_user`)과
+  계정 관련 예외만 `admin/`에서 가져다 쓴다.
 
 ## 수정은 두 번 호출한다
 
@@ -92,7 +96,7 @@ FE ◀──{changes, applied, result}──────────────
 | `total`, `wins`, `losses` | 계정 전적 |
 | `chars[]` | 쓴 적 있는 캐릭터의 `id, character, rank, rank_name, tier, points, streak, wins, losses` |
 
-- `saves/` 모듈이 save-admin의 `GET /player/save`를 부른다. 관리자 확인 없이 API 키만 쓰는 유일한
+- save-admin의 `GET /player/save`를 부른다. 관리자 확인 없이 API 키만 쓰는 유일한
   경로이고, 파일 위치·sha256·체크섬·접속 여부는 save-admin이 애초에 내보내지 않는다.
 - **캐시 10분**(`cache_ttl_player_save`, 키 `saves:player:{소문자 npid}`). 게임은 세션이 끝날 때
   세이브를 쓰고, 계급이 몇 분 늦게 보여도 문제가 없다. 세이브 없음도 캐시한다. 연결 실패는 캐시하지 않는다.

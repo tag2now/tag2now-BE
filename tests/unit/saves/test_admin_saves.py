@@ -5,11 +5,11 @@ import json
 import httpx
 import pytest
 
-from admin import db
-from admin.adapters.save_admin_server import SaveAdminServer
-from admin.exceptions import (
-    AccountNotFoundError, AdminPasswordError, AdminUnavailableError, BackupNotFoundError, NotAdminError,
-    SaveConflictError, SaveNotFoundError, SaveRequestError,
+from admin.exceptions import AccountNotFoundError, AdminPasswordError, NotAdminError
+from saves import db
+from saves.adapters.save_admin_server import SaveAdminServer
+from saves.exceptions import (
+    BackupNotFoundError, SaveConflictError, SaveNotFoundError, SaveRequestError, SavesUnavailableError,
 )
 
 # derive_rpcn_password("pw"), the value RPCS3 would send for it.
@@ -58,19 +58,19 @@ async def _adapter(transport, url="http://save-admin:8000", api_key="key") -> Sa
 @pytest.fixture
 async def use_server():
     """Install an adapter for the service, and restore whatever was there."""
-    previous = db._save_admin
+    previous = db._server
     installed = []
 
     async def install(transport):
         adapter = await _adapter(transport)
         installed.append(adapter)
-        db.set_save_admin(adapter)
+        db.set_save_server(adapter)
         return adapter
 
     yield install
     for adapter in installed:
         await adapter.close()
-    db.set_save_admin(previous)
+    db.set_save_server(previous)
 
 
 # --- adapter ------------------------------------------------------------------
@@ -101,12 +101,12 @@ async def test_sends_the_admins_derived_password_with_the_api_key():
     (409, "online", SaveConflictError),
     (409, "save_changed", SaveConflictError),
     (409, "likely_demoted", SaveConflictError),
-    (503, "online_unknown", AdminUnavailableError),
-    (502, "rpcn_unavailable", AdminUnavailableError),
+    (503, "online_unknown", SavesUnavailableError),
+    (502, "rpcn_unavailable", SavesUnavailableError),
     # faults between the two services, not the admin's to fix
-    (403, "invalid_api_key", AdminUnavailableError),
-    (404, "not_found", AdminUnavailableError),
-    (500, "internal_error", AdminUnavailableError),
+    (403, "invalid_api_key", SavesUnavailableError),
+    (404, "not_found", SavesUnavailableError),
+    (500, "internal_error", SavesUnavailableError),
 ])
 async def test_each_refusal_maps_to_its_own_error(status, code, error):
     adapter = await _adapter(_server(status, {"error": code, "message": "why"}))
@@ -132,7 +132,7 @@ async def test_an_invalid_request_keeps_the_servers_reason():
 async def test_an_unreadable_answer_is_unavailable(response):
     adapter = await _adapter(httpx.MockTransport(lambda request: response))
 
-    with pytest.raises(AdminUnavailableError):
+    with pytest.raises(SavesUnavailableError):
         await adapter.call("show", "root", "pw", {"username": "Alice"})
     await adapter.close()
 
@@ -143,7 +143,7 @@ async def test_a_network_failure_is_unavailable():
 
     adapter = await _adapter(httpx.MockTransport(refuse))
 
-    with pytest.raises(AdminUnavailableError):
+    with pytest.raises(SavesUnavailableError):
         await adapter.call("show", "root", "pw", {"username": "Alice"})
     await adapter.close()
 
@@ -153,7 +153,7 @@ async def test_refuses_to_run_unconfigured(url, api_key):
     seen = []
     adapter = await _adapter(_server(seen=seen), url=url, api_key=api_key)
 
-    with pytest.raises(AdminUnavailableError, match="설정되지 않았습니다"):
+    with pytest.raises(SavesUnavailableError, match="설정되지 않았습니다"):
         await adapter.call("show", "root", "pw", {"username": "Alice"})
     assert seen == []
     await adapter.close()

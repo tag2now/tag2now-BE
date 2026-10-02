@@ -623,59 +623,6 @@
         "title": "ParticipantSummaryOut",
         "type": "object"
       },
-      "PlayerSaveCharOut": {
-        "properties": {
-          "character": {
-            "title": "Character",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "losses": {
-            "title": "Losses",
-            "type": "integer"
-          },
-          "points": {
-            "title": "Points",
-            "type": "integer"
-          },
-          "rank": {
-            "title": "Rank",
-            "type": "integer"
-          },
-          "rank_name": {
-            "title": "Rank Name",
-            "type": "string"
-          },
-          "streak": {
-            "title": "Streak",
-            "type": "integer"
-          },
-          "tier": {
-            "title": "Tier",
-            "type": "string"
-          },
-          "wins": {
-            "title": "Wins",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "character",
-          "rank",
-          "rank_name",
-          "tier",
-          "points",
-          "streak",
-          "wins",
-          "losses"
-        ],
-        "title": "PlayerSaveCharOut",
-        "type": "object"
-      },
       "PlayerSaveOut": {
         "properties": {
           "account_rank": {
@@ -684,7 +631,7 @@
           },
           "chars": {
             "items": {
-              "$ref": "#/components/schemas/PlayerSaveCharOut"
+              "$ref": "#/components/schemas/SaveCharOut"
             },
             "title": "Chars",
             "type": "array"

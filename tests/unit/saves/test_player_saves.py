@@ -3,10 +3,8 @@
 import httpx
 import pytest
 
-from admin import db as admin_db
-from admin.adapters.save_admin_server import SaveAdminServer
 from saves import db
-from saves.adapters.save_admin_server import SaveAdminServerPlayerSaves
+from saves.adapters.save_admin_server import SaveAdminServer
 from saves.exceptions import SavesUnavailableError
 from shared.cache import DictCache
 
@@ -16,16 +14,23 @@ SAVE = {"npid": "Alice", "saved_utc": "2026-09-30 12:34:56.500000", "account_ran
         "total": 15, "wins": 10, "losses": 5, "chars": [CHAR]}
 
 
-def _server(status: int = 200, body: dict | None = None, seen: list | None = None):
+def _server(status: int = 200, body: dict | None = None, seen: list | None = None, applied: bool = True):
+    """The save server: the profile read answers status/body, an admin edit of
+    Alice's save answers a write, applied or only previewed."""
+    write = {"username": "Alice", "sha256": "a" * 64, "online": False, "applied": applied,
+             "changes": {"account_rank": None, "chars": []}, "result": None}
+
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(200, json=write)
         if seen is not None:
             seen.append(request)
         return httpx.Response(status, json=SAVE if body is None else body)
     return httpx.MockTransport(handler)
 
 
-async def _adapter(transport, url="http://save-admin:8000", api_key="key") -> SaveAdminServerPlayerSaves:
-    adapter = SaveAdminServerPlayerSaves(url, api_key, 1.0, transport=transport)
+async def _adapter(transport, url="http://save-admin:8000", api_key="key") -> SaveAdminServer:
+    adapter = SaveAdminServer(url, api_key, 1.0, transport=transport)
     await adapter.init()
     return adapter
 
@@ -33,19 +38,19 @@ async def _adapter(transport, url="http://save-admin:8000", api_key="key") -> Sa
 @pytest.fixture
 async def use_server():
     """Install an adapter for the service, and restore whatever was there."""
-    previous = db._saves
+    previous = db._server
     installed = []
 
     async def install(transport):
         adapter = await _adapter(transport)
         installed.append(adapter)
-        db.set_player_saves(adapter)
+        db.set_save_server(adapter)
         return adapter
 
     yield install
     for adapter in installed:
         await adapter.close()
-    db.set_player_saves(previous)
+    db.set_save_server(previous)
 
 
 @pytest.fixture(autouse=True)
@@ -67,6 +72,7 @@ async def test_reads_with_a_get_and_the_api_key_only():
     request = seen[0]
     assert (request.method, request.url.path, request.url.params["username"]) == ("GET", "/player/save", "Alice")
     assert request.headers["X-API-Key"] == "key"
+    assert request.content == b""
     await adapter.close()
 
 
@@ -165,38 +171,11 @@ async def test_an_outage_is_not_remembered(client, use_server):
     assert len(seen) == 2
 
 
-# --- an admin's edit ------------------------------------------------------------
-
-def _admin_server(applied: bool):
-    """tag2now-save-admin answering an edit of Alice's save, written or previewed."""
-    write = {"username": "Alice", "sha256": "a" * 64, "online": False, "applied": applied,
-             "changes": {"account_rank": None, "chars": []}, "result": None}
-    return httpx.MockTransport(lambda request: httpx.Response(200, json=write))
-
-
-@pytest.fixture
-async def admin_server():
-    previous = admin_db._save_admin
-    installed = []
-
-    async def install(applied: bool):
-        adapter = SaveAdminServer("http://save-admin:8000", "key", 1.0, transport=_admin_server(applied))
-        await adapter.init()
-        installed.append(adapter)
-        admin_db.set_save_admin(adapter)
-
-    yield install
-    for adapter in installed:
-        await adapter.close()
-    admin_db.set_save_admin(previous)
-
-
 @pytest.mark.parametrize("applied, reads", [(True, 2), (False, 1)])
 async def test_a_written_edit_shows_at_once_and_a_preview_changes_nothing(
-        client, use_server, admin_server, auth_headers, applied, reads):
+        client, use_server, auth_headers, applied, reads):
     seen = []
-    await use_server(_server(seen=seen))
-    await admin_server(applied)
+    await use_server(_server(seen=seen, applied=applied))
     client.get("/saves/players/alice")
 
     body = {"username": "ALICE", "password": "pw", "rank": 29, **({"expect_sha256": "a" * 64} if applied else {"dry_run": True})}

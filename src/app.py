@@ -38,7 +38,7 @@ from community.router import router as community_router
 from reservation.db import init_db as init_reservation_db, close_db as close_reservation_db
 from reservation.router import router as reservation_router
 from saves import init_saves, close_saves
-from saves.router import router as saves_router
+from saves.router import router as saves_router, admin_router as saves_admin_router
 from shared.settings import get_settings
 
 logging.basicConfig(
@@ -95,6 +95,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(saves_admin_router)
 app.include_router(ttt2_router)
 app.include_router(history_router)
 app.include_router(community_router, prefix="/community", tags=["community"])

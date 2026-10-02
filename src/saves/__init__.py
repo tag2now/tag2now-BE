@@ -1,8 +1,9 @@
-"""Anyone's TTT2 save, read-only: the ranks and records a player profile shows.
+"""TTT2 saves, through tag2now-save-admin's server on the RPCN host.
 
-The save files live on the RPCN host; tag2now-save-admin's server reads them
-(`GET /player/save`). Edits stay in `admin/`, which drops this module's cache
-entry for the player it wrote.
+Two audiences, one domain: anyone reads a player's ranks for the profile panel
+(`GET /saves/players/{npid}`, cached), and RPCN admins read and edit saves under
+`/admin/saves/*`, with their password checked by RPCN on every call. The admin
+gate and the account errors come from `admin/`; nothing there depends on this.
 """
 
 from saves.db import close_saves, init_saves

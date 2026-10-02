@@ -186,11 +186,11 @@ bytes). They default to empty so the app still boots without them, but then
 get a `JWT_SECRET` from `tests/conftest.py`, which also provides the
 `auth_headers(username)` fixture for signed-in requests.
 
-Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leaderboard`, `cache_ttl_rooms`, `cache_ttl_rooms_all`, `cache_ttl_community`, `cache_ttl_activity`, `cache_ttl_player_hours`, `matchmaking_ttl`.
+Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leaderboard`, `cache_ttl_rooms`, `cache_ttl_rooms_all`, `cache_ttl_community`, `cache_ttl_activity`, `cache_ttl_player_hours`, `cache_ttl_player_save`, `matchmaking_ttl`.
 
 ## Architecture
 
-Seven modules under `src/` --- five domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
+Eight modules under `src/` --- six domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
 
 | Module | Responsibility |
 |--------|----------------|
@@ -199,7 +199,8 @@ Seven modules under `src/` --- five domains plus `auth/` and `admin/` --- a `sha
 | `community/` | Message board — posts, comments, thumbs |
 | `reservation/` | Appointments — create, join, edit, cancel |
 | `auth/` | RPCN account login; stateless bearer tokens other routers depend on |
-| `admin/` | RPCN account moderation (lookup, ban) through rpcn-narco's admin API, and TTT2 save editing through tag2now-save-admin |
+| `saves/` | TTT2 saves through tag2now-save-admin: anyone's ranks for the profile, and admins' reads and edits |
+| `admin/` | RPCN account moderation (lookup, ban) through rpcn-narco's admin API, and the admin gate other routers use |
 | `shared/` | Settings, cache, database, exceptions |
 | `rpcn_client/` | Standalone RPCN protocol client (no FastAPI dependency) |
 
@@ -231,20 +232,26 @@ A wrong admin password answers **400, not 401** --- the frontend ends the
 session on any 401 to a signed-in request. A ban does not revoke the target's
 site token; it lapses at expiry. Spec: `docs/spec/08-admin.md`.
 
-`admin/` also forwards `/admin/saves/*` to the `save-admin` service
-([tag2now-save-admin](https://github.com/tag2now/tag2now-save-admin)), which
-reads and edits TTT2 save files on the RPCN host. It runs in this repo's
-`compose.prod.yml` with no published port, so only `be` reaches it, at
-`SAVE_ADMIN_URL`. Same password-per-action rule. An edit is two calls ---
-`dry_run`, then `expect_sha256` set to the sha256 the preview answered --- and
-an online player is a **409** (`ConflictError`), since the game would overwrite
-the edit. Spec: `docs/spec/09-save-admin.md`.
+### Saves
 
-`saves/` is the public, read-only side of the same server: `GET
-/saves/players/{npid}` answers anyone's ranks and record for the profile panel,
-through save-admin's key-only `GET /player/save`. It is cached for
-`cache_ttl_player_save` (10 min), a missing save included; an applied admin
-edit drops that player's entry in `admin/service.py`.
+`saves/` owns TTT2 saves, which live on the RPCN host and are read and written
+by the `save-admin` service
+([tag2now-save-admin](https://github.com/tag2now/tag2now-save-admin)). It runs
+in this repo's `compose.prod.yml` with no published port, so only `be` reaches
+it, at `SAVE_ADMIN_URL`. One adapter, one client, two routers:
+
+- **`GET /saves/players/{npid}`** --- public, read-only: anyone's ranks and
+  record for the profile panel, through save-admin's key-only
+  `GET /player/save`. Cached for `cache_ttl_player_save` (10 min), a missing
+  save included.
+- **`POST /admin/saves/*`** --- admins only, behind `admin.dependencies.admin_user`
+  and the same password-per-action rule as `admin/`. An edit is two calls ---
+  `dry_run`, then `expect_sha256` set to the sha256 the preview answered --- and
+  an online player is a **409** (`ConflictError`), since the game would
+  overwrite the edit. A written edit drops that player's profile cache entry.
+
+The split is by domain, not audience: `saves/` uses `admin/`'s gate and account
+errors, and `admin/` knows nothing of saves. Spec: `docs/spec/09-save-admin.md`.
 
 ### Hexagonal layering
 
@@ -374,7 +381,9 @@ error array. A new user-facing request field belongs in that map.
 | Prefix | Router |
 |--------|--------|
 | `/auth` | `auth/router.py` — `POST /login`, `GET /me` |
-| `/admin` | `admin/router.py` — `POST /users/lookup`, `POST /users/ban`, `POST /saves/*`; admins only |
+| `/admin` | `admin/router.py` — `POST /users/lookup`, `POST /users/ban`; admins only |
+| `/admin/saves` | `saves/router.py` (`admin_router`) — `POST /show`, `/backups`, `/log`, `/set-rank`, `/set-account-rank`, `/floor`, `/restore`; admins only |
+| `/saves` | `saves/router.py` — `GET /players/{npid}`, public |
 | *(none)* | `matching/router.py` — `/servers`, `/rooms/all`, `/leaderboard`, `/players/{npid}` |
 | `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/stats/weekly-top`, `/players/{npid}` |
 | `/community` | `community/router.py` — posts, comments, thumbs |
