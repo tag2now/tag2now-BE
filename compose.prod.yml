@@ -54,9 +54,10 @@ services:
       - ./.env.prod
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # ec2-user, who owns the saves and the backups on the host. As root, the
+    # ec2-user, who owns tus_data and the backups on the host. As root, the
     # backup directories and files it creates would lock the host CLI, which
-    # runs as ec2-user, out of writing next to them.
+    # runs as ec2-user, out of writing next to them. The saves themselves are
+    # root's (RPCN runs as root); save-admin swaps them in through tus_data.
     user: "1000:1000"
     # RPCN's data, at the same paths as on the host: the CLI on the host reads
     # back the backup paths this writes into the audit log. They must match
