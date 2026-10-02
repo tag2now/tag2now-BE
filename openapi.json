@@ -623,6 +623,106 @@
         "title": "ParticipantSummaryOut",
         "type": "object"
       },
+      "PlayerSaveCharOut": {
+        "properties": {
+          "character": {
+            "title": "Character",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "losses": {
+            "title": "Losses",
+            "type": "integer"
+          },
+          "points": {
+            "title": "Points",
+            "type": "integer"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "rank_name": {
+            "title": "Rank Name",
+            "type": "string"
+          },
+          "streak": {
+            "title": "Streak",
+            "type": "integer"
+          },
+          "tier": {
+            "title": "Tier",
+            "type": "string"
+          },
+          "wins": {
+            "title": "Wins",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "character",
+          "rank",
+          "rank_name",
+          "tier",
+          "points",
+          "streak",
+          "wins",
+          "losses"
+        ],
+        "title": "PlayerSaveCharOut",
+        "type": "object"
+      },
+      "PlayerSaveOut": {
+        "properties": {
+          "account_rank": {
+            "title": "Account Rank",
+            "type": "integer"
+          },
+          "chars": {
+            "items": {
+              "$ref": "#/components/schemas/PlayerSaveCharOut"
+            },
+            "title": "Chars",
+            "type": "array"
+          },
+          "losses": {
+            "title": "Losses",
+            "type": "integer"
+          },
+          "saved_at": {
+            "format": "date-time",
+            "title": "Saved At",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          },
+          "wins": {
+            "title": "Wins",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "username",
+          "saved_at",
+          "account_rank",
+          "total",
+          "wins",
+          "losses",
+          "chars"
+        ],
+        "title": "PlayerSaveOut",
+        "type": "object"
+      },
       "PostDetail": {
         "properties": {
           "author": {
@@ -3398,6 +3498,53 @@
         "summary": "All rooms including hidden",
         "tags": [
           "Tekken Tag Tournament 2"
+        ]
+      }
+    },
+    "/saves/players/{npid}": {
+      "get": {
+        "description": "A player's TTT2 save: account rank, record and the rank of every character\nthey have used. Read-only, and up to ten minutes behind the game.",
+        "operationId": "player_save_saves_players__npid__get",
+        "parameters": [
+          {
+            "description": "Player NPID",
+            "in": "path",
+            "name": "npid",
+            "required": true,
+            "schema": {
+              "description": "Player NPID",
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Npid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerSaveOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Player Save",
+        "tags": [
+          "Saves"
         ]
       }
     },

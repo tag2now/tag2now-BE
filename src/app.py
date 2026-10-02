@@ -37,6 +37,8 @@ from community import init_db, close_db
 from community.router import router as community_router
 from reservation.db import init_db as init_reservation_db, close_db as close_reservation_db
 from reservation.router import router as reservation_router
+from saves import init_saves, close_saves
+from saves.router import router as saves_router
 from shared.settings import get_settings
 
 logging.basicConfig(
@@ -57,6 +59,7 @@ except Exception:
 async def lifespan(app: FastAPI):
     await init_auth()
     await init_admin()
+    await init_saves()
     await init_database()
     await init_db()
     await init_reservation_db()
@@ -72,6 +75,7 @@ async def lifespan(app: FastAPI):
     await close_reservation_db()
     await close_db()
     await close_database()
+    await close_saves()
     await close_admin()
     await close_auth()
 
@@ -95,6 +99,7 @@ app.include_router(ttt2_router)
 app.include_router(history_router)
 app.include_router(community_router, prefix="/community", tags=["community"])
 app.include_router(reservation_router)
+app.include_router(saves_router)
 
 
 @app.exception_handler(NotFoundError)

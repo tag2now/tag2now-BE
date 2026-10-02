@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     cache_ttl_community: int = 30
     cache_ttl_activity: int = 300
     cache_ttl_player_hours: int = 300
+    # A player's TTT2 save on their profile; an admin's edit clears it sooner.
+    cache_ttl_player_save: int = 600
     matchmaking_ttl: int = 60
     match_history_collection_interval_seconds: int = 30
     # RPCN usernames (= npid) kept off the weekly ranking, e.g. test accounts.

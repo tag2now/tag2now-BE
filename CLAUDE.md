@@ -240,6 +240,12 @@ reads and edits TTT2 save files on the RPCN host. It runs in this repo's
 an online player is a **409** (`ConflictError`), since the game would overwrite
 the edit. Spec: `docs/spec/09-save-admin.md`.
 
+`saves/` is the public, read-only side of the same server: `GET
+/saves/players/{npid}` answers anyone's ranks and record for the profile panel,
+through save-admin's key-only `GET /player/save`. It is cached for
+`cache_ttl_player_save` (10 min), a missing save included; an applied admin
+edit drops that player's entry in `admin/service.py`.
+
 ### Hexagonal layering
 
 **Follow this pattern when adding a module.** Each domain module uses the same file layout:

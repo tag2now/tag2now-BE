@@ -8,6 +8,7 @@ from admin.db import get_account_admin, get_save_admin
 from admin.exceptions import SelfBanError
 from admin.models import AccountStatus, BanResult, SaveLogRequest, SaveRequest
 from auth.models import AuthUser
+from saves.service import forget as forget_player_save
 
 # Audit fields that hold a path on the RPCN host; only the file's label means
 # anything here, and the path says nothing an admin needs.
@@ -41,7 +42,11 @@ async def read_save_log(admin: AuthUser, request: SaveLogRequest) -> dict:
 
 async def edit_save(action: str, admin: AuthUser, request: SaveRequest) -> dict:
     """set-rank, set-account-rank, floor or restore: a preview with dry_run, else the write"""
-    return await _save_call(action, admin, request)
+    answer = await _save_call(action, admin, request)
+    # Profiles show the save from a cache; a written one shows at once.
+    if answer["applied"]:
+        forget_player_save(answer["username"])
+    return answer
 
 
 async def _save_call(action: str, admin: AuthUser, request) -> dict:

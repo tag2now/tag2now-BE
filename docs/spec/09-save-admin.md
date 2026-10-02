@@ -79,6 +79,30 @@ FE ◀──{changes, applied, result}──────────────
 
 비밀번호 불일치가 401이 아닌 이유는 08-admin.md와 같다.
 
+## 플레이어 프로필의 세이브 계급 (공개, 읽기 전용)
+
+`GET /saves/players/{npid}` — 로그인 없이 누구나 어떤 플레이어든 조회한다. 프로필 패널이 쓴다.
+계급은 리더보드에도 나오는 정보라 기록 API(`/history/players/{npid}`)처럼 공개다.
+
+| 필드 | 설명 |
+|------|------|
+| `username` | RPCN 아이디(실제 대소문자) |
+| `saved_at` | 게임이 세이브를 마지막으로 쓴 시각(UTC) |
+| `account_rank` | 계정 계급 코드 |
+| `total`, `wins`, `losses` | 계정 전적 |
+| `chars[]` | 쓴 적 있는 캐릭터의 `id, character, rank, rank_name, tier, points, streak, wins, losses` |
+
+- `saves/` 모듈이 save-admin의 `GET /player/save`를 부른다. 관리자 확인 없이 API 키만 쓰는 유일한
+  경로이고, 파일 위치·sha256·체크섬·접속 여부는 save-admin이 애초에 내보내지 않는다.
+- **캐시 10분**(`cache_ttl_player_save`, 키 `saves:player:{소문자 npid}`). 게임은 세션이 끝날 때
+  세이브를 쓰고, 계급이 몇 분 늦게 보여도 문제가 없다. 세이브 없음도 캐시한다. 연결 실패는 캐시하지 않는다.
+- 관리자 수정이 실제로 쓰였으면(`applied`) 그 플레이어의 캐시를 바로 지운다. 미리보기는 지우지 않는다.
+
+| 상황 | 상태 | detail |
+|------|------|--------|
+| 계정 없음 / 세이브 없음 | 404 | 이 플레이어의 TTT2 세이브가 없습니다. |
+| save-admin 연결 불가, 미설정 | 502 | 세이브 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요. |
+
 ## 사이트에서 하지 않는 것
 
 전체 계정 floor, floor 재실행(`--redo`), 접속 중 강제 쓰기(`--force`), 고아 세이브 정리(`gc`),
