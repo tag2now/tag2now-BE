@@ -13,6 +13,7 @@ import httpx
 from admin.exceptions import AccountNotFoundError, AdminPasswordError, AdminUnavailableError, NotAdminError
 from admin.models import AccountStatus, BanResult
 from admin.ports import AccountAdmin
+from shared.rpcn_api import RpcnApiClient, RpcnApiNotConfigured, RpcnApiUnreachable
 from shared.rpcn_password import derive_rpcn_password
 
 logger = logging.getLogger(__name__)
@@ -23,20 +24,8 @@ _UNAVAILABLE = "RPCN 관리 서버에 연결할 수 없습니다. 잠시 후 다
 
 
 class RpcnApiServerAccountAdmin(AccountAdmin):
-    def __init__(self, base_url: str, api_key: str, timeout: float, transport: httpx.AsyncBaseTransport | None = None):
-        self._base_url = base_url.rstrip("/")
-        self._api_key = api_key
-        self._timeout = timeout
-        self._transport = transport
-        self._client: httpx.AsyncClient | None = None
-
-    async def init(self) -> None:
-        self._client = httpx.AsyncClient(base_url=self._base_url, timeout=self._timeout, transport=self._transport)
-
-    async def close(self) -> None:
-        if self._client is not None:
-            await self._client.aclose()
-            self._client = None
+    def __init__(self, api: RpcnApiClient):
+        self._api = api
 
     async def lookup(self, admin_username: str, admin_password: str, username: str) -> AccountStatus:
         body = await self._post(_INFO_PATH, admin_username, admin_password, username)
@@ -47,19 +36,12 @@ class RpcnApiServerAccountAdmin(AccountAdmin):
         return _read(_to_ban_result, body)
 
     async def _post(self, path: str, admin_username: str, admin_password: str, username: str) -> dict:
-        if self._client is None:
-            raise RuntimeError("RPCN account admin not initialized")
-        if not self._base_url or not self._api_key:
-            logger.error("Admin API is not configured: RPCN_API_SERVER_URL or RPCN_API_SERVER_KEY is empty")
-            raise AdminUnavailableError("관리 기능이 설정되지 않았습니다.")
         payload = {"admin_username": admin_username, "admin_password": derive_rpcn_password(admin_password), "username": username}
         try:
-            response = await self._client.post(path, json=payload, headers={"X-API-Key": self._api_key})
-        except httpx.HTTPError as exc:
-            logger.warning(
-                "RPCN admin API unreachable at %s%s (%s: %s); check RPCN_API_SERVER_URL",
-                self._base_url, path, type(exc).__name__, exc,
-            )
+            response = await self._api.post(path, payload)
+        except RpcnApiNotConfigured as exc:
+            raise AdminUnavailableError("관리 기능이 설정되지 않았습니다.") from exc
+        except RpcnApiUnreachable as exc:
             raise AdminUnavailableError(_UNAVAILABLE) from exc
 
         _raise_for_status(response, path, admin_username)

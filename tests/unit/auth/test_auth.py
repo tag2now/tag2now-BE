@@ -11,6 +11,7 @@ from auth import db, service, tokens
 from auth.adapters.rpcn_api_server import RpcnApiServerAccountVerifier
 from auth.exceptions import AccountBannedError, AuthUnavailableError, InvalidCredentialsError, InvalidTokenError
 from auth.models import AuthUser
+from shared.rpcn_api import RpcnApiClient
 from shared.settings import get_settings
 
 ACCOUNT = {"user_id": 7, "username": "Alice", "online_name": "앨리스", "avatar_url": "https://a/x.png", "admin": False, "banned": False}
@@ -24,27 +25,39 @@ def _rpcn(status: int = 200, body: dict | None = None, seen: list | None = None)
     return httpx.MockTransport(handler)
 
 
+# Every client a test opens, closed after it: the adapters no longer own one.
+_clients: list[RpcnApiClient] = []
+
+
+@pytest.fixture(autouse=True)
+async def close_clients():
+    yield
+    while _clients:
+        await _clients.pop().close()
+
+
+async def _api(transport, base_url="http://rpcn:31315", api_key="key") -> RpcnApiClient:
+    api = RpcnApiClient(base_url, api_key, 1.0, transport=transport)
+    await api.init()
+    _clients.append(api)
+    return api
+
+
 async def _verifier(transport, base_url="http://rpcn:31315", api_key="key") -> RpcnApiServerAccountVerifier:
-    verifier = RpcnApiServerAccountVerifier(base_url, api_key, 1.0, transport=transport)
-    await verifier.init()
-    return verifier
+    return RpcnApiServerAccountVerifier(await _api(transport, base_url, api_key))
 
 
 @pytest.fixture
 async def use_verifier():
     """Install a verifier for the service, and restore whatever was there."""
     previous = db._verifier
-    installed = []
 
     async def install(transport, **kwargs):
         verifier = await _verifier(transport, **kwargs)
-        installed.append(verifier)
         db.set_verifier(verifier)
         return verifier
 
     yield install
-    for verifier in installed:
-        await verifier.close()
     db.set_verifier(previous)
 
 
@@ -64,7 +77,6 @@ async def test_verify_derives_the_typed_password_before_posting_with_the_api_key
         "password": "11E34BA86A98ED6A7DEBCA858864FAE02BC9C16AA4D99AAAB116311BDC6BFB01",
     }
     assert account.username == "Alice"  # RPCN's spelling, not the typed one
-    await verifier.close()
 
 
 async def test_verify_maps_401_to_invalid_credentials():
@@ -72,7 +84,6 @@ async def test_verify_maps_401_to_invalid_credentials():
 
     with pytest.raises(InvalidCredentialsError):
         await verifier.verify("alice", "wrong")
-    await verifier.close()
 
 
 @pytest.mark.parametrize("status", [403, 404, 500])
@@ -82,7 +93,6 @@ async def test_verify_treats_every_other_status_as_our_outage(status):
 
     with pytest.raises(AuthUnavailableError):
         await verifier.verify("alice", "pw")
-    await verifier.close()
 
 
 async def test_verify_maps_a_network_failure_to_unavailable():
@@ -93,7 +103,6 @@ async def test_verify_maps_a_network_failure_to_unavailable():
 
     with pytest.raises(AuthUnavailableError):
         await verifier.verify("alice", "pw")
-    await verifier.close()
 
 
 @pytest.fixture
@@ -117,7 +126,6 @@ async def test_verify_logs_where_it_could_not_reach(caplog, logging_enabled):
 
     with pytest.raises(AuthUnavailableError):
         await verifier.verify("alice", "pw")
-    await verifier.close()
 
     message = caplog.records[-1].getMessage()
     assert "http://rpcn-api:31315/external/users/verify" in message
@@ -130,7 +138,6 @@ async def test_verify_refuses_to_run_unconfigured():
 
     with pytest.raises(AuthUnavailableError):
         await verifier.verify("alice", "pw")
-    await verifier.close()
 
 
 # --- Tokens -----------------------------------------------------------------

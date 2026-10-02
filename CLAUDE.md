@@ -201,7 +201,7 @@ Eight modules under `src/` --- six domains plus `auth/` and `admin/` --- a `shar
 | `auth/` | RPCN account login; stateless bearer tokens other routers depend on |
 | `saves/` | TTT2 saves through tag2now-save-admin: anyone's ranks for the profile, and admins' reads and edits |
 | `admin/` | RPCN account moderation (lookup, ban) through rpcn-narco's admin API, and the admin gate other routers use |
-| `shared/` | Settings, cache, database, exceptions |
+| `shared/` | Settings, cache, database, exceptions, and the rpcn-narco API server client `auth/` and `admin/` share (`rpcn_api.py`) |
 | `rpcn_client/` | Standalone RPCN protocol client (no FastAPI dependency) |
 
 ### Authentication
@@ -219,6 +219,12 @@ or `optional_user`, never by reading a header themselves. **Ownership keys on
 `voter` on the board. `online_name` is only ever displayed. Because the
 dependency resolves before the body, a signed-in route answers 401, not 422,
 to an anonymous request with a bad body. Spec: `docs/spec/07-auth.md`.
+
+`auth/` and `admin/` call the same API server with the same key, through one
+`shared.rpcn_api.RpcnApiClient` (one connection pool, opened first in
+`lifespan` and closed last). It answers the HTTP response or raises
+`RpcnApiNotConfigured` / `RpcnApiUnreachable`; what a status means, and the
+Korean message a user sees, stay in each module's adapter.
 
 ### Admin
 

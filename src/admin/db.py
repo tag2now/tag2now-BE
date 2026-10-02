@@ -2,25 +2,21 @@
 
 from admin.adapters.rpcn_api_server import RpcnApiServerAccountAdmin
 from admin.ports import AccountAdmin
-from shared.settings import get_settings
+from shared.rpcn_api import get_rpcn_api
 
 _admin: AccountAdmin | None = None
 
 
 async def init_admin() -> None:
-    # Shares login's settings: the same API server and key answer both. When
-    # they are empty init_auth has already warned, and the routes answer 502.
+    # Login's client: the same API server and key answer both. When they are
+    # empty init_auth has already warned, and the routes answer 502.
     global _admin
-    settings = get_settings()
-    _admin = RpcnApiServerAccountAdmin(settings.rpcn_api_server_url, settings.rpcn_api_server_key.get_secret_value(), settings.rpcn_api_server_timeout_seconds)
-    await _admin.init()
+    _admin = RpcnApiServerAccountAdmin(get_rpcn_api())
 
 
 async def close_admin() -> None:
     global _admin
-    if _admin:
-        await _admin.close()
-        _admin = None
+    _admin = None
 
 
 def get_account_admin() -> AccountAdmin:

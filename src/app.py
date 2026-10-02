@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse
 
 from shared.cache import redis_health_check
 from shared.database import init_database, close_database
+from shared.rpcn_api import init_rpcn_api, close_rpcn_api
 from shared.exceptions import NotFoundError, UnauthorizedError, ForbiddenError, ValidationError, ConflictError, ServiceUnavailableError
 from admin.db import init_admin, close_admin
 from admin.router import router as admin_router
@@ -57,6 +58,7 @@ except Exception:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await init_rpcn_api()
     await init_auth()
     await init_admin()
     await init_saves()
@@ -78,6 +80,7 @@ async def lifespan(app: FastAPI):
     await close_saves()
     await close_admin()
     await close_auth()
+    await close_rpcn_api()
 
 
 app = FastAPI(

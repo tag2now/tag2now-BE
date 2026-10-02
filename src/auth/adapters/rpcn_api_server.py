@@ -7,11 +7,10 @@ collides with the user being logged in from RPCS3.
 
 import logging
 
-import httpx
-
 from auth.exceptions import AuthUnavailableError, InvalidCredentialsError
 from auth.models import VerifiedAccount
 from auth.ports import AccountVerifier
+from shared.rpcn_api import RpcnApiClient, RpcnApiNotConfigured, RpcnApiUnreachable
 from shared.rpcn_password import derive_rpcn_password
 
 logger = logging.getLogger(__name__)
@@ -20,41 +19,15 @@ _VERIFY_PATH = "/external/users/verify"
 
 
 class RpcnApiServerAccountVerifier(AccountVerifier):
-    def __init__(self, base_url: str, api_key: str, timeout: float, transport: httpx.AsyncBaseTransport | None = None):
-        self._base_url = base_url.rstrip("/")
-        self._api_key = api_key
-        self._timeout = timeout
-        self._transport = transport
-        self._client: httpx.AsyncClient | None = None
-
-    async def init(self) -> None:
-        self._client = httpx.AsyncClient(base_url=self._base_url, timeout=self._timeout, transport=self._transport)
-
-    async def close(self) -> None:
-        if self._client is not None:
-            await self._client.aclose()
-            self._client = None
+    def __init__(self, api: RpcnApiClient):
+        self._api = api
 
     async def verify(self, username: str, password: str) -> VerifiedAccount:
-        if self._client is None:
-            raise RuntimeError("RPCN account verifier not initialized")
-        if not self._base_url or not self._api_key:
-            logger.error("Login is not configured: RPCN_API_SERVER_URL or RPCN_API_SERVER_KEY is empty")
-            raise AuthUnavailableError("로그인이 설정되지 않았습니다.")
         try:
-            response = await self._client.post(
-                _VERIFY_PATH,
-                json={"username": username, "password": derive_rpcn_password(password)},
-                headers={"X-API-Key": self._api_key},
-            )
-        except httpx.HTTPError as exc:
-            # The address and the kind of failure, not just the message: a bare
-            # "[Errno -2] Name does not resolve" says a lookup failed without
-            # saying which host, or that the host came from this setting.
-            logger.warning(
-                "RPCN account verification unreachable at %s%s (%s: %s); check RPCN_API_SERVER_URL",
-                self._base_url, _VERIFY_PATH, type(exc).__name__, exc,
-            )
+            response = await self._api.post(_VERIFY_PATH, {"username": username, "password": derive_rpcn_password(password)})
+        except RpcnApiNotConfigured as exc:
+            raise AuthUnavailableError("로그인이 설정되지 않았습니다.") from exc
+        except RpcnApiUnreachable as exc:
             raise AuthUnavailableError("로그인 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.") from exc
 
         if response.status_code == 401:

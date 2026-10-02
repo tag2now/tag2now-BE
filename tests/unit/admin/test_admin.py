@@ -9,6 +9,7 @@ import pytest
 from admin import db
 from admin.adapters.rpcn_api_server import RpcnApiServerAccountAdmin
 from admin.exceptions import AccountNotFoundError, AdminPasswordError, AdminUnavailableError, NotAdminError
+from shared.rpcn_api import RpcnApiClient
 
 INFO = {
     "user_id": 7, "username": "Alice", "online_name": "앨리스", "avatar_url": "https://a/x.png",
@@ -28,27 +29,39 @@ def _rpcn(status: int = 200, body: dict | None = None, seen: list | None = None)
     return httpx.MockTransport(handler)
 
 
+# Every client a test opens, closed after it: the adapters no longer own one.
+_clients: list[RpcnApiClient] = []
+
+
+@pytest.fixture(autouse=True)
+async def close_clients():
+    yield
+    while _clients:
+        await _clients.pop().close()
+
+
+async def _api(transport, base_url="http://rpcn:31315", api_key="key") -> RpcnApiClient:
+    api = RpcnApiClient(base_url, api_key, 1.0, transport=transport)
+    await api.init()
+    _clients.append(api)
+    return api
+
+
 async def _adapter(transport, api_key="key") -> RpcnApiServerAccountAdmin:
-    adapter = RpcnApiServerAccountAdmin("http://rpcn:31315", api_key, 1.0, transport=transport)
-    await adapter.init()
-    return adapter
+    return RpcnApiServerAccountAdmin(await _api(transport, api_key=api_key))
 
 
 @pytest.fixture
 async def use_rpcn():
     """Install an adapter for the service, and restore whatever was there."""
     previous = db._admin
-    installed = []
 
     async def install(transport):
         adapter = await _adapter(transport)
-        installed.append(adapter)
         db.set_account_admin(adapter)
         return adapter
 
     yield install
-    for adapter in installed:
-        await adapter.close()
     db.set_account_admin(previous)
 
 
@@ -66,7 +79,6 @@ async def test_ban_sends_the_admins_derived_password_with_the_api_key():
     assert json.loads(request.content) == {"admin_username": "root", "admin_password": DERIVED_PW, "username": "Alice"}
     assert result.username == "Alice"
     assert result.kicked is True
-    await adapter.close()
 
 
 async def test_lookup_reads_rpcn_timestamps_as_utc_and_keeps_a_missing_one_empty():
@@ -77,7 +89,6 @@ async def test_lookup_reads_rpcn_timestamps_as_utc_and_keeps_a_missing_one_empty
     assert status.online is True
     assert status.created_at == datetime(2023, 11, 14, 22, 13, 20, tzinfo=timezone.utc)
     assert status.last_login_at is None
-    await adapter.close()
 
 
 @pytest.mark.parametrize("status, body, error", [
@@ -96,7 +107,6 @@ async def test_each_rpcn_refusal_maps_to_its_own_error(status, body, error):
 
     with pytest.raises(error):
         await adapter.ban("root", "pw", "Alice")
-    await adapter.close()
 
 
 async def test_a_network_failure_is_unavailable():
@@ -107,7 +117,6 @@ async def test_a_network_failure_is_unavailable():
 
     with pytest.raises(AdminUnavailableError):
         await adapter.lookup("root", "pw", "Alice")
-    await adapter.close()
 
 
 async def test_an_unexpected_body_is_unavailable():
@@ -115,7 +124,6 @@ async def test_an_unexpected_body_is_unavailable():
 
     with pytest.raises(AdminUnavailableError):
         await adapter.lookup("root", "pw", "Alice")
-    await adapter.close()
 
 
 async def test_refuses_to_run_unconfigured():
@@ -125,7 +133,6 @@ async def test_refuses_to_run_unconfigured():
     with pytest.raises(AdminUnavailableError):
         await adapter.ban("root", "pw", "Alice")
     assert seen == []
-    await adapter.close()
 
 
 # --- HTTP -------------------------------------------------------------------

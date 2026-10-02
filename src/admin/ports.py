@@ -7,12 +7,6 @@ from admin.models import AccountStatus, BanResult
 
 class AccountAdmin(ABC):
     @abstractmethod
-    async def init(self) -> None: ...
-
-    @abstractmethod
-    async def close(self) -> None: ...
-
-    @abstractmethod
     async def lookup(self, admin_username: str, admin_password: str, username: str) -> AccountStatus:
         """Return the account, or raise AdminPasswordError / NotAdminError /
         AccountNotFoundError / AdminUnavailableError."""
