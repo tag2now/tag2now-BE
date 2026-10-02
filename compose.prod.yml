@@ -48,11 +48,10 @@ services:
     image: 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com/tag2now/save-admin:${SAVE_ADMIN_IMAGE_TAG:-latest}
     restart: unless-stopped
     logging: *default-logging
-    environment:
-      # The same key be reads from .env.prod as SAVE_ADMIN_KEY.
-      TDT_ADMIN_API_KEY: ${SAVE_ADMIN_KEY}
-      RPCN_STAT_API_KEY: ${RPCN_API_SERVER_KEY}
-      RPCN_API_URL: http://host.docker.internal:31315
+    # be's .env.prod: save-admin reads SAVE_ADMIN_KEY, RPCN_API_SERVER_KEY and
+    # RPCN_API_SERVER_URL from it, the same as be.
+    env_file:
+      - ./.env.prod
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # ec2-user, who owns the saves and the backups on the host. As root, the
