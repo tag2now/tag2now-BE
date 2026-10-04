@@ -24,19 +24,7 @@ The `gameInfo` structure is composed of a header containing IDs and Ranks, follo
 
 ## 2. Character ID Reference Table
 
-Extracted from the correlation between `gameInfo` hex values and human-readable labels.
-
-| Hex ID | Character Name |
-| --- | --- |
-| `0x04` | Yoshimitsu |
-| `0x08` | Christie |
-| `0x09` | Jin |
-| `0x0D` | Heihachi |
-| `0x17` | Ganryu |
-| `0x21` | Eddy |
-| `0x22` | Bob |
-| `0x26` | Lars |
-| `0x2D` | Kunimitsu |
+Hex ID별 캐릭터 이름은 [`src/matching/constants.py`](../src/matching/constants.py)의 `TTT2_CHARACTERS`를 따른다.
 
 ---
 
