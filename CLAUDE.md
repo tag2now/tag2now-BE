@@ -387,11 +387,11 @@ with api_client() as client:
 
 On `RpcnError` or `OSError` the client is disconnected, the singleton is cleared, and `RpcnUnavailableError` is raised. A `_RECONNECT_COOLDOWN` of 5 s prevents reconnect storms. When `rpcn_metric_enable` is set, the client is wrapped in `TrackedRpcnClient` (`rpcn_client/metrics.py`).
 
-`RpcnUnavailableError` derives from the shared `ServiceUnavailableError`, which `app.py` maps to HTTP 502.
+`RpcnUnavailableError` derives from the shared `ServiceUnavailableError`, which maps to HTTP 502.
 
 ### Error handling
 
-Domain code raises the exceptions in `shared/exceptions.py`; `app.py` registers handlers that map them to status codes. Do not raise `HTTPException` from services.
+Domain code raises the exceptions in `shared/exceptions.py`; `shared/error_handlers.py` maps them to status codes in one table, `_STATUS`, which `app.py` installs with `register_exception_handlers(app)`. A new exception is one line in that table. Do not raise `HTTPException` from services.
 
 | Exception | Status |
 |-----------|--------|
@@ -404,7 +404,7 @@ Domain code raises the exceptions in `shared/exceptions.py`; `app.py` registers 
 | `ServiceUnavailableError` | 502 |
 
 FastAPI's own `RequestValidationError` keeps its 422 but is reshaped by a
-handler in `app.py`: it answers with a single Korean sentence naming the fields
+handler in `shared/error_handlers.py`: it answers with a single Korean sentence naming the fields
 a user can actually see, via the `_FIELD_LABELS` map, instead of the default
 error array. A new user-facing request field belongs in that map.
 
