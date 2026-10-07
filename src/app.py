@@ -24,7 +24,7 @@ from fastapi.responses import JSONResponse
 from shared.cache import redis_health_check
 from shared.database import init_database, close_database
 from shared.rpcn_api import init_rpcn_api, close_rpcn_api
-from shared.exceptions import NotFoundError, UnauthorizedError, ForbiddenError, ValidationError, ConflictError, ServiceUnavailableError
+from shared.exceptions import NotFoundError, UnauthorizedError, ForbiddenError, ValidationError, ConflictError, RateLimitedError, ServiceUnavailableError
 from admin.db import init_admin, close_admin
 from admin.router import router as admin_router
 from auth.db import init_auth, close_auth
@@ -129,6 +129,11 @@ async def validation_handler(request, exc):
 @app.exception_handler(ConflictError)
 async def conflict_handler(request, exc):
     return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(RateLimitedError)
+async def rate_limited_handler(request, exc):
+    return JSONResponse(status_code=429, content={"detail": str(exc)})
 
 
 # Field labels for request-schema violations, so a 422 names the input a user

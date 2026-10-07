@@ -375,6 +375,7 @@ Domain code raises the exceptions in `shared/exceptions.py`; `app.py` registers 
 | `ForbiddenError` | 403 |
 | `ValidationError` | 400 |
 | `ConflictError` | 409 |
+| `RateLimitedError` | 429 |
 | `ServiceUnavailableError` | 502 |
 
 FastAPI's own `RequestValidationError` keeps its 422 but is reshaped by a
