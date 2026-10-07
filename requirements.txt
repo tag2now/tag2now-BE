@@ -2,9 +2,9 @@ protobuf>=4.0
 grpcio-tools>=1.50
 pytest
 httpx
-fastapi>=0.110
+fastapi>=0.141  # fastapi.sse (chat stream)
 pydantic-settings>=2.0
-uvicorn>=0.29
+uvicorn>=0.52  # --timeout-graceful-shutdown, verified with chat streams
 redis>=5.0
 asyncpg>=0.29
 sqlalchemy[asyncio]>=2.0

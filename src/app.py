@@ -29,6 +29,8 @@ from admin.db import init_admin, close_admin
 from admin.router import router as admin_router
 from auth.db import init_auth, close_auth
 from auth.router import router as auth_router
+from chat.db import init_chat
+from chat.router import router as chat_router
 from history import init_history_repo, close_history_repo
 from history.collector import run_collector, stop_collector
 from history.router import router as history_router
@@ -67,6 +69,7 @@ async def lifespan(app: FastAPI):
     await init_reservation_db()
     await init_history_repo()
     await init_game_repo()
+    await init_chat()
     collector_task = asyncio.create_task(run_collector(), name="match-history-collector")
     try:
         yield
@@ -104,6 +107,7 @@ app.include_router(history_router)
 app.include_router(community_router, prefix="/community", tags=["community"])
 app.include_router(reservation_router)
 app.include_router(saves_router)
+app.include_router(chat_router)
 
 
 @app.exception_handler(NotFoundError)

@@ -21,4 +21,8 @@ RUN python -m grpc_tools.protoc -I. --python_out=src/rpcn_client np2_structs.pro
 COPY alembic.ini .
 COPY alembic/ ./alembic/
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "src"]
+# uvicorn waits for open connections to close before running lifespan shutdown,
+# with no limit by default. A chat stream never closes on its own, so without a
+# limit `docker stop` waits out its 10 s and kills the process, and the
+# collector and database are never shut down. 5 s leaves room inside that 10.
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "src", "--timeout-graceful-shutdown", "5"]

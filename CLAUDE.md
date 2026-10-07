@@ -190,7 +190,7 @@ Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leade
 
 ## Architecture
 
-Eight modules under `src/` --- six domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
+Nine modules under `src/` --- seven domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
 
 | Module | Responsibility |
 |--------|----------------|
@@ -198,6 +198,7 @@ Eight modules under `src/` --- six domains plus `auth/` and `admin/` --- a `shar
 | `history/` | Persisted snapshots, time-series statistics, the match collector |
 | `community/` | Message board — posts, comments, thumbs |
 | `reservation/` | Appointments — create, join, edit, cancel |
+| `chat/` | One-day lobby chat, in memory, pushed over SSE |
 | `auth/` | RPCN account login; stateless bearer tokens other routers depend on |
 | `saves/` | TTT2 saves through tag2now-save-admin: anyone's ranks for the profile, and admins' reads and edits |
 | `admin/` | RPCN account moderation (lookup, ban) through rpcn-narco's admin API, and the admin gate other routers use |
@@ -312,6 +313,30 @@ return result
 
 Routers own cache invalidation on writes (see `community/router.py:_invalidate_posts`).
 
+### Chat
+
+`chat/` is a lobby chat that shows one play day, 06:00 KST to 06:00 KST. It is
+held **in process memory** (`MemoryChatRepository`, newest 500) behind the
+`ChatRepository` port, so a deploy empties it --- accepted for a channel that
+forgets its day anyway. A Postgres adapter would slot in behind the same port.
+
+`GET /chat/stream` is Server-Sent Events through FastAPI's own
+`fastapi.sse.EventSourceResponse`, which also sends a `: ping` every 15 s ---
+inside CloudFront's 30 s origin timeout. Every connection opens with a
+`snapshot` of today's messages and then follows `message` and `delete` events;
+a reconnect gets a new snapshot rather than resuming from `Last-Event-ID`,
+because ids restart with the process. Events travel on the `ChatEventBus` port;
+`adapters/memory_bus.py` gives each stream a bounded queue and drops a stream
+whose queue fills. A second process would need a Redis bus behind that port.
+
+**A stream never closes on its own, so uvicorn runs with
+`--timeout-graceful-shutdown 5`** (Dockerfile). Without it uvicorn waits for
+open connections forever before lifespan shutdown, `docker stop` kills the
+process after 10 s, and the collector and database are never closed. Each
+stream cut that way logs a `CancelledError` traceback; that is the cost, not a
+fault. A local `--reload` run waits the same way --- pass the flag there too,
+or close the chat panel before saving.
+
 ### Matchmaking detection
 
 `matching/matchmaking_tracker.py` infers matchmaking players RPCN cannot show. A player in the TTT2 matchmaking loop (`searchRoom → createRoom → wait → quit`) is in one of three states — the terms are the owner's, use them exactly:
@@ -395,6 +420,7 @@ error array. A new user-facing request field belongs in that map.
 | `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/stats/weekly-top`, `/players/{npid}` |
 | `/community` | `community/router.py` — posts, comments, thumbs |
 | `/reservations` | `reservation/router.py` — list, create, read one (`GET /{id}`), edit (`PATCH`), join, cancel |
+| `/chat` | `chat/router.py` — `GET /stream` (SSE, public), `POST /messages`, `DELETE /messages/{id}` |
 | *(none)* | `/health` in `app.py`, excluded from the schema |
 
 Every write in `community` and `reservation` requires a bearer token; every read is public.

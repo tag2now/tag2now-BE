@@ -270,6 +270,40 @@
         "title": "CharChangeOut",
         "type": "object"
       },
+      "ChatMessageOut": {
+        "properties": {
+          "author_online_name": {
+            "title": "Author Online Name",
+            "type": "string"
+          },
+          "author_username": {
+            "title": "Author Username",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "author_username",
+          "author_online_name",
+          "body",
+          "created_at"
+        ],
+        "title": "ChatMessageOut",
+        "type": "object"
+      },
       "CreatePostRequest": {
         "properties": {
           "body": {
@@ -778,6 +812,21 @@
           "page_size"
         ],
         "title": "PostListResponse",
+        "type": "object"
+      },
+      "PostMessageRequest": {
+        "properties": {
+          "body": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "PostMessageRequest",
         "type": "object"
       },
       "PostSummary": {
@@ -2299,6 +2348,130 @@
         "summary": "Me",
         "tags": [
           "Auth"
+        ]
+      }
+    },
+    "/chat/messages": {
+      "post": {
+        "operationId": "post_message_chat_messages_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Post Message",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/chat/messages/{message_id}": {
+      "delete": {
+        "description": "The author's own message, or any message for an admin.",
+        "operationId": "delete_message_chat_messages__message_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "title": "Message Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Message",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/chat/stream": {
+      "get": {
+        "description": "Today's chat, then every change to it as it happens. Public.\n\nOpens with a `snapshot` event holding today's messages, then sends\n`message` and `delete` events. A reconnect gets a fresh snapshot rather\nthan resuming from `Last-Event-ID`: ids restart with the process, and a\ndeletion missed while disconnected is only visible in a whole new list.\nThe client replaces its list on every snapshot.",
+        "operationId": "stream_chat_stream_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "itemSchema": {
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "retry": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Stream",
+        "tags": [
+          "Chat"
         ]
       }
     },
