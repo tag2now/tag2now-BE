@@ -118,6 +118,14 @@ Stop every match, run the tests, then start the server again. Killing the parent
 
 `pyproject.toml` sets `pythonpath = ["src"]` and `asyncio_mode = "auto"`, so async tests need no `@pytest.mark.asyncio` decorator.
 
+**Before offering a commit, run `.claude/skills/test/SKILL.md`.** It is the
+whole pre-commit suite — these steps, the contract check against the frontend's
+copy, and tag2now-FE's suites when that changed — and the rule for reading it:
+each suite runs once, its output goes whole to a file under `test-results/`,
+and every failure is named from that run. In a session opened at the workspace
+root a sub-repository's skills can be discovered late, hours in, so when `test`
+is not in the skill list yet, read that file and follow it anyway.
+
 ### The published contract
 
 `openapi.json` at the repository root is not generated at build time — it is
