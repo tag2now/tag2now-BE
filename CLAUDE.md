@@ -194,11 +194,11 @@ bytes). They default to empty so the app still boots without them, but then
 get a `JWT_SECRET` from `tests/conftest.py`, which also provides the
 `auth_headers(username)` fixture for signed-in requests.
 
-Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leaderboard`, `cache_ttl_rooms`, `cache_ttl_rooms_all`, `cache_ttl_community`, `cache_ttl_activity`, `cache_ttl_player_hours`, `cache_ttl_player_save`, `matchmaking_ttl`.
+Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leaderboard`, `cache_ttl_rooms`, `cache_ttl_rooms_all`, `cache_ttl_community`, `cache_ttl_activity`, `cache_ttl_player_hours`, `cache_ttl_player_save`, `cache_ttl_live_streams`, `cache_ttl_stream_channels`, `matchmaking_ttl`.
 
 ## Architecture
 
-Nine modules under `src/` --- seven domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
+Ten modules under `src/` --- eight domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
 
 | Module | Responsibility |
 |--------|----------------|
@@ -209,6 +209,7 @@ Nine modules under `src/` --- seven domains plus `auth/` and `admin/` --- a `sha
 | `chat/` | One-day lobby chat, in memory, pushed over SSE |
 | `auth/` | RPCN account login; stateless bearer tokens other routers depend on |
 | `saves/` | TTT2 saves through tag2now-save-admin: anyone's ranks for the profile, and admins' reads and edits |
+| `streaming/` | Players' own Chzzk channels, and who in a room is live — carried on `/rooms/all` as each user's `stream` |
 | `admin/` | RPCN account moderation (lookup, ban) through rpcn-narco's admin API, and the admin gate other routers use |
 | `shared/` | Settings, cache, database, exceptions, and the rpcn-narco API server client `auth/` and `admin/` share (`rpcn_api.py`) |
 | `rpcn_client/` | Standalone RPCN protocol client (no FastAPI dependency) |
@@ -424,6 +425,8 @@ error array. A new user-facing request field belongs in that map.
 | `/admin` | `admin/router.py` — `POST /users/lookup`, `POST /users/ban`; admins only |
 | `/admin/saves` | `saves/router.py` (`admin_router`) — `POST /show`, `/backups`, `/log`, `/set-rank`, `/set-account-rank`, `/floor`, `/restore`; admins only |
 | `/saves` | `saves/router.py` — `GET /players/{npid}`, public |
+| `/streams` | `streaming/router.py` — `GET`/`PUT`/`DELETE /me`, the signed-in account's channel |
+| `/admin/streams` | `streaming/router.py` (`admin_router`) — `GET`, `DELETE /{username}`; admins only, no password |
 | *(none)* | `matching/router.py` — `/servers`, `/rooms/all`, `/leaderboard`, `/players/{npid}` |
 | `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/stats/weekly-top`, `/players/{npid}` |
 | `/community` | `community/router.py` — posts, comments, thumbs |
