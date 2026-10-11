@@ -105,6 +105,61 @@
         "title": "AdminActionRequest",
         "type": "object"
       },
+      "AdminStreamChannelOut": {
+        "properties": {
+          "channel_id": {
+            "title": "Channel Id",
+            "type": "string"
+          },
+          "channel_name": {
+            "title": "Channel Name",
+            "type": "string"
+          },
+          "channel_url": {
+            "title": "Channel Url",
+            "type": "string"
+          },
+          "platform": {
+            "title": "Platform",
+            "type": "string"
+          },
+          "registered_at": {
+            "format": "date-time",
+            "title": "Registered At",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "platform",
+          "channel_id",
+          "channel_name",
+          "channel_url",
+          "registered_at",
+          "username"
+        ],
+        "title": "AdminStreamChannelOut",
+        "type": "object"
+      },
+      "AdminStreamChannelsOut": {
+        "properties": {
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/AdminStreamChannelOut"
+            },
+            "title": "Channels",
+            "type": "array"
+          }
+        },
+        "required": [
+          "channels"
+        ],
+        "title": "AdminStreamChannelsOut",
+        "type": "object"
+      },
       "AuditRecordOut": {
         "properties": {
           "action": {
@@ -244,6 +299,21 @@
         "title": "BanOut",
         "type": "object"
       },
+      "ChannelRequest": {
+        "properties": {
+          "channel": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Channel",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel"
+        ],
+        "title": "ChannelRequest",
+        "type": "object"
+      },
       "CharChangeOut": {
         "properties": {
           "after": {
@@ -268,6 +338,40 @@
           "after"
         ],
         "title": "CharChangeOut",
+        "type": "object"
+      },
+      "ChatMessageOut": {
+        "properties": {
+          "author_online_name": {
+            "title": "Author Online Name",
+            "type": "string"
+          },
+          "author_username": {
+            "title": "Author Username",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "author_username",
+          "author_online_name",
+          "body",
+          "created_at"
+        ],
+        "title": "ChatMessageOut",
         "type": "object"
       },
       "CreatePostRequest": {
@@ -593,6 +697,25 @@
         "title": "MatchType",
         "type": "string"
       },
+      "MyStreamChannelOut": {
+        "properties": {
+          "channel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StreamChannelOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "channel"
+        ],
+        "title": "MyStreamChannelOut",
+        "type": "object"
+      },
       "ParticipantSummaryOut": {
         "properties": {
           "display_name": {
@@ -778,6 +901,21 @@
           "page_size"
         ],
         "title": "PostListResponse",
+        "type": "object"
+      },
+      "PostMessageRequest": {
+        "properties": {
+          "body": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "PostMessageRequest",
         "type": "object"
       },
       "PostSummary": {
@@ -1448,6 +1586,40 @@
           "streak"
         ],
         "title": "SlotStateOut",
+        "type": "object"
+      },
+      "StreamChannelOut": {
+        "properties": {
+          "channel_id": {
+            "title": "Channel Id",
+            "type": "string"
+          },
+          "channel_name": {
+            "title": "Channel Name",
+            "type": "string"
+          },
+          "channel_url": {
+            "title": "Channel Url",
+            "type": "string"
+          },
+          "platform": {
+            "title": "Platform",
+            "type": "string"
+          },
+          "registered_at": {
+            "format": "date-time",
+            "title": "Registered At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "platform",
+          "channel_id",
+          "channel_name",
+          "channel_url",
+          "registered_at"
+        ],
+        "title": "StreamChannelOut",
         "type": "object"
       },
       "ThumbRequest": {
@@ -2140,6 +2312,76 @@
         ]
       }
     },
+    "/admin/streams": {
+      "get": {
+        "description": "Every registered channel, most recently registered first.",
+        "operationId": "list_channels_admin_streams_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminStreamChannelsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Channels",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/admin/streams/{username}": {
+      "delete": {
+        "description": "Disconnect an account's channel, e.g. one registered by someone else.",
+        "operationId": "remove_channel_admin_streams__username__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "username",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Username",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Channel",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/admin/users/ban": {
       "post": {
         "description": "Ban an RPCN account and disconnect it if it is in-game.\n\nThe ban is RPCN's: RPCS3 and this site's login both refuse the account from\nthen on. A site token it already holds stays valid until it expires.",
@@ -2299,6 +2541,130 @@
         "summary": "Me",
         "tags": [
           "Auth"
+        ]
+      }
+    },
+    "/chat/messages": {
+      "post": {
+        "operationId": "post_message_chat_messages_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Post Message",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/chat/messages/{message_id}": {
+      "delete": {
+        "description": "The author's own message, or any message for an admin.",
+        "operationId": "delete_message_chat_messages__message_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "title": "Message Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Message",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/chat/stream": {
+      "get": {
+        "description": "Today's chat, then every change to it as it happens. Public.\n\nOpens with a `snapshot` event holding today's messages, then sends\n`message` and `delete` events. A reconnect gets a fresh snapshot rather\nthan resuming from `Last-Event-ID`: ids restart with the process, and a\ndeletion missed while disconnected is only visible in a whole new list.\nThe client replaces its list on every snapshot.",
+        "operationId": "stream_chat_stream_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "itemSchema": {
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "retry": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Stream",
+        "tags": [
+          "Chat"
         ]
       }
     },
@@ -3512,6 +3878,96 @@
         "summary": "Server and world list",
         "tags": [
           "Tekken Tag Tournament 2"
+        ]
+      }
+    },
+    "/streams/me": {
+      "delete": {
+        "description": "Disconnect the signed-in account's channel. Succeeds when there is none.",
+        "operationId": "unregister_channel_streams_me_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Unregister Channel",
+        "tags": [
+          "Streams"
+        ]
+      },
+      "get": {
+        "description": "The signed-in account's channel, or null.",
+        "operationId": "my_channel_streams_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyStreamChannelOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "My Channel",
+        "tags": [
+          "Streams"
+        ]
+      },
+      "put": {
+        "description": "Connect a Chzzk channel to the signed-in account, replacing any before it.",
+        "operationId": "register_channel_streams_me_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyStreamChannelOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Register Channel",
+        "tags": [
+          "Streams"
         ]
       }
     }

@@ -118,6 +118,14 @@ Stop every match, run the tests, then start the server again. Killing the parent
 
 `pyproject.toml` sets `pythonpath = ["src"]` and `asyncio_mode = "auto"`, so async tests need no `@pytest.mark.asyncio` decorator.
 
+**Before offering a commit, run `.claude/skills/test/SKILL.md`.** It is the
+whole pre-commit suite — these steps, the contract check against the frontend's
+copy, and tag2now-FE's suites when that changed — and the rule for reading it:
+each suite runs once, its output goes whole to a file under `test-results/`,
+and every failure is named from that run. In a session opened at the workspace
+root a sub-repository's skills can be discovered late, hours in, so when `test`
+is not in the skill list yet, read that file and follow it anyway.
+
 ### The published contract
 
 `openapi.json` at the repository root is not generated at build time — it is
@@ -186,11 +194,11 @@ bytes). They default to empty so the app still boots without them, but then
 get a `JWT_SECRET` from `tests/conftest.py`, which also provides the
 `auth_headers(username)` fixture for signed-in requests.
 
-Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leaderboard`, `cache_ttl_rooms`, `cache_ttl_rooms_all`, `cache_ttl_community`, `cache_ttl_activity`, `cache_ttl_player_hours`, `cache_ttl_player_save`, `matchmaking_ttl`.
+Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leaderboard`, `cache_ttl_rooms`, `cache_ttl_rooms_all`, `cache_ttl_community`, `cache_ttl_activity`, `cache_ttl_player_hours`, `cache_ttl_player_save`, `cache_ttl_live_streams`, `cache_ttl_stream_channels`, `matchmaking_ttl`.
 
 ## Architecture
 
-Eight modules under `src/` --- six domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
+Ten modules under `src/` --- eight domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
 
 | Module | Responsibility |
 |--------|----------------|
@@ -198,8 +206,10 @@ Eight modules under `src/` --- six domains plus `auth/` and `admin/` --- a `shar
 | `history/` | Persisted snapshots, time-series statistics, the match collector |
 | `community/` | Message board — posts, comments, thumbs |
 | `reservation/` | Appointments — create, join, edit, cancel |
+| `chat/` | One-day lobby chat, in memory, pushed over SSE |
 | `auth/` | RPCN account login; stateless bearer tokens other routers depend on |
 | `saves/` | TTT2 saves through tag2now-save-admin: anyone's ranks for the profile, and admins' reads and edits |
+| `streaming/` | Players' own Chzzk channels, and who in a room is live — carried on `/rooms/all` as each user's `stream` |
 | `admin/` | RPCN account moderation (lookup, ban) through rpcn-narco's admin API, and the admin gate other routers use |
 | `shared/` | Settings, cache, database, exceptions, and the rpcn-narco API server client `auth/` and `admin/` share (`rpcn_api.py`) |
 | `rpcn_client/` | Standalone RPCN protocol client (no FastAPI dependency) |
@@ -312,6 +322,30 @@ return result
 
 Routers own cache invalidation on writes (see `community/router.py:_invalidate_posts`).
 
+### Chat
+
+`chat/` is a lobby chat that shows one play day, 06:00 KST to 06:00 KST. It is
+held **in process memory** (`MemoryChatRepository`, newest 500) behind the
+`ChatRepository` port, so a deploy empties it --- accepted for a channel that
+forgets its day anyway. A Postgres adapter would slot in behind the same port.
+
+`GET /chat/stream` is Server-Sent Events through FastAPI's own
+`fastapi.sse.EventSourceResponse`, which also sends a `: ping` every 15 s ---
+inside CloudFront's 30 s origin timeout. Every connection opens with a
+`snapshot` of today's messages and then follows `message` and `delete` events;
+a reconnect gets a new snapshot rather than resuming from `Last-Event-ID`,
+because ids restart with the process. Events travel on the `ChatEventBus` port;
+`adapters/memory_bus.py` gives each stream a bounded queue and drops a stream
+whose queue fills. A second process would need a Redis bus behind that port.
+
+**A stream never closes on its own, so uvicorn runs with
+`--timeout-graceful-shutdown 5`** (Dockerfile). Without it uvicorn waits for
+open connections forever before lifespan shutdown, `docker stop` kills the
+process after 10 s, and the collector and database are never closed. Each
+stream cut that way logs a `CancelledError` traceback; that is the cost, not a
+fault. A local `--reload` run waits the same way --- pass the flag there too,
+or close the chat panel before saving.
+
 ### Matchmaking detection
 
 `matching/matchmaking_tracker.py` infers matchmaking players RPCN cannot show. A player in the TTT2 matchmaking loop (`searchRoom → createRoom → wait → quit`) is in one of three states — the terms are the owner's, use them exactly:
@@ -362,11 +396,11 @@ with api_client() as client:
 
 On `RpcnError` or `OSError` the client is disconnected, the singleton is cleared, and `RpcnUnavailableError` is raised. A `_RECONNECT_COOLDOWN` of 5 s prevents reconnect storms. When `rpcn_metric_enable` is set, the client is wrapped in `TrackedRpcnClient` (`rpcn_client/metrics.py`).
 
-`RpcnUnavailableError` derives from the shared `ServiceUnavailableError`, which `app.py` maps to HTTP 502.
+`RpcnUnavailableError` derives from the shared `ServiceUnavailableError`, which maps to HTTP 502.
 
 ### Error handling
 
-Domain code raises the exceptions in `shared/exceptions.py`; `app.py` registers handlers that map them to status codes. Do not raise `HTTPException` from services.
+Domain code raises the exceptions in `shared/exceptions.py`; `shared/error_handlers.py` maps them to status codes in one table, `_STATUS`, which `app.py` installs with `register_exception_handlers(app)`. A new exception is one line in that table. Do not raise `HTTPException` from services.
 
 | Exception | Status |
 |-----------|--------|
@@ -375,10 +409,11 @@ Domain code raises the exceptions in `shared/exceptions.py`; `app.py` registers 
 | `ForbiddenError` | 403 |
 | `ValidationError` | 400 |
 | `ConflictError` | 409 |
+| `RateLimitedError` | 429 |
 | `ServiceUnavailableError` | 502 |
 
 FastAPI's own `RequestValidationError` keeps its 422 but is reshaped by a
-handler in `app.py`: it answers with a single Korean sentence naming the fields
+handler in `shared/error_handlers.py`: it answers with a single Korean sentence naming the fields
 a user can actually see, via the `_FIELD_LABELS` map, instead of the default
 error array. A new user-facing request field belongs in that map.
 
@@ -390,10 +425,13 @@ error array. A new user-facing request field belongs in that map.
 | `/admin` | `admin/router.py` — `POST /users/lookup`, `POST /users/ban`; admins only |
 | `/admin/saves` | `saves/router.py` (`admin_router`) — `POST /show`, `/backups`, `/log`, `/set-rank`, `/set-account-rank`, `/floor`, `/restore`; admins only |
 | `/saves` | `saves/router.py` — `GET /players/{npid}`, public |
+| `/streams` | `streaming/router.py` — `GET`/`PUT`/`DELETE /me`, the signed-in account's channel |
+| `/admin/streams` | `streaming/router.py` (`admin_router`) — `GET`, `DELETE /{username}`; admins only, no password |
 | *(none)* | `matching/router.py` — `/servers`, `/rooms/all`, `/leaderboard`, `/players/{npid}` |
 | `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/stats/weekly-top`, `/players/{npid}` |
 | `/community` | `community/router.py` — posts, comments, thumbs |
 | `/reservations` | `reservation/router.py` — list, create, read one (`GET /{id}`), edit (`PATCH`), join, cancel |
+| `/chat` | `chat/router.py` — `GET /stream` (SSE, public), `POST /messages`, `DELETE /messages/{id}` |
 | *(none)* | `/health` in `app.py`, excluded from the schema |
 
 Every write in `community` and `reservation` requires a bearer token; every read is public.

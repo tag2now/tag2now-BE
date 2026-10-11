@@ -25,5 +25,9 @@ class ConflictError(DomainError):
     """The request is valid but the current state refuses it; retrying later may work."""
 
 
+class RateLimitedError(DomainError):
+    """The caller is acting faster than the service allows; retrying after a pause works."""
+
+
 class ServiceUnavailableError(DomainError):
     """External service is down or unreachable."""

@@ -10,9 +10,9 @@ requires-python = ">=3.10"
 dependencies = [
     "protobuf>=4.0",
     "grpcio-tools>=1.50",
-    "fastapi>=0.110",
+    "fastapi>=0.141",
     "pydantic-settings>=2.0",
-    "uvicorn>=0.29",
+    "uvicorn>=0.52",
     "redis>=5.0",
     "httpx",
     "PyJWT>=2.8",

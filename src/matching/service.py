@@ -20,6 +20,7 @@ from matching.models import (
 	TTT2_RANK_BOARD_ID,
 	TTT2LeaderboardEntry,
 )
+from streaming import service as streaming_service
 
 logger = logging.getLogger(__name__)
 
@@ -100,15 +101,29 @@ async def collect_activity_observation(com_id: str) -> ActivityObservation:
 
 
 async def get_rooms_all(com_id: str) -> dict:
-	"""Search all rooms including hidden, with matchmaking detection. Cached."""
+	"""Search all rooms including hidden, with matchmaking detection and who is live. Cached."""
 	key = f"ttt2:rooms_all:{com_id}"
 	if cached := cache_get(key):
 		return cached
 
 	result = await asyncio.to_thread(_fetch_rooms_all, com_id)
 	encoded = jsonable_encoder(result)
+	await _attach_streams(encoded)
 	cache_set(key, encoded, get_settings().cache_ttl_rooms_all)
 	return encoded
+
+
+async def _attach_streams(groups: dict) -> None:
+	"""Set each room user's `stream` to their live broadcast, or None."""
+	users = [user for rooms in groups.values() for room in rooms for user in room["users"]]
+	try:
+		live = await streaming_service.live_for({user["npid"] for user in users if user.get("npid")})
+	except Exception:
+		# Streams are an extra: the room list still goes out without them.
+		logger.warning("Live streams unavailable; rooms served without them", exc_info=True)
+		live = {}
+	for user in users:
+		user["stream"] = live.get((user.get("npid") or "").lower())
 
 
 def get_leaderboard(com_id: str, board_id: int, num_ranks: int) -> dict:

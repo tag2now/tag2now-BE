@@ -49,6 +49,37 @@ async def test_get_rooms_all_groups_rooms_and_merges_matchmaking_phantoms(mock_c
     assert [r["owner_npid"] for r in result["rank_match"]] == ["searching", "ranked"]
 
 
+LIVE = {"platform": "chzzk", "channel_name": "앨리스", "url": "https://chzzk.naver.com/live/" + "a" * 32,
+        "title": "TTT2 랭크전", "viewer_count": 42}
+
+
+async def test_get_rooms_all_marks_each_user_with_their_broadcast(mock_cache, mock_game_repo, monkeypatch, nobody_live):
+    from matching.service import get_rooms_all
+    monkeypatch.setattr("matching.service.get_server_world_tree", lambda com_id: {"1": [10]})
+    mock_game_repo.search_rooms_all.return_value = [_listed_room(1, "Alice", "bob", rank_id=10),
+                                                    _listed_room(2, "carol", rank_id=0)]
+    monkeypatch.setattr("matching.service.update_and_get_phantoms", lambda rooms: [])
+    nobody_live.return_value = {"alice": LIVE}
+
+    result = await get_rooms_all("NPWR02973_00")
+
+    streams = {u["npid"]: u["stream"] for rooms in result.values() for room in rooms for u in room["users"]}
+    assert streams == {"Alice": LIVE, "bob": None, "carol": None}
+    nobody_live.assert_awaited_once_with({"Alice", "bob", "carol"})
+
+
+async def test_get_rooms_all_still_answers_when_streams_fail(mock_cache, mock_game_repo, monkeypatch, nobody_live):
+    from matching.service import get_rooms_all
+    monkeypatch.setattr("matching.service.get_server_world_tree", lambda com_id: {"1": [10]})
+    mock_game_repo.search_rooms_all.return_value = [_listed_room(1, "alice", rank_id=10)]
+    monkeypatch.setattr("matching.service.update_and_get_phantoms", lambda rooms: [])
+    nobody_live.side_effect = RuntimeError("database down")
+
+    result = await get_rooms_all("NPWR02973_00")
+
+    assert result["rank_match"][0]["users"][0]["stream"] is None
+
+
 @pytest.mark.asyncio
 async def test_collect_activity_observation_bypasses_http_cache(mock_game_repo, monkeypatch):
     from matching.models import Rank, RoomInfoDTO
