@@ -40,6 +40,8 @@ from reservation.db import init_db as init_reservation_db, close_db as close_res
 from reservation.router import router as reservation_router
 from saves import init_saves, close_saves
 from saves.router import router as saves_router, admin_router as saves_admin_router
+from streaming import init_streaming, close_streaming
+from streaming.router import router as streaming_router, admin_router as streaming_admin_router
 from shared.settings import get_settings
 
 logging.basicConfig(
@@ -68,11 +70,13 @@ async def lifespan(app: FastAPI):
     await init_history_repo()
     await init_game_repo()
     await init_chat()
+    await init_streaming()
     collector_task = asyncio.create_task(run_collector(), name="match-history-collector")
     try:
         yield
     finally:
         await stop_collector(collector_task)
+    await close_streaming()
     await close_game_repo()
     await close_history_repo()
     await close_reservation_db()
@@ -106,6 +110,8 @@ app.include_router(community_router, prefix="/community", tags=["community"])
 app.include_router(reservation_router)
 app.include_router(saves_router)
 app.include_router(chat_router)
+app.include_router(streaming_router)
+app.include_router(streaming_admin_router)
 
 register_exception_handlers(app)
 

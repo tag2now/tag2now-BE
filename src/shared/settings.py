@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     cache_ttl_player_hours: int = 300
     # A player's TTT2 save on their profile; an admin's edit clears it sooner.
     cache_ttl_player_save: int = 600
+    # One channel's live status; a failed check is cached as offline for as long.
+    cache_ttl_live_streams: int = 30
+    # Every registered channel; a registration change clears it sooner.
+    cache_ttl_stream_channels: int = 300
     matchmaking_ttl: int = 60
     match_history_collection_interval_seconds: int = 30
     # RPCN usernames (= npid) kept off the weekly ranking, e.g. test accounts.
@@ -64,6 +68,10 @@ class Settings(BaseSettings):
     # HS256 key for access tokens; at least 32 bytes. Rotating it signs everyone out.
     jwt_secret: SecretStr = SecretStr("")
     jwt_ttl_seconds: int = 7 * 24 * 3600
+
+    # Chzzk's web API, not the official Open API, which cannot look up one channel.
+    chzzk_api_url: str = "https://api.chzzk.naver.com"
+    chzzk_timeout_seconds: float = 3.0
 
     cors_origins: list[str] = ["*"]
 

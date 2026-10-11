@@ -82,6 +82,7 @@ _FIELD_LABELS = {
     "fix_points": "점수 보정",
     "refloor": "강등 캐릭터 재적용",
     "label": "백업 이름",
+    "channel": "치지직 채널",
 }
 
 

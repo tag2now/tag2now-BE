@@ -7,6 +7,7 @@ from shared.database import Base, build_dsn
 import community.entities  # noqa
 import history.entities  # noqa
 import reservation.entities  # noqa
+import streaming.entities  # noqa
 
 config = context.config
 config.set_main_option("sqlalchemy.url", os.getenv("DATABASE_URL") or build_dsn(driver="psycopg"))
