@@ -340,6 +340,24 @@
         "title": "CharChangeOut",
         "type": "object"
       },
+      "CharacterOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "CharacterOut",
+        "type": "object"
+      },
       "ChatMessageOut": {
         "properties": {
           "author_online_name": {
@@ -610,6 +628,30 @@
           "floor"
         ],
         "title": "FloorWriteOut",
+        "type": "object"
+      },
+      "GameDataOut": {
+        "properties": {
+          "characters": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterOut"
+            },
+            "title": "Characters",
+            "type": "array"
+          },
+          "ranks": {
+            "items": {
+              "$ref": "#/components/schemas/RankOut"
+            },
+            "title": "Ranks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "characters",
+          "ranks"
+        ],
+        "title": "GameDataOut",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -992,6 +1034,29 @@
           "created_at"
         ],
         "title": "PostSummary",
+        "type": "object"
+      },
+      "RankOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tier": {
+            "title": "Tier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "tier"
+        ],
+        "title": "RankOut",
         "type": "object"
       },
       "ReservationOut": {
@@ -3038,6 +3103,28 @@
         "summary": "Thumb Post",
         "tags": [
           "community"
+        ]
+      }
+    },
+    "/game-data": {
+      "get": {
+        "description": "Every TTT2 character id and rank code with its name; the one table other services read.",
+        "operationId": "game_data_game_data_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameDataOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Character and rank tables",
+        "tags": [
+          "Tekken Tag Tournament 2"
         ]
       }
     },

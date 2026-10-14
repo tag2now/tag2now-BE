@@ -8,6 +8,7 @@ from fastapi.encoders import jsonable_encoder
 
 from shared.cache import cache_get, cache_set
 from shared.settings import get_settings
+from matching.constants import TEKKEN_RANKS, TTT2_CHARACTERS
 from matching.db import get_game_server_repo
 from matching.matchmaking_tracker import update_and_get_phantoms
 from matching.models import (
@@ -37,6 +38,14 @@ def _group_rooms_by_type(rooms: list[RoomInfoDTO]) -> dict[str, list[RoomInfoDTO
 	for room in rooms:
 		grouped[room.room_type.value].append(room)
 	return grouped
+
+
+def get_game_data() -> dict:
+	"""Character and rank tables; tag2now-save-admin reads them from here."""
+	return {
+		"characters": [{"id": i, "name": name} for i, name in sorted(TTT2_CHARACTERS.items())],
+		"ranks": [{"id": i, **rank} for i, rank in sorted(TEKKEN_RANKS.items())],
+	}
 
 
 # ---------------------------------------------------------------------------

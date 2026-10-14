@@ -427,7 +427,7 @@ error array. A new user-facing request field belongs in that map.
 | `/saves` | `saves/router.py` — `GET /players/{npid}`, public |
 | `/streams` | `streaming/router.py` — `GET`/`PUT`/`DELETE /me`, the signed-in account's channel |
 | `/admin/streams` | `streaming/router.py` (`admin_router`) — `GET`, `DELETE /{username}`; admins only, no password |
-| *(none)* | `matching/router.py` — `/servers`, `/rooms/all`, `/leaderboard`, `/players/{npid}` |
+| *(none)* | `matching/router.py` — `/game-data`, `/servers`, `/rooms/all`, `/leaderboard`, `/players/{npid}` |
 | `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/stats/weekly-top`, `/players/{npid}` |
 | `/community` | `community/router.py` — posts, comments, thumbs |
 | `/reservations` | `reservation/router.py` — list, create, read one (`GET /{id}`), edit (`PATCH`), join, cancel |

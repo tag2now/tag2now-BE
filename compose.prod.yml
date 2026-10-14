@@ -48,6 +48,10 @@ services:
     image: 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com/tag2now/save-admin:${SAVE_ADMIN_IMAGE_TAG:-latest}
     restart: unless-stopped
     logging: *default-logging
+    # Character and rank names come from be's GET /game-data; the host CLI
+    # reaches the same be at its default, http://127.0.0.1:8000.
+    environment:
+      TAG2NOW_API_URL: http://be:8000
     # be's .env.prod: save-admin reads SAVE_ADMIN_KEY, RPCN_API_SERVER_KEY and
     # RPCN_API_SERVER_URL from it, the same as be.
     env_file:

@@ -2,16 +2,27 @@
 
 import logging
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Path, Query, Response
 from fastapi.encoders import jsonable_encoder
 
-from matching.models import TTT2_COM_ID, TTT2_RANK_BOARD_ID
+from matching.models import TTT2_COM_ID, TTT2_RANK_BOARD_ID, GameDataOut
 from matching import service
 from matching.service import LEADERBOARD_CACHE_SIZE
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Tekken Tag Tournament 2"])
+
+
+# Changes only with a deploy, so a client may keep it for five minutes.
+GAME_DATA_MAX_AGE = 300
+
+
+@router.get("/game-data", response_model=GameDataOut, summary="Character and rank tables")
+def game_data(response: Response):
+    """Every TTT2 character id and rank code with its name; the one table other services read."""
+    response.headers["Cache-Control"] = f"public, max-age={GAME_DATA_MAX_AGE}"
+    return service.get_game_data()
 
 
 @router.get("/servers", summary="Server and world list")

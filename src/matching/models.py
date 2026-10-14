@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 
+from pydantic import BaseModel
+
 from rpcn_client import RoomInfo, UserInfo
 from matching.constants import TEKKEN_RANKS, TTT2_CHARACTERS
 
@@ -206,3 +208,23 @@ class RoomUser:
 	user_id: str
 	online_name: str
 	avatar_url: str
+
+
+# ---------------------------------------------------------------------------
+# Game data (the one table every other service reads)
+# ---------------------------------------------------------------------------
+
+class CharacterOut(BaseModel):
+	id: int
+	name: str
+
+
+class RankOut(BaseModel):
+	id: int
+	name: str
+	tier: str
+
+
+class GameDataOut(BaseModel):
+	characters: list[CharacterOut]
+	ranks: list[RankOut]
