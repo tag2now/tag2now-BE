@@ -84,6 +84,16 @@ def test_a_post_answers_the_message_under_the_signed_in_name(client, auth_header
     assert (body["author_username"], body["author_online_name"], body["body"]) == ("alice", "Alice", "한 판 하실 분")
 
 
+def test_a_post_says_whether_its_author_is_an_admin(client, auth_headers):
+    service.configure(MemoryChatRepository(max_kept=10), EndedBus())
+    client.post("/chat/messages", json={"body": "공지"}, headers=auth_headers("mod", admin=True))
+    client.post("/chat/messages", json={"body": "hi"}, headers=auth_headers("alice"))
+
+    _, data_line = client.get("/chat/stream").text.strip().split("\n")
+
+    assert [m["author_admin"] for m in json.loads(data_line.removeprefix("data: "))] == [True, False]
+
+
 @pytest.mark.parametrize(
     "text, expected",
     [

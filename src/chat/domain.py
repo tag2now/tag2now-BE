@@ -24,6 +24,9 @@ class Message:
     author_online_name: str
     body: str
     created_at: datetime
+    # Whether the author was an admin when they posted --- the token's claim,
+    # read at that moment. The line keeps it for the rest of its one day.
+    author_admin: bool = False
 
 
 @dataclass(frozen=True)

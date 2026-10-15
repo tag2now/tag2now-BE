@@ -23,8 +23,10 @@ class MemoryChatRepository(ChatRepository):
         self._messages: deque[Message] = deque(maxlen=max_kept)
         self._next_id = 1
 
-    async def append(self, author_username: str, author_online_name: str, body: str, created_at: datetime) -> Message:
-        message = Message(self._next_id, author_username, author_online_name, body, created_at)
+    async def append(
+        self, author_username: str, author_online_name: str, body: str, created_at: datetime, *, author_admin: bool = False
+    ) -> Message:
+        message = Message(self._next_id, author_username, author_online_name, body, created_at, author_admin)
         self._next_id += 1
         self._messages.append(message)
         return message

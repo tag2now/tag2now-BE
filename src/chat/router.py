@@ -42,7 +42,7 @@ async def stream() -> AsyncIterable[ServerSentEvent]:
 
 @router.post("/messages", response_model=models.ChatMessageOut, status_code=201)
 async def post_message(request: models.PostMessageRequest, user: AuthUser = Depends(current_user)):
-    return await service.post_message(subject=user.username, display_name=user.online_name, body=request.body)
+    return await service.post_message(subject=user.username, display_name=user.online_name, body=request.body, admin=user.admin)
 
 
 @router.delete("/messages/{message_id}", status_code=204)

@@ -20,6 +20,7 @@ class ChatMessageOut(BaseModel):
     author_online_name: str
     body: str
     created_at: datetime
+    author_admin: bool
 
 
 class DeletedOut(BaseModel):

@@ -65,10 +65,10 @@ async def todays_messages() -> list[Message]:
     return await _repository().list_since(day_start(_clock.now()))
 
 
-async def post_message(*, subject: str, display_name: str, body: str) -> Message:
+async def post_message(*, subject: str, display_name: str, body: str, admin: bool = False) -> Message:
     now = _clock.now()
     ensure_not_flooding(_last_post.get(subject), now)
-    message = await _repository().append(subject, display_name, body, now)
+    message = await _repository().append(subject, display_name, body, now, author_admin=admin)
     _last_post[subject] = now
     await _event_bus().publish(Posted(message))
     return message
