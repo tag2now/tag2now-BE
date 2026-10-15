@@ -7,7 +7,6 @@ from decimal import Decimal
 from community.exceptions import (
     PostNotFoundError,
     CommentNotFoundError,
-    OwnershipError,
     NestingDepthError,
 )
 from community.ports import CommunityRepository
@@ -199,29 +198,26 @@ class DynamoCommunityRepository(CommunityRepository):
         await self._conn.table.put_item(Item=item)
         return _item_to_post(item)
 
-    async def update_post(self, post_id: int, user: str, title: str, body: str, post_type: str, characters: list[str], youtube_video_id: str | None) -> dict:
+    async def update_post(self, post_id: int, title: str, body: str, post_type: str, characters: list[str], youtube_video_id: str | None) -> dict:
         from botocore.exceptions import ClientError
 
         try:
             response = await self._conn.table.update_item(
                 Key={"PK": f"POST#{post_id}", "SK": "META"},
                 UpdateExpression="SET #title = :title, #body = :body, post_type = :type, #chars = :chars, youtube_video_id = :video",
-                ConditionExpression="attribute_exists(PK) AND author = :user",
+                ConditionExpression="attribute_exists(PK)",
                 ExpressionAttributeNames={"#title": "title", "#body": "body", "#chars": "characters"},
-                ExpressionAttributeValues={":title": title, ":body": body, ":type": post_type, ":chars": list(characters), ":video": youtube_video_id, ":user": user},
+                ExpressionAttributeValues={":title": title, ":body": body, ":type": post_type, ":chars": list(characters), ":video": youtube_video_id},
                 ReturnValues="ALL_NEW",
             )
         except ClientError as error:
             if error.response["Error"]["Code"] != "ConditionalCheckFailedException":
                 raise
-            await self.get_post(post_id)  # Raises PostNotFoundError for a missing post.
-            raise OwnershipError("Not your post") from error
+            raise PostNotFoundError("Post not found") from error
         return _item_to_post(response["Attributes"])
 
-    async def delete_post(self, post_id: int, user: str) -> None:
-        post = await self.get_post(post_id)
-        if post["author"] != user:
-            raise OwnershipError("Not your post")
+    async def delete_post(self, post_id: int) -> None:
+        await self.get_post(post_id)  # Raises PostNotFoundError for a missing post.
 
         # Delete all comments for this post
         comments = await self.get_post_comments(post_id)

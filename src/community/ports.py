@@ -37,12 +37,14 @@ class CommunityRepository(ABC):
         """Insert a new post and return it."""
 
     @abstractmethod
-    async def update_post(self, post_id: int, user: str, title: str, body: str, post_type: str, characters: list[str], youtube_video_id: str | None) -> dict:
-        """Update editable fields of a post owned by user."""
+    async def update_post(self, post_id: int, title: str, body: str, post_type: str, characters: list[str], youtube_video_id: str | None) -> dict:
+        """Update editable fields of a post, or raise PostNotFoundError.
+
+        Who may is the service's decision, not the store's."""
 
     @abstractmethod
-    async def delete_post(self, post_id: int, user: str) -> None:
-        """Delete a post owned by *user*, or raise PostNotFoundError / OwnershipError."""
+    async def delete_post(self, post_id: int) -> None:
+        """Delete a post, or raise PostNotFoundError. Who may is the service's decision."""
 
     # -- Comments ------------------------------------------------------------
 

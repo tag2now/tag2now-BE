@@ -23,7 +23,7 @@ def _invalidate_post(post_id: int):
     cache_delete_pattern(f"community:post:{post_id}")
 
 def _get_user(user: AuthUser = Depends(current_user)) -> str:
-    """The signed-in RPCN username: the author on writes, the owner on edits.
+    """The signed-in RPCN username: the author on writes, the voter on thumbs.
 
     The board stores one name per post and compares it for ownership, so it
     must be the unique, unchangeable username rather than the online name.
@@ -100,7 +100,7 @@ async def update_post(post_id: int, req: models.UpdatePostRequest, user: AuthUse
 
 
 @router.delete("/posts/{post_id}", status_code=204)
-async def delete_post(post_id: int, user: str = Depends(_get_user)):
+async def delete_post(post_id: int, user: AuthUser = Depends(current_user)):
     await service.delete_post(post_id, user)
     _invalidate_posts()
     _invalidate_post(post_id)

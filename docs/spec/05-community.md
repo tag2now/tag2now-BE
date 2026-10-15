@@ -19,8 +19,8 @@
 | GET | `/community/posts?page&page_size&post_type&characters` | 목록 (page ≥ 1, page_size 1~100 기본 20) |
 | POST | `/community/posts` | 작성 (201) |
 | GET | `/community/posts/{id}` | 상세 + 댓글 트리 |
-| PATCH | `/community/posts/{id}` | 수정 — 작성자 본인만, 편집 가능한 필드 전부를 보낸다 |
-| DELETE | `/community/posts/{id}` | 작성자 본인만 (204) |
+| PATCH | `/community/posts/{id}` | 수정 — 작성자 본인만(공지는 관리자 누구나), 편집 가능한 필드 전부를 보낸다 |
+| DELETE | `/community/posts/{id}` | 작성자 본인만, 공지는 관리자 누구나 (204) |
 
 ### 글 종류(`post_type`)
 
@@ -35,7 +35,9 @@
   권한을 잃은 관리자도 토큰이 만료될 때까지는 쓸 수 있다.
 - `post_type` 없이 부르는 목록은 공지를 **빼고** 돌려준다. `total`에도 세지 않는다.
 - 공지는 `?post_type=공지`로 따로 받는다. 개수 제한 없이 전부 고정한다.
-- 수정·삭제·댓글·추천은 일반 글과 같다(작성자 본인만 수정·삭제).
+- **수정·삭제는 관리자 누구나** 할 수 있다. 작성자 본인도 그대로 할 수 있다. 공지인지는
+  요청이 아니라 저장된 글로 판단하므로, 관리자가 남의 일반 글을 공지로 바꿔 가져갈 수는 없다(403).
+- 댓글·추천은 일반 글과 같다.
 
 ### 캐릭터 태그(`characters`)
 

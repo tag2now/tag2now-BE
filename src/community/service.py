@@ -2,7 +2,7 @@
 
 from auth.models import AuthUser
 from community.db import get_repo
-from community.exceptions import NoticeAdminOnlyError
+from community.exceptions import NoticeAdminOnlyError, OwnershipError
 from community.models import NOTICE_POST_TYPE
 
 
@@ -18,6 +18,18 @@ def ensure_can_use_post_type(post_type: str, user: AuthUser) -> None:
     """
     if post_type == NOTICE_POST_TYPE and not user.admin:
         raise NoticeAdminOnlyError("공지는 관리자만 작성할 수 있습니다.")
+
+
+def ensure_can_manage_post(post: dict, user: AuthUser) -> None:
+    """A post is its author's to edit or delete; a notice is every admin's.
+
+    Judged by the post as stored, not as the request would leave it, so an
+    admin still cannot turn someone else's post into a notice to take it over.
+    """
+    owns = post["author"] == user.username
+    co_admin = post["post_type"] == NOTICE_POST_TYPE and user.admin
+    if not (owns or co_admin):
+        raise OwnershipError("Not your post")
 
 
 async def list_posts(page: int, page_size: int, post_type: str | None = None, characters: list[str] | None = None) -> tuple[list[dict], int]:
@@ -39,11 +51,15 @@ async def create_post(author: AuthUser, title: str, body: str, post_type: str = 
 
 async def update_post(post_id: int, user: AuthUser, title: str, body: str, post_type: str, characters: list[str], youtube_video_id: str | None) -> dict:
     ensure_can_use_post_type(post_type, user)
-    return await get_repo().update_post(post_id, user.username, title, body, post_type, characters, youtube_video_id)
+    repo = get_repo()
+    ensure_can_manage_post(await repo.get_post(post_id), user)
+    return await repo.update_post(post_id, title, body, post_type, characters, youtube_video_id)
 
 
-async def delete_post(post_id: int, user: str):
-    await get_repo().delete_post(post_id, user)
+async def delete_post(post_id: int, user: AuthUser):
+    repo = get_repo()
+    ensure_can_manage_post(await repo.get_post(post_id), user)
+    await repo.delete_post(post_id)
 
 
 # ---------------------------------------------------------------------------

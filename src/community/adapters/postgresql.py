@@ -2,7 +2,7 @@
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from community.entities import Comment, Post, Thumb
-from community.exceptions import CommentNotFoundError, NestingDepthError, OwnershipError, PostNotFoundError
+from community.exceptions import CommentNotFoundError, NestingDepthError, PostNotFoundError
 from community.models import NOTICE_POST_TYPE
 from community.ports import CommunityRepository
 from shared.database import get_session_factory
@@ -40,20 +40,18 @@ class PostgresCommunityRepository(CommunityRepository):
     async def create_post(self, author, title, body, post_type="자유", characters=None, youtube_video_id=None):
         async with self.sessions() as s, s.begin():
             row=Post(author=author,title=title,body=body,post_type=post_type,characters=list(characters or []),youtube_video_id=youtube_video_id); s.add(row); await s.flush(); await s.refresh(row); return _dict(row)
-    async def update_post(self, post_id, user, title, body, post_type, characters, youtube_video_id):
+    async def update_post(self, post_id, title, body, post_type, characters, youtube_video_id):
         async with self.sessions() as s, s.begin():
             row = await s.scalar(select(Post).where(Post.id == post_id).with_for_update())
             if row is None: raise PostNotFoundError("Post not found")
-            if row.author != user: raise OwnershipError("Not your post")
             row.title, row.body, row.post_type, row.characters = title, body, post_type, list(characters)
             row.youtube_video_id = youtube_video_id
             await s.flush()
             return {**_dict(row), "comment_count": await s.scalar(select(func.count()).select_from(Comment).where(Comment.post_id == post_id))}
-    async def delete_post(self, post_id, user):
+    async def delete_post(self, post_id):
         async with self.sessions() as s, s.begin():
             row=await s.get(Post,post_id)
             if row is None: raise PostNotFoundError("Post not found")
-            if row.author != user: raise OwnershipError("Not your post")
             await s.delete(row)
     async def create_comment(self, post_id, author, body, parent_id=None):
         async with self.sessions() as s, s.begin():
