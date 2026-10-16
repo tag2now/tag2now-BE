@@ -1,7 +1,8 @@
-"""Chat lives for one play day and nothing longer.
+"""Chat shows the current play day and the one before it, and nothing longer.
 
-A message belongs to the day that runs from 06:00 KST to the next 06:00 KST.
-Older messages are not shown, and nothing promises to keep them: the store is
+A play day runs from 06:00 KST to the next 06:00 KST. The previous day stays
+in view so a conversation does not look cut off just after 06:00. Older
+messages are not shown, and nothing promises to keep them: the store is
 process memory, so a deploy empties it as well.
 """
 
@@ -49,3 +50,9 @@ def day_start(now: datetime) -> datetime:
     if kst_now < start:
         start -= timedelta(days=1)
     return start.astimezone(now.tzinfo)
+
+
+def history_start(now: datetime) -> datetime:
+    """The oldest moment whose messages are still shown: the 06:00 KST that
+    opened the previous play day."""
+    return day_start(now) - timedelta(days=1)

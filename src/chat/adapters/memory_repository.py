@@ -6,14 +6,14 @@ from chat.ports import ChatRepository
 
 
 class MemoryChatRepository(ChatRepository):
-    """Today's chat in process memory.
+    """Recent chat in process memory.
 
     It lives and dies with the process, so a backend deploy empties it --- an
-    accepted cost for a channel that only ever shows one day. There is one
+    accepted cost for a channel that only ever shows two days. There is one
     process (see CLAUDE.md), so one deque is the whole store.
 
     The deque is bounded rather than purged at 06:00: `list_since` already
-    hides the previous day, and the bound is what keeps a busy day from
+    hides anything older, and the bound is what keeps a busy day from
     growing without limit. Ids restart from 1 with the process; a client
     replaces its list with the snapshot every stream opens with, so a reused
     id never meets the old one.

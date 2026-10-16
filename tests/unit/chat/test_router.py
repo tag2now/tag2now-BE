@@ -126,7 +126,7 @@ def test_delete_is_the_authors_or_an_admins(client, auth_headers):
     assert client.delete(f"/chat/messages/{message_id}", headers=auth_headers("alice")).status_code == 404
 
 
-async def test_the_stream_opens_with_todays_messages_then_follows_changes():
+async def test_the_stream_opens_with_recent_messages_then_follows_changes():
     earlier = await service.post_message(subject="alice", display_name="Alice", body="earlier")
     events = router.stream()
 
@@ -145,7 +145,7 @@ async def test_the_stream_opens_with_todays_messages_then_follows_changes():
     await events.aclose()
 
 
-async def test_someone_who_joins_later_gets_all_of_todays_chat_then_the_same_live_events():
+async def test_someone_who_joins_later_gets_all_of_the_recent_chat_then_the_same_live_events():
     first = router.stream()
     assert (await _next(first)).data == []
 

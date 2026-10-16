@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from chat.domain import KST, day_start
+from chat.domain import KST, day_start, history_start
 
 
 @pytest.mark.parametrize(
@@ -28,3 +28,16 @@ def test_day_start_answers_in_the_zone_it_was_asked_in():
 
     assert start.tzinfo == timezone.utc
     assert start == datetime(2026, 10, 6, 21, 0, tzinfo=timezone.utc)  # 06:00 KST on the 7th
+
+
+@pytest.mark.parametrize(
+    "now, expected",
+    [
+        # Just after dawn the whole of last night is still shown.
+        (datetime(2026, 10, 8, 6, 0, tzinfo=KST), datetime(2026, 10, 7, 6, 0, tzinfo=KST)),
+        (datetime(2026, 10, 8, 5, 59, 59, tzinfo=KST), datetime(2026, 10, 6, 6, 0, tzinfo=KST)),
+        (datetime(2026, 10, 8, 23, 0, tzinfo=KST), datetime(2026, 10, 7, 6, 0, tzinfo=KST)),
+    ],
+)
+def test_history_starts_at_the_previous_play_days_0600_kst(now, expected):
+    assert history_start(now) == expected

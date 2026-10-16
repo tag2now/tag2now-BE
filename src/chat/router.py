@@ -23,7 +23,7 @@ def _to_sse(event: ChatEvent) -> ServerSentEvent:
 async def stream() -> AsyncIterable[ServerSentEvent]:
     """Today's chat, then every change to it as it happens. Public.
 
-    Opens with a `snapshot` event holding today's messages, then sends
+    Opens with a `snapshot` event holding the recent messages (see `chat.domain`), then sends
     `message` and `delete` events. A reconnect gets a fresh snapshot rather
     than resuming from `Last-Event-ID`: ids restart with the process, and a
     deletion missed while disconnected is only visible in a whole new list.
@@ -34,7 +34,7 @@ async def stream() -> AsyncIterable[ServerSentEvent]:
     # neither the snapshot nor, if we subscribed only afterwards, the stream.
     # Anything that lands in both is deduplicated by id on the client.
     async with service.subscribe() as events:
-        messages = await service.todays_messages()
+        messages = await service.recent_messages()
         yield ServerSentEvent(event="snapshot", data=[models.ChatMessageOut.model_validate(m) for m in messages])
         async for event in events:
             yield _to_sse(event)

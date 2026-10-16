@@ -10,7 +10,7 @@ from collections.abc import AsyncIterable
 from contextlib import AbstractAsyncContextManager
 from datetime import datetime, timedelta, timezone
 
-from chat.domain import ChatEvent, Deleted, Message, Posted, day_start
+from chat.domain import ChatEvent, Deleted, Message, Posted, history_start
 from chat.ports import ChatEventBus, ChatRepository, Clock
 from shared.exceptions import ForbiddenError, NotFoundError, RateLimitedError
 
@@ -61,8 +61,8 @@ def subscribe() -> AbstractAsyncContextManager[AsyncIterable[ChatEvent]]:
     return _event_bus().subscribe()
 
 
-async def todays_messages() -> list[Message]:
-    return await _repository().list_since(day_start(_clock.now()))
+async def recent_messages() -> list[Message]:
+    return await _repository().list_since(history_start(_clock.now()))
 
 
 async def post_message(*, subject: str, display_name: str, body: str, admin: bool = False) -> Message:
