@@ -28,6 +28,15 @@ Always use the project virtual environment when running Python commands:
 .venv/Scripts/python.exe -m grpc_tools.protoc ...
 ```
 
+## Comments
+
+A comment says in one line --- two at most --- *why* the code is as it is, when
+the code cannot say it. Not what the code does, and not its history: "used to",
+"before this", "changed because" belong in the commit message. Anything longer
+goes in this file or `docs/`.
+
+Docstrings follow the same rule.
+
 ## Running
 
 The ASGI app is `src/app.py:app`. Note `--app-dir src`, since packages live under `src/`.
