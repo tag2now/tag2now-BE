@@ -123,7 +123,7 @@ FE ◀──{changes, applied, result}──────────────
 - save-admin의 `GET /players/top-ranks`를 부른다(API 키만). save-admin은 지난 호출 뒤 `data_id`가 바뀐
   세이브만 다시 읽는다. 게임은 저장마다 새 `data_id`를 쓰고 관리자 수정은 그대로 두므로, **관리자 수정은 이
   리더보드에 반영되지 않는다** — 게임으로 얻은 계급만 보이는 것이 의도다.
-- **캐시 5분**(`cache_ttl_save_leaderboard`, 키 `saves:leaderboard`). 전체를 한 번 캐시하고 `top`은 잘라서
+- **캐시 5분**(`cache_ttl_current_rank_leaderboard`, 키 `saves:current-rank-leaderboard`). 전체를 한 번 캐시하고 `top`은 잘라서
   준다. 연결 실패는 캐시하지 않는다(502).
 
 ## 캐릭터·계급 이름

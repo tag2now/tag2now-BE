@@ -76,7 +76,7 @@ class SaveCharOut(BaseModel):
     losses: int
 
 
-class RankLeaderboardEntryOut(BaseModel):
+class CurrentRankLeaderboardEntryOut(BaseModel):
     # Place on the board; players with the same two characters' ranks and points share it.
     rank: int
     username: str
@@ -87,10 +87,10 @@ class RankLeaderboardEntryOut(BaseModel):
     chars: list[SaveCharOut]
 
 
-class RankLeaderboardOut(BaseModel):
+class CurrentRankLeaderboardOut(BaseModel):
     # Players on the board, of which entries are the first `top`.
     total: int
-    entries: list[RankLeaderboardEntryOut]
+    entries: list[CurrentRankLeaderboardEntryOut]
 
 
 class SaveOut(BaseModel):

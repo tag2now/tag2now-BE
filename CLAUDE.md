@@ -169,7 +169,7 @@ bytes). They default to empty so the app still boots without them, but then
 get a `JWT_SECRET` from `tests/conftest.py`, which also provides the
 `auth_headers(username)` fixture for signed-in requests.
 
-Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leaderboard`, `cache_ttl_rooms`, `cache_ttl_rooms_all`, `cache_ttl_community`, `cache_ttl_activity`, `cache_ttl_player_hours`, `cache_ttl_player_save`, `cache_ttl_save_leaderboard`, `cache_ttl_live_streams`, `cache_ttl_stream_channels`, `matchmaking_ttl`.
+Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leaderboard`, `cache_ttl_rooms`, `cache_ttl_rooms_all`, `cache_ttl_community`, `cache_ttl_activity`, `cache_ttl_player_hours`, `cache_ttl_player_save`, `cache_ttl_current_rank_leaderboard`, `cache_ttl_live_streams`, `cache_ttl_stream_channels`, `matchmaking_ttl`.
 
 ## Architecture
 
@@ -239,7 +239,7 @@ it, at `SAVE_ADMIN_URL`. One adapter, one client, two routers:
   save-admin's key-only `GET /players/top-ranks` (each save's two highest
   characters). Sorted here --- best character's rank, the second's, then their
   points; equal standings share a place --- and cached whole for
-  `cache_ttl_save_leaderboard` (5 min). save-admin rereads only saves whose
+  `cache_ttl_current_rank_leaderboard` (5 min). save-admin rereads only saves whose
   `data_id` changed, so only what the game wrote shows; admin edits do not.
 - **`POST /admin/saves/*`** --- admins only, behind `admin.dependencies.admin_user`
   and the same password-per-action rule as `admin/`. An edit is two calls ---

@@ -6,7 +6,7 @@ import pytest
 from saves import db
 from saves.adapters.save_admin_server import SaveAdminServer
 from saves.exceptions import SavesUnavailableError
-from saves.service import rank_board
+from saves.service import current_rank_board
 from shared.cache import DictCache
 
 
@@ -100,7 +100,7 @@ async def test_a_refusal_is_unavailable(response):
 # --- ordering -------------------------------------------------------------------
 
 def test_best_character_first_then_the_second():
-    board = rank_board([
+    board = current_rank_board([
         _player("Low", _char(0, 21), _char(1, 21)),
         _player("Top", _char(0, 25), _char(1, 12)),
         _player("Pair", _char(0, 22), _char(1, 22)),
@@ -110,7 +110,7 @@ def test_best_character_first_then_the_second():
 
 
 def test_points_break_a_tie_of_ranks():
-    board = rank_board([
+    board = current_rank_board([
         _player("A", _char(0, 22, 100), _char(1, 20, 9000)),
         _player("B", _char(0, 22, 4000), _char(1, 20, 0)),
         _player("C", _char(0, 22, 100), _char(1, 20, 9001)),
@@ -120,18 +120,18 @@ def test_points_break_a_tie_of_ranks():
 
 def test_equal_standings_share_a_place_and_list_by_name():
     floor = (_char(0, 14, 5000), _char(1, 14, 5000))
-    board = rank_board([_player("carol", *floor), _player("Top", _char(0, 30)), _player("Bob", *floor),
+    board = current_rank_board([_player("carol", *floor), _player("Top", _char(0, 30)), _player("Bob", *floor),
                         _player("Last", _char(0, 12))])
     assert _order(board) == [(1, "Top"), (2, "Bob"), (2, "carol"), (4, "Last")]
 
 
 def test_one_ranked_character_sits_below_two_of_the_same_rank():
-    board = rank_board([_player("One", _char(0, 22)), _player("Two", _char(0, 22), _char(1, 0))])
+    board = current_rank_board([_player("One", _char(0, 22)), _player("Two", _char(0, 22), _char(1, 0))])
     assert _order(board) == [(1, "Two"), (2, "One")]
 
 
 def test_a_player_with_no_ranked_character_is_left_out():
-    assert _order(rank_board([_player("Empty"), _player("Bob", _char(0, 20))])) == [(1, "Bob")]
+    assert _order(current_rank_board([_player("Empty"), _player("Bob", _char(0, 20))])) == [(1, "Bob")]
 
 
 # --- HTTP -----------------------------------------------------------------------

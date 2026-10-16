@@ -5,7 +5,7 @@ session ends, and a rank seen a few minutes late costs nothing, so an answer is
 kept for cache_ttl_player_save --- a missing save too, or a profile with no save
 would ask the server every time. An admin's written edit drops the entry at once.
 
-The current-rank leaderboard is kept for cache_ttl_save_leaderboard, whole, and
+The current-rank leaderboard is kept for cache_ttl_current_rank_leaderboard, whole, and
 each request slices it. Only what the game wrote counts: an admin's edit keeps
 the save's data_id, which save-admin uses to skip unchanged saves, so it does
 not show there.
@@ -56,20 +56,20 @@ def _profile(save: dict | None) -> dict | None:
 
 # --- leaderboard ----------------------------------------------------------------
 
-_LEADERBOARD_KEY = "saves:leaderboard"
+_CURRENT_RANK_KEY = "saves:current-rank-leaderboard"
 
 # Stands in for a second character a player does not have; below any rank.
 _NO_CHAR = {"rank": -1, "points": -1}
 
 
-async def get_rank_leaderboard(top: int) -> dict:
-    if (board := cache_get(_LEADERBOARD_KEY)) is None:
-        board = rank_board(await get_save_server().read_top_ranks())
-        cache_set(_LEADERBOARD_KEY, board, get_settings().cache_ttl_save_leaderboard)
+async def get_current_rank_leaderboard(top: int) -> dict:
+    if (board := cache_get(_CURRENT_RANK_KEY)) is None:
+        board = current_rank_board(await get_save_server().read_top_ranks())
+        cache_set(_CURRENT_RANK_KEY, board, get_settings().cache_ttl_current_rank_leaderboard)
     return {"total": len(board), "entries": board[:top]}
 
 
-def rank_board(players: list[dict]) -> list[dict]:
+def current_rank_board(players: list[dict]) -> list[dict]:
     """Players with a ranked character, best first; equal standings share a place
     (1, 2, 2, 4) and are listed by name."""
     ranked = sorted((p for p in players if p["chars"]), key=lambda p: (_standing(p), p["npid"].casefold()))
