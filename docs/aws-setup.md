@@ -45,14 +45,15 @@ no address record and serves nothing — absolute URLs must use the `match.` hos
 `deploy` job that SSHes into Lightsail. Each repo releases only its own service
 and pins only its own image tag, so a BE release never rolls `fe` and vice versa:
 
-| Repo | Writes to `.env.prod` | Restarts | Also uploads |
-|------|----------------------|----------|--------------|
-| tag2now-BE | `BE_IMAGE_TAG` | `be` | `compose.prod.yml` |
+| Repo | Writes to `.env` | Restarts | Also uploads |
+|------|------------------|----------|--------------|
+| tag2now-BE | `BE_IMAGE_TAG` | `be` | `compose.prod.yml`, as `compose.yml` |
 | tag2now-FE | `FE_IMAGE_TAG` | `fe` | — |
 
 `compose.prod.yml` is owned by **tag2now-BE** — it describes the whole stack,
 including `fe`. Edit it in that repo; a BE release scp's it over the instance's
-copy, so on-instance edits are lost.
+`compose.yml`, so on-instance edits are lost. With the instance's files named
+`compose.yml` and `.env`, a bare `docker compose` there reads both.
 
 The BE job runs `alembic upgrade head` against the new image *before* replacing
 the serving container, so a failed migration leaves the old container running.
@@ -77,7 +78,7 @@ anyone later creates in the org.
 | `PROD_SSH_KNOWN_HOSTS` | secret | output of `ssh-keyscan <instance-ip>` |
 | `PROD_HOST` | secret | instance IP or hostname |
 | `PROD_USER` | secret | SSH user |
-| `PROD_DEPLOY_PATH` | secret | directory holding `compose.prod.yml` and `.env.prod` |
+| `PROD_DEPLOY_PATH` | secret | directory holding `compose.yml` and `.env` |
 | `AWS_REGION` | variable | `ap-northeast-2` |
 
 **Repo-level** (each repo, because the values genuinely differ):
@@ -120,18 +121,18 @@ To release by hand — a rollback, or when Actions is unavailable:
 
 ```bash
 cd "$PROD_DEPLOY_PATH"
-sed -i 's/^BE_IMAGE_TAG=.*/BE_IMAGE_TAG=v1.2.3/' .env.prod
+sed -i 's/^BE_IMAGE_TAG=.*/BE_IMAGE_TAG=v1.2.3/' .env
 aws ecr get-login-password --region ap-northeast-2   | docker login --username AWS --password-stdin 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com
-docker compose --env-file .env.prod -f compose.prod.yml pull be
-docker compose --env-file .env.prod -f compose.prod.yml run --rm be python -m alembic upgrade head
-docker compose --env-file .env.prod -f compose.prod.yml up -d be
+docker compose pull be
+docker compose run --rm be python -m alembic upgrade head
+docker compose up -d be
 ```
 
 For the first release after Alembic adoption, an already-provisioned database
 must be recorded at the baseline instead of recreated:
 
 ```bash
-docker compose --env-file .env.prod -f compose.prod.yml run --rm be python -m alembic stamp head
+docker compose run --rm be python -m alembic stamp head
 ```
 
 Run `stamp` exactly once, only after confirming the existing schema matches the
@@ -140,16 +141,16 @@ does for you.
 
 ## Secrets
 
-RPCN credentials live in **`.env.prod` on the instance** — not in Secrets
-Manager, not in the repo. The instance runs its own `compose.yml` (not the one
-in this repo, which is for local development) and pulls the file in via
-`env_file`:
+RPCN credentials live in **`.env` on the instance** — not in Secrets
+Manager, not in the repo. The instance's `compose.yml` is this repo's
+`compose.prod.yml` (the repo's own `compose.yml` is for local development) and
+pulls the file in via `env_file`:
 
 ```yaml
 services:
   be:
     env_file:
-      - .env.prod
+      - .env
 ```
 
 So a plain `docker compose up -d` picks the credentials up; no `--env-file`

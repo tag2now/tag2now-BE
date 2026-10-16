@@ -41,8 +41,8 @@ jobs:
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
 
   # Production is a single Lightsail instance running docker compose, released
-  # over SSH. This job owns compose.prod.yml for the whole stack (both repos'
-  # services), but only ever restarts `be` — see docs/aws-setup.md.
+  # over SSH. This job uploads compose.prod.yml as the instance's compose.yml,
+  # for the whole stack, but only ever restarts `be` — see docs/aws-setup.md.
   deploy:
     name: Deploy to production
     needs: build
@@ -72,7 +72,7 @@ jobs:
         run: |
           scp -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
             compose.prod.yml \
-            "$PROD_USER@$PROD_HOST:$PROD_DEPLOY_PATH/"
+            "$PROD_USER@$PROD_HOST:$PROD_DEPLOY_PATH/compose.yml"
 
       - name: Pin the backend image tag
         env:
@@ -83,11 +83,11 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes "$PROD_USER@$PROD_HOST" \
             "cd '$PROD_DEPLOY_PATH' && \
-             test -f .env.prod && \
-             if grep -q '^BE_IMAGE_TAG=' .env.prod; then \
-               sed -i 's/^BE_IMAGE_TAG=.*/BE_IMAGE_TAG=$IMAGE_TAG/' .env.prod; \
+             test -f .env && \
+             if grep -q '^BE_IMAGE_TAG=' .env; then \
+               sed -i 's/^BE_IMAGE_TAG=.*/BE_IMAGE_TAG=$IMAGE_TAG/' .env; \
              else \
-               printf '\nBE_IMAGE_TAG=%s\n' '$IMAGE_TAG' >> .env.prod; \
+               printf '\nBE_IMAGE_TAG=%s\n' '$IMAGE_TAG' >> .env; \
              fi"
 
       # Migrations run against the new image before the serving container is
@@ -106,6 +106,6 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes "$PROD_USER@$PROD_HOST" \
             "cd '$PROD_DEPLOY_PATH' && \
              aws ecr get-login-password --region '$AWS_REGION' | docker login --username AWS --password-stdin '$ECR_REGISTRY' && \
-             docker compose --env-file .env.prod -f compose.prod.yml pull be && \
-             docker compose --env-file .env.prod -f compose.prod.yml run --rm be python -m alembic upgrade head && \
-             docker compose --env-file .env.prod -f compose.prod.yml up -d be"
+             docker compose pull be && \
+             docker compose run --rm be python -m alembic upgrade head && \
+             docker compose up -d be"

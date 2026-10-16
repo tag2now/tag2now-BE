@@ -1,5 +1,5 @@
-# Production stack on Lightsail, deployed by this repo's deploy job; see CLAUDE.md.
-# No redis: REDIS_URL is empty in .env.prod, so be caches in process.
+# Production stack on Lightsail, uploaded as the instance's compose.yml; see CLAUDE.md.
+# No redis: REDIS_URL is empty in .env, so be caches in process.
 
 # json-file never rotates by default; cap each service at 30 MB.
 x-logging: &default-logging
@@ -19,7 +19,7 @@ services:
       FAST_API_PROFILE: prod
       SAVE_ADMIN_URL: http://save-admin:8000
     env_file:
-      - ./.env.prod
+      - ./.env
     # rpcn runs with network_mode: host
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -35,7 +35,7 @@ services:
     environment:
       TAG2NOW_API_URL: http://be:8000
     env_file:
-      - ./.env.prod
+      - ./.env
     # Loopback only, for an SSH tunnel.
     ports:
       - "127.0.0.1:8001:8000"

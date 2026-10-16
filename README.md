@@ -204,24 +204,21 @@ installed.
 
 ### In production
 
-The Lightsail instance runs `compose.prod.yml` from a clone of this repository,
-alongside a `.env.prod` that it keeps to itself — it holds the RPCN credentials
-and is never committed. The database is bind-mounted from the host, so run
-compose as the user that owns that directory.
+The Lightsail instance keeps this repository's `compose.prod.yml` as
+`compose.yml`, uploaded by the deploy job, beside a `.env` that holds the RPCN
+credentials and image tags and is never committed. The database is bind-mounted
+from the host, so run compose as the user that owns that directory.
 
 There is no Redis service in production: `REDIS_URL` is left empty, so the
 backend caches in-process.
 
-Release a new image:
+Pushing a `v*` tag builds the image and deploys it; see
+[docs/aws-setup.md](docs/aws-setup.md). By hand, on the instance:
 
 ```bash
-git pull
-docker compose -f compose.prod.yml pull
-docker compose -f compose.prod.yml up -d
+docker compose pull be
+docker compose up -d be
 ```
-
-Pushing a `v*` tag builds and pushes images to ECR, but does **not** deploy —
-the commands above are still a manual step.
 
 ### Database migrations
 

@@ -24,8 +24,9 @@ FE ◀──{changes, applied, result}──────────────
 
 - 08-admin.md와 같이 **호출마다 관리자 비밀번호**를 받고, 변환(`derive_rpcn_password`)해서 넘긴 뒤
   남기지 않는다. 관리자 여부는 save-admin이 RPCN에 다시 묻는다.
-- save-admin은 `compose.prod.yml`의 서비스이고 포트를 열지 않는다. `be`만 `http://save-admin:8000`으로 닿는다.
-- 설정: `SAVE_ADMIN_URL`(compose가 지정), `SAVE_ADMIN_KEY`(`.env.prod`, save-admin에도 같은 값이 간다),
+- save-admin은 `compose.prod.yml`의 서비스다. `be`는 `http://save-admin:8000`으로 닿고, 포트는 인스턴스 루프백
+  `127.0.0.1:8001`에만 열려 SSH 터널로만 접근한다.
+- 설정: `SAVE_ADMIN_URL`(compose가 지정), `SAVE_ADMIN_KEY`(`.env`, save-admin에도 같은 값이 간다),
   `SAVE_ADMIN_TIMEOUT_SECONDS`(기본 20). URL이나 키가 비면 모든 `/admin/saves/*`와 아래의
   `/saves/players/{npid}`가 502다.
 - 백엔드 코드는 `saves/` 모듈 하나다. adapter 하나(save-admin 클라이언트 하나)가 관리자 호출과 공개 조회를

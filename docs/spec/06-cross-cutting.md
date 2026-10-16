@@ -87,7 +87,7 @@ FastAPI 의존성이 없는 독립 패키지. `python -m rpcn_client`로 단독 
 |------|-----------|--------|
 | 로컬 venv | `env/.env.local` | `local` |
 | docker compose | `env_file: env/.env.dev`가 실제 환경변수로 주입 | 미사용 |
-| 운영 | 인스턴스의 `.env.prod` | 미사용 |
+| 운영 | 인스턴스의 `.env` | 미사용 |
 
 필수(기본값 없음): `rpcn_user`, `rpcn_password`, `rpcn_token`.
 로그인에는 `rpcn_api_server_url`, `rpcn_api_server_key`, `jwt_secret`이 추가로 필요하다. 비어 있어도 기동은 되지만 로그인과 쓰기 라우트가 502다([07-auth.md](07-auth.md)).
@@ -109,9 +109,9 @@ E2E에서 폴링을 실시간으로 기다리지 않는다. 첫 네비게이션 
 ## 배포 / 릴리스
 
 - 두 저장소 모두 **`v*` 태그 푸시가 릴리스**다. GitHub Actions가 ECR에 이미지를 올리고 SSH로 Lightsail에 배포한다.
-- BE 배포는 `.env.prod`의 `BE_IMAGE_TAG`를 갱신 → `alembic upgrade head` → `be`만 재시작.
+- BE 배포는 `.env`의 `BE_IMAGE_TAG`를 갱신 → `alembic upgrade head` → `be`만 재시작.
 - FE 배포는 `FE_IMAGE_TAG` 갱신 → `fe`만 재시작. 두 서비스는 독립 릴리스된다.
-- `compose.prod.yml`은 **tag2now-BE가 소유**하며 배포 시 인스턴스로 scp된다. 인스턴스에서 직접 고치지 않는다.
+- `compose.prod.yml`은 **tag2now-BE가 소유**하며 배포 시 인스턴스의 `compose.yml`로 scp된다. 인스턴스에서 직접 고치지 않는다.
 - FE 버전의 단일 출처는 `src/config/patchNotes.ts`의 최상단 항목(`LATEST_PATCH_VERSION`).
   헤더 버전 표기와 패치노트 다이얼로그 재노출을 동시에 좌우한다. 릴리스 태그 `v{version}`만 수동으로 맞춘다.
 - `/api` 트래픽은 CloudFront를 거치지 않고 인스턴스로 직접 간다. 정적 자산만 CDN을 탄다.

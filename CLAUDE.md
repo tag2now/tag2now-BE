@@ -481,15 +481,15 @@ Production is a **single AWS Lightsail instance** running docker compose — `fe
 - `.github/workflows/deploy.yml` — on `v*` tags: build and push to ECR, then deploy to production over SSH.
 
 **Release is automatic on a `v*` tag.** The `deploy` job SSHes into Lightsail,
-writes `BE_IMAGE_TAG` into the instance's `.env.prod`, pulls, runs
+writes `BE_IMAGE_TAG` into the instance's `.env`, pulls, runs
 `alembic upgrade head` against the new image, and restarts **only `be`** —
 `fe` is released independently by the frontend repo, which pins `FE_IMAGE_TAG`.
 
 This repo owns `compose.prod.yml` for the whole stack; the deploy job scp's it
-to the instance, so edit it here rather than on the box. Its comments are one
+to the instance as `compose.yml`, so edit it here rather than on the box. Its comments are one
 line of *why* each; the explanation lives in this file and in
 tag2now-save-admin's README, not in the compose file. RPCN credentials live
-only in the instance's `.env.prod`, which is never touched by the workflow apart
+only in the instance's `.env`, which is never touched by the workflow apart
 from the `BE_IMAGE_TAG` line.
 
 The SSH and ECR settings are **org-level** secrets/variables on the `tag2now`
