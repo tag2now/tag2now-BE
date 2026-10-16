@@ -486,7 +486,9 @@ writes `BE_IMAGE_TAG` into the instance's `.env.prod`, pulls, runs
 `fe` is released independently by the frontend repo, which pins `FE_IMAGE_TAG`.
 
 This repo owns `compose.prod.yml` for the whole stack; the deploy job scp's it
-to the instance, so edit it here rather than on the box. RPCN credentials live
+to the instance, so edit it here rather than on the box. Its comments are one
+line of *why* each; the explanation lives in this file and in
+tag2now-save-admin's README, not in the compose file. RPCN credentials live
 only in the instance's `.env.prod`, which is never touched by the workflow apart
 from the `BE_IMAGE_TAG` line.
 

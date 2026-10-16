@@ -1,19 +1,7 @@
-# Production stack for the Lightsail instance.
-#
-# The instance keeps its own .env.prod next to this file — it holds the RPCN
-# credentials and is never committed. This file itself is deployed here by the
-# BE repo's deploy workflow (scp), so edit it in the repo, not on the instance.
-#
-# Each repo releases only its own service and pins only its own tag, so a BE
-# release never rolls fe and vice versa. The deploy workflows write
-# BE_IMAGE_TAG / FE_IMAGE_TAG into .env.prod; they default to latest when unset.
-#
-# There is no redis service: REDIS_URL is left empty in .env.prod, so the
-# backend caches in-process (see src/shared/cache.py). That cache lives and
-# dies with the be container, so a restart empties it.
+# Production stack on Lightsail, deployed by this repo's deploy job; see CLAUDE.md.
+# No redis: REDIS_URL is empty in .env.prod, so be caches in process.
 
-# Docker's default json-file driver never rotates, so container logs grow
-# until they fill the disk. Cap every service at 30 MB.
+# json-file never rotates by default; cap each service at 30 MB.
 x-logging: &default-logging
   driver: json-file
   options:
@@ -32,44 +20,30 @@ services:
       SAVE_ADMIN_URL: http://save-admin:8000
     env_file:
       - ./.env.prod
-    # rpcn runs on this instance with network_mode: host, so its API server is
-    # on the host, not on this compose network. 127.0.0.1 here is be itself;
-    # RPCN_API_SERVER_URL=http://host.docker.internal:31315 reaches the host.
+    # rpcn runs with network_mode: host
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
 
-  # TTT2 save admin (tag2now-save-admin), which be calls for the admin page.
-  # Released by that repository: it pins SAVE_ADMIN_IMAGE_TAG and restarts only
-  # this service. be reaches it on this network; the port is published on the
-  # instance's loopback only, for an SSH tunnel (ssh -L 18001:127.0.0.1:8001),
-  # never on a public interface.
+  # Released by tag2now-save-admin.
   save-admin:
     image: 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com/tag2now/save-admin:${SAVE_ADMIN_IMAGE_TAG:-latest}
     restart: unless-stopped
     logging: *default-logging
-    # Character and rank names come from be's GET /game-data; the host CLI
-    # reaches the same be at its default, http://127.0.0.1:8000.
     environment:
       TAG2NOW_API_URL: http://be:8000
-    # be's .env.prod: save-admin reads SAVE_ADMIN_KEY, RPCN_API_SERVER_KEY and
-    # RPCN_API_SERVER_URL from it, the same as be.
     env_file:
       - ./.env.prod
+    # Loopback only, for an SSH tunnel.
     ports:
       - "127.0.0.1:8001:8000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # ec2-user, who owns tus_data and the backups on the host. As root, the
-    # backup directories and files it creates would lock the host CLI, which
-    # runs as ec2-user, out of writing next to them. The saves themselves are
-    # root's (RPCN runs as root); save-admin swaps them in through tus_data.
+    # ec2-user, so the host CLI can write beside the backups this makes.
     user: "1000:1000"
-    # RPCN's data, at the same paths as on the host: the CLI on the host reads
-    # back the backup paths this writes into the audit log. They must match
-    # rpcn-narco's RPCN_DATA_PATH and the paths in tag2now-save-admin.
+    # Host paths: the audit log records them and the host CLI reopens them.
     volumes:
       - /home/ec2-user/rpcn-data/db:/home/ec2-user/rpcn-data/db
       - /home/ec2-user/rpcn-data/tus_data:/home/ec2-user/rpcn-data/tus_data
@@ -88,7 +62,6 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     logging: *default-logging
-    # No host port: be reaches it as postgres:5432 on the compose network.
     environment:
       POSTGRES_USER: tag2now
       POSTGRES_PASSWORD: tag2now
@@ -105,7 +78,6 @@ volumes:
   postgres-data:
     driver: local
     driver_opts:
-      # Use your preferred storage path here, it must already exist
       device: /home/$USER/postgres-data
       o: bind
       type: none
