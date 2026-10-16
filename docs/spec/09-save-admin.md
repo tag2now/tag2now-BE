@@ -110,8 +110,9 @@ FE ◀──{changes, applied, result}──────────────
 
 ## 현재 계급 리더보드 (공개, 읽기 전용)
 
-`GET /saves/leaderboard?top=N` — 로그인 없이 누구나. 게임을 해서 갱신된 현재 계급으로 순위를 매긴다.
-`top`은 1~1000, 기본 100.
+`GET /saves/leaderboard?top=N&days=D` — 로그인 없이 누구나. 게임을 해서 갱신된 현재 계급으로 순위를 매긴다.
+`top`은 1~1000, 기본 100. `days`(1~365)를 주면 게임이 그 기간 안에 세이브를 쓴 플레이어만 남기고
+그 안에서 다시 순위를 매긴다(`total`도 남은 인원). 없으면 전원.
 
 | 필드 | 설명 |
 |------|------|
@@ -124,8 +125,8 @@ FE ◀──{changes, applied, result}──────────────
 - save-admin의 `GET /players/top-ranks`를 부른다(API 키만). save-admin은 지난 호출 뒤 `data_id`가 바뀐
   세이브만 다시 읽는다. 게임은 저장마다 새 `data_id`를 쓰고 관리자 수정은 그대로 두므로, **관리자 수정은 이
   리더보드에 반영되지 않는다** — 게임으로 얻은 계급만 보이는 것이 의도다.
-- **캐시 5분**(`cache_ttl_current_rank_leaderboard`, 키 `saves:current-rank-leaderboard`). 전체를 한 번 캐시하고 `top`은 잘라서
-  준다. 연결 실패는 캐시하지 않는다(502).
+- **캐시 5분**(`cache_ttl_current_rank_leaderboard`, 키 `saves:current-rank-leaderboard`). save-admin의 응답을 통째로
+  캐시하고, 요청마다 `days`로 거르고 순위를 매겨 `top`만큼 준다. 연결 실패는 캐시하지 않는다(502).
 
 ## 캐릭터·계급 이름
 

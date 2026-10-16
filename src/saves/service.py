@@ -15,7 +15,7 @@ RPCN every time.
 """
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from itertools import groupby
 
 from auth.models import AuthUser
@@ -62,11 +62,21 @@ _CURRENT_RANK_KEY = "saves:current-rank-leaderboard"
 _NO_CHAR = {"rank": -1, "points": -1}
 
 
-async def get_current_rank_leaderboard(top: int) -> dict:
-    if (board := cache_get(_CURRENT_RANK_KEY)) is None:
-        board = current_rank_board(await get_save_server().read_top_ranks())
-        cache_set(_CURRENT_RANK_KEY, board, get_settings().cache_ttl_current_rank_leaderboard)
+async def get_current_rank_leaderboard(top: int, days: int | None = None) -> dict:
+    # The players are cached as save-admin answers them; filtering and ranking
+    # 1000 of them per request costs about a millisecond, so `days` needs no key of its own.
+    if (players := cache_get(_CURRENT_RANK_KEY)) is None:
+        players = await get_save_server().read_top_ranks()
+        cache_set(_CURRENT_RANK_KEY, players, get_settings().cache_ttl_current_rank_leaderboard)
+    board = current_rank_board(_saved_within(players, days))
     return {"total": len(board), "entries": board[:top]}
+
+
+def _saved_within(players: list[dict], days: int | None) -> list[dict]:
+    if days is None:
+        return players
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    return [p for p in players if _saved_at(p) >= since]
 
 
 def current_rank_board(players: list[dict]) -> list[dict]:

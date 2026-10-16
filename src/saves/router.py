@@ -19,10 +19,14 @@ async def player_save(npid: str = Path(min_length=1, max_length=64, description=
 
 
 @router.get("/leaderboard", response_model=models.CurrentRankLeaderboardOut)
-async def current_rank_leaderboard(top: int = Query(100, ge=1, le=1000, description="How many players to answer")):
+async def current_rank_leaderboard(
+    top: int = Query(100, ge=1, le=1000, description="How many players to answer"),
+    days: int | None = Query(None, ge=1, le=365, description="Only players whose game saved within this many days"),
+):
     """Players by their current ranks: the best character's rank, then the second's,
-    then their points. Read-only, and up to five minutes behind the game."""
-    return await service.get_current_rank_leaderboard(top)
+    then their points; with `days`, only recent players, ranked among themselves.
+    Read-only, and up to five minutes behind the game."""
+    return await service.get_current_rank_leaderboard(top, days)
 
 
 # --- admin ----------------------------------------------------------------------

@@ -246,11 +246,13 @@ adapter, one client, two routers:
   record for the profile panel, through save-admin's key-only
   `GET /player/save`. Cached for `cache_ttl_player_save` (10 min), a missing
   save included.
-- **`GET /saves/leaderboard?top=`** --- public: players by current rank, from
+- **`GET /saves/leaderboard?top=&days=`** --- public: players by current rank, from
   save-admin's key-only `GET /players/top-ranks` (each save's two highest
   characters). Sorted here --- best character's rank, the second's, then their
-  points; equal standings share a place --- and cached whole for
-  `cache_ttl_current_rank_leaderboard` (5 min). save-admin rereads only saves whose
+  points; equal standings share a place. `days` keeps only players whose game
+  saved within that many days, ranked among themselves. save-admin's answer is
+  cached whole for `cache_ttl_current_rank_leaderboard` (5 min) and ranked per
+  request. save-admin rereads only saves whose
   `data_id` changed, so only what the game wrote shows; admin edits do not.
 - **`POST /admin/saves/*`** --- admins only, behind `admin.dependencies.admin_user`
   and the same password-per-action rule as `admin/`. An edit is two calls ---

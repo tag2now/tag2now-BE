@@ -1,5 +1,7 @@
 """The current-rank leaderboard, with tag2now-save-admin's server replaced by an httpx mock transport."""
 
+from datetime import datetime, timedelta, timezone
+
 import httpx
 import pytest
 
@@ -180,3 +182,44 @@ async def test_an_outage_is_not_remembered(client, use_server):
     for _ in range(2):
         assert client.get("/saves/leaderboard").status_code == 502
     assert len(seen) == 2
+
+
+# --- days -----------------------------------------------------------------------
+
+def _saved(npid: str, days_ago: float, *chars: dict) -> dict:
+    when = datetime.now(timezone.utc) - timedelta(days=days_ago)
+    return {**_player(npid, *chars), "saved_utc": when.strftime("%Y-%m-%d %H:%M:%S")}
+
+
+RECENT = [
+    _saved("Old", 40, _char(0, 30)),
+    _saved("TiedA", 3, _char(0, 25)),
+    _saved("TiedB", 29.9, _char(0, 25)),
+    _saved("Low", 0, _char(0, 20)),
+]
+
+
+async def test_days_keeps_recent_players_and_ranks_them_among_themselves(client, use_server):
+    await use_server(_server(body={"players": RECENT}))
+    body = client.get("/saves/leaderboard", params={"days": 30}).json()
+    assert body["total"] == 3
+    assert _order(body["entries"]) == [(1, "TiedA"), (1, "TiedB"), (3, "Low")]
+
+
+async def test_without_days_everyone_counts(client, use_server):
+    await use_server(_server(body={"players": RECENT}))
+    body = client.get("/saves/leaderboard").json()
+    assert (body["total"], _order(body["entries"])[0]) == (4, (1, "Old"))
+
+
+async def test_any_days_reads_the_one_cached_answer(client, use_server):
+    seen = []
+    await use_server(_server(body={"players": RECENT}, seen=seen))
+    for params in ({}, {"days": 30}, {"days": 7}):
+        assert client.get("/saves/leaderboard", params=params).status_code == 200
+    assert len(seen) == 1
+
+
+@pytest.mark.parametrize("days", [0, 366])
+def test_days_out_of_range_is_422(client, days):
+    assert client.get("/saves/leaderboard", params={"days": days}).status_code == 422
