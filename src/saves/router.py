@@ -1,7 +1,7 @@
 """Two routers over one service: anyone's read-only profile view, and the
 admin's reads and edits under /admin."""
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, Path, Query
 
 from admin.dependencies import admin_user
 from auth.models import AuthUser
@@ -16,6 +16,13 @@ async def player_save(npid: str = Path(min_length=1, max_length=64, description=
     """A player's TTT2 save: account rank, record and the rank of every character
     they have used. Read-only, and up to ten minutes behind the game."""
     return await service.get_player_save(npid)
+
+
+@router.get("/leaderboard", response_model=models.RankLeaderboardOut)
+async def rank_leaderboard(top: int = Query(100, ge=1, le=1000, description="How many players to answer")):
+    """Players by their current ranks: the best character's rank, then the second's,
+    then their points. Read-only, and up to five minutes behind the game."""
+    return await service.get_rank_leaderboard(top)
 
 
 # --- admin ----------------------------------------------------------------------

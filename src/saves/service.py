@@ -5,12 +5,18 @@ session ends, and a rank seen a few minutes late costs nothing, so an answer is
 kept for cache_ttl_player_save --- a missing save too, or a profile with no save
 would ask the server every time. An admin's written edit drops the entry at once.
 
+The current-rank leaderboard is kept for cache_ttl_save_leaderboard, whole, and
+each request slices it. Only what the game wrote counts: an admin's edit keeps
+the save's data_id, which save-admin uses to skip unchanged saves, so it does
+not show there.
+
 Admin calls go straight to the server, which checks the admin's password with
 RPCN every time.
 """
 
 import os
 from datetime import datetime, timezone
+from itertools import groupby
 
 from auth.models import AuthUser
 from saves.db import get_save_server
@@ -46,6 +52,44 @@ def _profile(save: dict | None) -> dict | None:
         return None
     return {"username": save["npid"], "saved_at": _saved_at(save), "account_rank": save["account_rank"],
             "total": save["total"], "wins": save["wins"], "losses": save["losses"], "chars": save["chars"]}
+
+
+# --- leaderboard ----------------------------------------------------------------
+
+_LEADERBOARD_KEY = "saves:leaderboard"
+
+# Stands in for a second character a player does not have; below any rank.
+_NO_CHAR = {"rank": -1, "points": -1}
+
+
+async def get_rank_leaderboard(top: int) -> dict:
+    if (board := cache_get(_LEADERBOARD_KEY)) is None:
+        board = rank_board(await get_save_server().read_top_ranks())
+        cache_set(_LEADERBOARD_KEY, board, get_settings().cache_ttl_save_leaderboard)
+    return {"total": len(board), "entries": board[:top]}
+
+
+def rank_board(players: list[dict]) -> list[dict]:
+    """Players with a ranked character, best first; equal standings share a place
+    (1, 2, 2, 4) and are listed by name."""
+    ranked = sorted((p for p in players if p["chars"]), key=lambda p: (_standing(p), p["npid"].casefold()))
+    board, place = [], 1
+    for _, tied in groupby(ranked, key=_standing):
+        tied = list(tied)
+        board += [{"rank": place, **_entry(p)} for p in tied]
+        place += len(tied)
+    return board
+
+
+def _standing(player: dict) -> tuple:
+    # Sorts ascending, so higher ranks and points come first.
+    first, second = (player["chars"] + [_NO_CHAR, _NO_CHAR])[:2]
+    return -first["rank"], -second["rank"], -first["points"], -second["points"]
+
+
+def _entry(player: dict) -> dict:
+    return {"username": player["npid"], "saved_at": _saved_at(player), "account_rank": player["account_rank"],
+            "chars": player["chars"]}
 
 
 # --- admin ----------------------------------------------------------------------

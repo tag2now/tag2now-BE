@@ -169,7 +169,7 @@ bytes). They default to empty so the app still boots without them, but then
 get a `JWT_SECRET` from `tests/conftest.py`, which also provides the
 `auth_headers(username)` fixture for signed-in requests.
 
-Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leaderboard`, `cache_ttl_rooms`, `cache_ttl_rooms_all`, `cache_ttl_community`, `cache_ttl_activity`, `cache_ttl_player_hours`, `cache_ttl_player_save`, `cache_ttl_live_streams`, `cache_ttl_stream_channels`, `matchmaking_ttl`.
+Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leaderboard`, `cache_ttl_rooms`, `cache_ttl_rooms_all`, `cache_ttl_community`, `cache_ttl_activity`, `cache_ttl_player_hours`, `cache_ttl_player_save`, `cache_ttl_save_leaderboard`, `cache_ttl_live_streams`, `cache_ttl_stream_channels`, `matchmaking_ttl`.
 
 ## Architecture
 
@@ -235,6 +235,12 @@ it, at `SAVE_ADMIN_URL`. One adapter, one client, two routers:
   record for the profile panel, through save-admin's key-only
   `GET /player/save`. Cached for `cache_ttl_player_save` (10 min), a missing
   save included.
+- **`GET /saves/leaderboard?top=`** --- public: players by current rank, from
+  save-admin's key-only `GET /players/top-ranks` (each save's two highest
+  characters). Sorted here --- best character's rank, the second's, then their
+  points; equal standings share a place --- and cached whole for
+  `cache_ttl_save_leaderboard` (5 min). save-admin rereads only saves whose
+  `data_id` changed, so only what the game wrote shows; admin edits do not.
 - **`POST /admin/saves/*`** --- admins only, behind `admin.dependencies.admin_user`
   and the same password-per-action rule as `admin/`. An edit is two calls ---
   `dry_run`, then `expect_sha256` set to the sha256 the preview answered --- and
@@ -400,7 +406,7 @@ error array. A new user-facing request field belongs in that map.
 | `/auth` | `auth/router.py` — `POST /login`, `GET /me` |
 | `/admin` | `admin/router.py` — `POST /users/lookup`, `POST /users/ban`; admins only |
 | `/admin/saves` | `saves/router.py` (`admin_router`) — `POST /show`, `/backups`, `/log`, `/set-rank`, `/set-account-rank`, `/floor`, `/restore`; admins only |
-| `/saves` | `saves/router.py` — `GET /players/{npid}`, public |
+| `/saves` | `saves/router.py` — `GET /players/{npid}`, `GET /leaderboard`, public |
 | `/streams` | `streaming/router.py` — `GET`/`PUT`/`DELETE /me`, the signed-in account's channel |
 | `/admin/streams` | `streaming/router.py` (`admin_router`) — `GET`, `DELETE /{username}`; admins only, no password |
 | *(none)* | `matching/router.py` — `/game-data`, `/servers`, `/rooms/all`, `/leaderboard`, `/players/{npid}` |

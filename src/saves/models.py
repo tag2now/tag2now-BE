@@ -76,6 +76,23 @@ class SaveCharOut(BaseModel):
     losses: int
 
 
+class RankLeaderboardEntryOut(BaseModel):
+    # Place on the board; players with the same two characters' ranks and points share it.
+    rank: int
+    username: str
+    # When the game last wrote this save.
+    saved_at: datetime
+    account_rank: int
+    # The two highest characters, by rank then points; one when only one is ranked.
+    chars: list[SaveCharOut]
+
+
+class RankLeaderboardOut(BaseModel):
+    # Players on the board, of which entries are the first `top`.
+    total: int
+    entries: list[RankLeaderboardEntryOut]
+
+
 class SaveOut(BaseModel):
     username: str
     data_id: int

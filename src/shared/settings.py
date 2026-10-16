@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     cache_ttl_player_hours: int = 300
     # A player's TTT2 save on their profile; an admin's edit clears it sooner.
     cache_ttl_player_save: int = 600
+    # The current-rank leaderboard; save-admin rereads only saves the game wrote since.
+    cache_ttl_save_leaderboard: int = 300
     # One channel's live status; a failed check is cached as offline for as long.
     cache_ttl_live_streams: int = 30
     # Every registered channel; a registration change clears it sooner.
