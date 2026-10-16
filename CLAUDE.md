@@ -228,8 +228,10 @@ site token; it lapses at expiry. Spec: `docs/spec/08-admin.md`.
 `saves/` owns TTT2 saves, which live on the RPCN host and are read and written
 by the `save-admin` service
 ([tag2now-save-admin](https://github.com/tag2now/tag2now-save-admin)). It runs
-in this repo's `compose.prod.yml` with no published port, so only `be` reaches
-it, at `SAVE_ADMIN_URL`. One adapter, one client, two routers:
+in this repo's `compose.prod.yml`, where `be` reaches it at `SAVE_ADMIN_URL`.
+Its port is published on the instance's loopback only (`127.0.0.1:8001`), so
+from outside it is reachable through an SSH tunnel and nothing else. One
+adapter, one client, two routers:
 
 - **`GET /saves/players/{npid}`** --- public, read-only: anyone's ranks and
   record for the profile panel, through save-admin's key-only

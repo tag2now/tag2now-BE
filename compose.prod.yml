@@ -43,7 +43,9 @@ services:
 
   # TTT2 save admin (tag2now-save-admin), which be calls for the admin page.
   # Released by that repository: it pins SAVE_ADMIN_IMAGE_TAG and restarts only
-  # this service. No published port: only be, on this network, can reach it.
+  # this service. be reaches it on this network; the port is published on the
+  # instance's loopback only, for an SSH tunnel (ssh -L 18001:127.0.0.1:8001),
+  # never on a public interface.
   save-admin:
     image: 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com/tag2now/save-admin:${SAVE_ADMIN_IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -56,6 +58,8 @@ services:
     # RPCN_API_SERVER_URL from it, the same as be.
     env_file:
       - ./.env.prod
+    ports:
+      - "127.0.0.1:8001:8000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # ec2-user, who owns tus_data and the backups on the host. As root, the
