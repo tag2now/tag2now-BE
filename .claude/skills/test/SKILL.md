@@ -7,6 +7,19 @@ description: Run tag2now-BE's whole test suite before offering a commit — this
 
 Run this before offering a commit.
 
+## Once per commit, not once per edit
+
+Run the whole suite **once**, when the change is final and a commit is about to
+be offered --- not after each edit or rename. While a change is still moving,
+run only the test files it touches:
+
+```bash
+.venv/Scripts/python.exe -m pytest tests/unit/path/to/test_changed.py -q
+```
+
+If an edit lands after the full run, re-run only what that edit touches, unless
+it changed something many modules share (`shared/`, `app.py`, a migration).
+
 Later steps depend on earlier ones — the integration tests need the migration.
 Do not reorder to save time.
 
