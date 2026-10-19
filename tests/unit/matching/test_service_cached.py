@@ -162,6 +162,30 @@ def test_get_leaderboard_slices_from_cache_without_refetching(mock_game_repo, mo
     mock_game_repo.get_leaderboard.assert_not_called()
 
 
+
+def test_get_leaderboard_drops_excluded_accounts_and_closes_their_gaps(mock_cache, mock_game_repo, monkeypatch):
+    """Excluded accounts leave no gap: everyone below moves up, and a tie stays a tie."""
+    from matching.service import get_leaderboard
+    from matching.models import TTT2LeaderboardResult, TTT2LeaderboardEntry
+    from shared.settings import get_settings
+
+    monkeypatch.setattr(get_settings(), "ranking_excluded_npids", ["TESTER", "other_tester"])
+    board = [(1, "a"), (2, "tester"), (3, "b"), (3, "c"), (5, "Other_Tester"), (6, "d")]
+    mock_game_repo.get_leaderboard.return_value = TTT2LeaderboardResult(
+        total_records=100, last_sort_date=0, entries=[
+            TTT2LeaderboardEntry(
+                rank=rank, np_id=npid, online_name=npid, score=0,
+                pc_id=0, record_date=0, has_game_data=False, comment="", player_info=None,
+            )
+            for rank, npid in board
+        ],
+    )
+
+    result = get_leaderboard("NPWR02973_00", 4, 10)
+
+    assert [(e["rank"], e["np_id"]) for e in result["entries"]] == [(1, "a"), (2, "b"), (2, "c"), (4, "d")]
+    assert result["total_records"] == 98
+
 @pytest.mark.asyncio
 async def test_lookup_player_aggregates_sources(mock_cache, monkeypatch):
     from matching.service import lookup_player

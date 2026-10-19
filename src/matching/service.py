@@ -152,9 +152,20 @@ def _get_full_leaderboard(com_id: str, board_id: int) -> dict:
 		return cached
 	repo = get_game_server_repo()
 	lb = repo.get_leaderboard(com_id, board_id, LEADERBOARD_CACHE_SIZE)
-	encoded = jsonable_encoder(lb)
+	encoded = _without_excluded(jsonable_encoder(lb))
 	cache_set(key, encoded, get_settings().cache_ttl_leaderboard)
 	return encoded
+
+
+def _without_excluded(lb: dict) -> dict:
+	"""Drop excluded accounts; those below move up past them, and ties stay tied."""
+	settings = get_settings()
+	excluded_ranks = [e["rank"] for e in lb["entries"] if settings.is_ranking_excluded(e["np_id"])]
+	entries = [
+		{**e, "rank": e["rank"] - sum(r < e["rank"] for r in excluded_ranks)}
+		for e in lb["entries"] if not settings.is_ranking_excluded(e["np_id"])
+	]
+	return {**lb, "total_records": lb["total_records"] - len(excluded_ranks), "entries": entries}
 
 
 def _find_leaderboard_entry(npid: str) -> TTT2LeaderboardEntry | None:

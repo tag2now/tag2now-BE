@@ -17,6 +17,10 @@
 응답 시 `entries[:top]`으로 잘라 준다(TTL 300s). `top`별로 캐시를 나누면 RPCN 호출이 배수로 늘기 때문이다.
 이 전체 캐시는 플레이어 조회에서도 재사용된다.
 
+`RANKING_EXCLUDED_NPIDS`(03-statistics.md)에 든 계정은 캐시에 넣기 전에 뺀다. 아래 순위는 위에서 빠진 인원만큼
+당겨지고(RPCN이 준 동점은 유지), `total_records`도 그만큼 준다. 같은 캐시를 쓰므로 플레이어 조회의 `leaderboard`도
+이 계정에는 `null`이다.
+
 ### 응답
 
 ```json

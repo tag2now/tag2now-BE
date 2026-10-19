@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     cache_ttl_stream_channels: int = 300
     matchmaking_ttl: int = 60
     match_history_collection_interval_seconds: int = 30
-    # RPCN usernames (= npid) kept off the weekly ranking, e.g. test accounts.
+    # RPCN usernames (= npid) kept off every ranking, e.g. test accounts.
     ranking_excluded_npids: list[str] = []
 
     # host:port only — shared.database.build_dsn() adds scheme and credentials
@@ -81,6 +81,10 @@ class Settings(BaseSettings):
         env_file=(_ENV_DIR / ".env", _ENV_DIR / f".env.{profile}"),
         env_file_encoding="utf-8",
     )
+
+    def is_ranking_excluded(self, npid: str) -> bool:
+        # RPCN usernames are unique case-insensitively, so the list is too.
+        return npid.casefold() in {n.casefold() for n in self.ranking_excluded_npids}
 
 
 @lru_cache

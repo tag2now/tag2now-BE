@@ -68,8 +68,13 @@ async def get_current_rank_leaderboard(top: int, days: int | None = None) -> dic
     if (players := cache_get(_CURRENT_RANK_KEY)) is None:
         players = await get_save_server().read_top_ranks()
         cache_set(_CURRENT_RANK_KEY, players, get_settings().cache_ttl_current_rank_leaderboard)
-    board = current_rank_board(_saved_within(players, days))
+    board = current_rank_board(_saved_within(_without_excluded(players), days))
     return {"total": len(board), "entries": board[:top]}
+
+
+def _without_excluded(players: list[dict]) -> list[dict]:
+    settings = get_settings()
+    return [p for p in players if not settings.is_ranking_excluded(p["npid"])]
 
 
 def _saved_within(players: list[dict], days: int | None) -> list[dict]:

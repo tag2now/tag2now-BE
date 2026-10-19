@@ -184,6 +184,16 @@ async def test_an_outage_is_not_remembered(client, use_server):
     assert len(seen) == 2
 
 
+
+# --- excluded accounts -----------------------------------------------------------
+
+async def test_excluded_accounts_are_left_off_and_the_rest_ranked_without_them(client, use_server, monkeypatch):
+    from shared.settings import get_settings
+    monkeypatch.setattr(get_settings(), "ranking_excluded_npids", ["alice"])
+    await use_server(_server())
+    body = client.get("/saves/leaderboard").json()
+    assert (body["total"], _order(body["entries"])) == (1, [(1, "Bob")])
+
 # --- days -----------------------------------------------------------------------
 
 def _saved(npid: str, days_ago: float, *chars: dict) -> dict:

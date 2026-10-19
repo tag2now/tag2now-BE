@@ -49,7 +49,7 @@
 | `GET /history/players/{npid}` | `days` 1~90 (기본 30) | 활동 일수, 관측 횟수, 최초/최종 목격, 방 종류별 횟수, 자주 만난 상대, 활동 시간대 |
 
 주간 top은 `RANKING_EXCLUDED_NPIDS`(JSON 목록, 대소문자 무시)에 든 RPCN username을 빼고 센다.
-테스트 계정용이다. `LIMIT` 전에 SQL에서 거르므로 빠진 자리는 다음 순위가 채운다.
+테스트 계정용이며, RPCN 리더보드(02-leaderboard.md)와 현재 계급 리더보드(09-save-admin.md)에서도 같은 목록을 뺀다. `LIMIT` 전에 SQL에서 거르므로 빠진 자리는 다음 순위가 채운다.
 online_name은 중복·변경될 수 있어 기준으로 쓰지 않는다.
 
 모든 읽기는 read-through 캐시(TTL 300s)를 거친다. 쓰기 경로는 **커밋 이후에** `history:daily:*` 패턴을 무효화한다.
