@@ -2,8 +2,7 @@
 
 A play day runs from 06:00 KST to the next 06:00 KST. The previous day stays
 in view so a conversation does not look cut off just after 06:00. Older
-messages are not shown, and nothing promises to keep them: the store is
-process memory, so a deploy empties it as well.
+messages are not shown, and nothing promises to keep them.
 """
 
 from dataclasses import dataclass

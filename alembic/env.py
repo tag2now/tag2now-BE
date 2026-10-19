@@ -4,6 +4,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from shared.database import Base, build_dsn
+import chat.entities  # noqa
 import community.entities  # noqa
 import history.entities  # noqa
 import reservation.entities  # noqa

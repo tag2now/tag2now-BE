@@ -6,17 +6,11 @@ from chat.ports import ChatRepository
 
 
 class MemoryChatRepository(ChatRepository):
-    """Recent chat in process memory.
-
-    It lives and dies with the process, so a backend deploy empties it --- an
-    accepted cost for a channel that only ever shows two days. There is one
-    process (see CLAUDE.md), so one deque is the whole store.
+    """Recent chat in process memory, for tests; production keeps chat in
+    PostgreSQL (`adapters/postgresql.py`).
 
     The deque is bounded rather than purged at 06:00: `list_since` already
-    hides anything older, and the bound is what keeps a busy day from
-    growing without limit. Ids restart from 1 with the process; a client
-    replaces its list with the snapshot every stream opens with, so a reused
-    id never meets the old one.
+    hides anything older. Ids restart from 1 with each instance.
     """
 
     def __init__(self, max_kept: int):

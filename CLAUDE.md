@@ -190,7 +190,7 @@ Ten modules under `src/` --- eight domains plus `auth/` and `admin/` --- a `shar
 | `history/` | Persisted snapshots, time-series statistics, the match collector |
 | `community/` | Message board — posts, comments, thumbs |
 | `reservation/` | Appointments — create, join, edit, cancel |
-| `chat/` | Two-day lobby chat, in memory, pushed over SSE |
+| `chat/` | Two-day lobby chat, stored in PostgreSQL, pushed over SSE |
 | `auth/` | RPCN account login; stateless bearer tokens other routers depend on |
 | `saves/` | TTT2 saves through tag2now-save-admin: anyone's ranks for the profile, and admins' reads and edits |
 | `streaming/` | Players' own Chzzk channels, and who in a room is live — carried on `/rooms/all` as each user's `stream` |
@@ -320,16 +320,20 @@ Routers own cache invalidation on writes (see `community/router.py:_invalidate_p
 
 `chat/` is a lobby chat that shows the current play day and the one before it
 --- from the previous day's 06:00 KST (`chat.domain.history_start`), so a
-conversation does not look cut off just after dawn. It is held **in process
-memory** (`MemoryChatRepository`, newest 500) behind the `ChatRepository` port,
-so a deploy empties it --- accepted for a channel that forgets its days anyway. A Postgres adapter would slot in behind the same port.
+conversation does not look cut off just after dawn. Messages are kept in
+**PostgreSQL** (`chat_messages`, `adapters/postgresql.py`), so a deploy keeps
+them and their deletions; a snapshot carries the newest 500 in that window.
+Ids are an identity column and never repeat across restarts. Deletion removes
+the row, and older rows are left in place with no purge job.
+`MemoryChatRepository` remains as the unit tests' store. Spec: `docs/spec/10-chat.md`.
 
 `GET /chat/stream` is Server-Sent Events through FastAPI's own
 `fastapi.sse.EventSourceResponse`, which also sends a `: ping` every 15 s ---
 inside CloudFront's 30 s origin timeout. Every connection opens with a
 `snapshot` of the recent messages and then follows `message` and `delete` events;
 a reconnect gets a new snapshot rather than resuming from `Last-Event-ID`,
-because ids restart with the process. Events travel on the `ChatEventBus` port;
+because a deletion missed while disconnected only shows in a whole new list.
+Events travel **in memory** on the `ChatEventBus` port;
 `adapters/memory_bus.py` gives each stream a bounded queue and drops a stream
 whose queue fills. A second process would need a Redis bus behind that port.
 

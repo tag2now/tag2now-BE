@@ -14,7 +14,7 @@ class ChatRepository(ABC):
 
     @abstractmethod
     async def list_since(self, boundary: datetime) -> list[Message]:
-        """Messages created at or after `boundary`, oldest first."""
+        """Messages created at or after `boundary`, oldest first; a store may cap it to the newest."""
 
     @abstractmethod
     async def get(self, message_id: int) -> Message | None: ...

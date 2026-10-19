@@ -25,9 +25,9 @@ async def stream() -> AsyncIterable[ServerSentEvent]:
 
     Opens with a `snapshot` event holding the recent messages (see `chat.domain`), then sends
     `message` and `delete` events. A reconnect gets a fresh snapshot rather
-    than resuming from `Last-Event-ID`: ids restart with the process, and a
-    deletion missed while disconnected is only visible in a whole new list.
-    The client replaces its list on every snapshot.
+    than resuming from `Last-Event-ID`: a deletion missed while disconnected
+    is only visible in a whole new list. The client replaces its list on
+    every snapshot.
     """
     # Subscribe before reading the snapshot. A store that does real I/O hands
     # the event loop to other requests mid-read; a message posted then is in
