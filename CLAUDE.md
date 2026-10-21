@@ -247,13 +247,21 @@ adapter, one client, two routers:
   `GET /player/save`. Cached for `cache_ttl_player_save` (10 min), a missing
   save included.
 - **`GET /saves/leaderboard?top=&days=`** --- public: players by current rank, from
-  save-admin's key-only `GET /players/top-ranks` (each save's two highest
-  characters). Sorted here --- best character's rank, the second's, then their
+  save-admin's key-only `GET /players/top-ranks` (every save's characters; the
+  two highest are picked here). Sorted here --- best character's rank, the second's, then their
   points; equal standings share a place. `days` keeps only players whose game
-  saved within that many days, ranked among themselves. save-admin's answer is
-  cached whole for `cache_ttl_current_rank_leaderboard` (5 min) and ranked per
-  request. save-admin rereads only saves whose
+  saved within that many days, ranked among themselves. Cached for
+  `cache_ttl_current_rank_leaderboard` (5 min) as each player's two best
+  characters, and ranked per request. save-admin rereads only saves whose
   `data_id` changed, so only what the game wrote shows; admin edits do not.
+- **`GET /saves/current-rank-holders?rank=&days=&top=`** --- public: players to
+  play now at a rank (10, 1st dan, to 42) --- those who *played* a character
+  currently there and saved within `days` (default **30**), lowest on the
+  leaderboard first, since rank correction lifts a strong player's other
+  characters. Filled by the same save-admin call as the leaderboard and cached
+  **per rank** (`saves:current-rank-holders:{rank}`, character ids only): every
+  cache read parses its whole JSON value on the event loop, and one key of
+  every character would be megabytes. Spec 09 has the measurements.
 - **`POST /admin/saves/*`** --- admins only, behind `admin.dependencies.admin_user`
   and the same password-per-action rule as `admin/`. An edit is two calls ---
   `dry_run`, then `expect_sha256` set to the sha256 the preview answered --- and
@@ -423,7 +431,7 @@ error array. A new user-facing request field belongs in that map.
 | `/auth` | `auth/router.py` — `POST /login`, `GET /me` |
 | `/admin` | `admin/router.py` — `POST /users/lookup`, `POST /users/ban`; admins only |
 | `/admin/saves` | `saves/router.py` (`admin_router`) — `POST /show`, `/backups`, `/log`, `/set-rank`, `/set-account-rank`, `/floor`, `/restore`; admins only |
-| `/saves` | `saves/router.py` — `GET /players/{npid}`, `GET /leaderboard`, public |
+| `/saves` | `saves/router.py` — `GET /players/{npid}`, `GET /leaderboard`, `GET /current-rank-holders`, public |
 | `/streams` | `streaming/router.py` — `GET`/`PUT`/`DELETE /me`, the signed-in account's channel |
 | `/admin/streams` | `streaming/router.py` (`admin_router`) — `GET`, `DELETE /{username}`; admins only, no password |
 | *(none)* | `matching/router.py` — `/game-data`, `/servers`, `/rooms/all`, `/leaderboard`, `/players/{npid}` |

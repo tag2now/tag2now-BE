@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import pytest
 
+from matching.constants import TEKKEN_RANKS, TTT2_CHARACTERS
 from saves import db
 from saves.adapters.save_admin_server import SaveAdminServer
 from saves.exceptions import SavesUnavailableError
@@ -12,9 +13,9 @@ from saves.service import current_rank_board
 from shared.cache import DictCache
 
 
-def _char(id: int, rank: int, points: int = 0) -> dict:
+def _char(id: int, rank: int, points: int = 0, wins: int = 1) -> dict:
     return {"id": id, "character": f"C{id}", "rank": rank, "rank_name": f"R{rank}", "tier": "t",
-            "points": points, "streak": 0, "wins": 1, "losses": 0}
+            "points": points, "streak": 0, "wins": wins, "losses": 0}
 
 
 def _player(npid: str, *chars: dict, account_rank: int = 20) -> dict:
@@ -81,7 +82,7 @@ def _order(board: list[dict]) -> list[tuple[int, str]]:
 async def test_reads_every_player_with_a_get_and_the_api_key_only():
     seen = []
     adapter = await _adapter(_server(seen=seen))
-    assert await adapter.read_top_ranks() == PLAYERS
+    assert await adapter.read_ranks() == PLAYERS
     request = seen[0]
     assert (request.method, request.url.path) == ("GET", "/players/top-ranks")
     assert request.headers["X-API-Key"] == "key"
@@ -95,7 +96,7 @@ async def test_reads_every_player_with_a_get_and_the_api_key_only():
 async def test_a_refusal_is_unavailable(response):
     adapter = await _adapter(_server(*response))
     with pytest.raises(SavesUnavailableError):
-        await adapter.read_top_ranks()
+        await adapter.read_ranks()
     await adapter.close()
 
 
@@ -148,6 +149,16 @@ async def test_anyone_reads_the_board(client, use_server):
         {"rank": 2, "username": "Bob", "saved_at": "2026-10-16T01:02:03Z", "account_rank": 20,
          "chars": PLAYERS[0]["chars"]},
     ]}
+
+
+async def test_the_best_two_of_every_character_rank_and_show_on_the_board(client, use_server):
+    # save-admin answers every character, in slot order
+    alice = _player("Alice", _char(1, 12), _char(2, 25, 100), _char(3, 25, 4000), _char(4, 20))
+    bob = _player("Bob", _char(0, 25, 5000), _char(1, 11))
+    await use_server(_server(body={"players": [bob, alice]}))
+    entries = client.get("/saves/leaderboard").json()["entries"]
+    assert _order(entries) == [(1, "Alice"), (2, "Bob")]
+    assert entries[0]["chars"] == [_char(3, 25, 4000), _char(2, 25, 100)]
 
 
 async def test_top_slices_the_board_and_total_counts_it_all(client, use_server):
@@ -233,3 +244,108 @@ async def test_any_days_reads_the_one_cached_answer(client, use_server):
 @pytest.mark.parametrize("days", [0, 366])
 def test_days_out_of_range_is_422(client, days):
     assert client.get("/saves/leaderboard", params={"days": days}).status_code == 422
+
+
+# --- current-rank holders -----------------------------------------------------------
+
+def _unplayed(id: int, rank: int = 10) -> dict:
+    """A character the floor raised and no one has played."""
+    return _char(id, rank, wins=0)
+
+
+def _holders(client, **params):
+    return client.get("/saves/current-rank-holders", params=params)
+
+
+def _names(body: dict) -> list[str]:
+    return [e["username"] for e in body["entries"]]
+
+
+async def test_a_character_below_the_best_two_is_found_alone(client, use_server):
+    alice = _saved("Alice", 1, _char(0, 25), _char(1, 24), _char(2, 12), _char(5, 12))
+    await use_server(_server(body={"players": [alice]}))
+    response = _holders(client, rank=12)
+    assert response.status_code == 200
+    body = response.json()
+    assert (body["rank"], body["rank_name"], body["total"]) == (12, TEKKEN_RANKS[12]["name"], 1)
+    entry = body["entries"][0]
+    assert (entry["username"], entry["account_rank"]) == ("Alice", 20)
+    assert entry["chars"] == [{"id": 2, "character": TTT2_CHARACTERS[2]}, {"id": 5, "character": TTT2_CHARACTERS[5]}]
+
+
+async def test_an_unplayed_character_holds_no_rank_but_its_player_stays_on_the_board(client, use_server):
+    floored = _saved("Floored", 1, _unplayed(0), _unplayed(1))
+    played = _saved("Played", 1, _unplayed(0), _char(1, 10))
+    await use_server(_server(body={"players": [floored, played]}))
+    assert _names(_holders(client, rank=10).json()) == ["Played"]
+    assert sorted(e["username"] for e in client.get("/saves/leaderboard").json()["entries"]) == ["Floored", "Played"]
+
+
+async def test_the_lowest_on_the_leaderboard_comes_first_then_by_name(client, use_server):
+    await use_server(_server(body={"players": [
+        _saved("Strong", 1, _char(0, 30), _char(1, 14)),
+        _saved("lowb", 1, _char(0, 14)),
+        _saved("Mid", 1, _char(0, 20), _char(1, 14)),
+        _saved("LowA", 1, _char(0, 14)),
+    ]}))
+    assert _names(_holders(client, rank=14).json()) == ["LowA", "lowb", "Mid", "Strong"]
+
+
+async def test_without_days_only_the_last_30_count(client, use_server):
+    await use_server(_server(body={"players": [
+        _saved("Today", 0, _char(0, 15)), _saved("Recent", 29.9, _char(0, 15)), _saved("Gone", 30.1, _char(0, 15)),
+    ]}))
+    assert sorted(_names(_holders(client, rank=15).json())) == ["Recent", "Today"]
+    assert _names(_holders(client, rank=15, days=7).json()) == ["Today"]
+
+
+async def test_holders_top_slices_and_total_counts_them_all(client, use_server):
+    await use_server(_server(body={"players": [_saved(n, 1, _char(0, 15)) for n in ("A", "B", "C")]}))
+    body = _holders(client, rank=15, top=2).json()
+    assert (body["total"], _names(body)) == (3, ["A", "B"])
+
+
+async def test_excluded_accounts_hold_nothing(client, use_server, monkeypatch):
+    from shared.settings import get_settings
+    monkeypatch.setattr(get_settings(), "ranking_excluded_npids", ["alice"])
+    await use_server(_server(body={"players": [_saved("Alice", 1, _char(0, 15)), _saved("Bob", 1, _char(0, 15))]}))
+    assert _names(_holders(client, rank=15).json()) == ["Bob"]
+
+
+async def test_one_read_serves_the_board_and_every_rank_an_empty_one_too(client, use_server):
+    seen = []
+    await use_server(_server(body={"players": [_saved("Alice", 1, _char(0, 15))]}, seen=seen))
+    assert client.get("/saves/leaderboard").status_code == 200
+    assert _holders(client, rank=15).json()["total"] == 1
+    for _ in range(2):
+        assert _holders(client, rank=40).json()["total"] == 0
+    assert len(seen) == 1
+
+
+async def test_holders_ask_the_server_when_nothing_is_cached(client, use_server):
+    seen = []
+    await use_server(_server(body={"players": [_saved("Alice", 1, _char(0, 15))]}, seen=seen))
+    assert _names(_holders(client, rank=15).json()) == ["Alice"]
+    assert client.get("/saves/leaderboard").json()["total"] == 1
+    assert len(seen) == 1
+
+
+async def test_holders_outage_is_502_and_not_remembered(client, use_server):
+    seen = []
+    await use_server(_server(500, {"error": "internal_error", "message": "x"}, seen=seen))
+    for _ in range(2):
+        assert _holders(client, rank=15).status_code == 502
+    assert len(seen) == 2
+
+
+@pytest.mark.parametrize("params", [
+    {"rank": 9}, {"rank": 43}, {}, {"rank": 10, "top": 0}, {"rank": 10, "top": 1001},
+    {"rank": 10, "days": 0}, {"rank": 10, "days": 366},
+])
+def test_holders_params_out_of_range_are_422(client, params):
+    assert _holders(client, **params).status_code == 422
+
+
+async def test_first_dan_is_the_lowest_rank_asked(client, use_server):
+    await use_server(_server(body={"players": [_saved("Alice", 1, _char(0, 10))]}))
+    assert _names(_holders(client, rank=10).json()) == ["Alice"]

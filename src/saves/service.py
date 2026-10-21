@@ -5,25 +5,32 @@ session ends, and a rank seen a few minutes late costs nothing, so an answer is
 kept for cache_ttl_player_save --- a missing save too, or a profile with no save
 would ask the server every time. An admin's written edit drops the entry at once.
 
-The current-rank leaderboard is kept for cache_ttl_current_rank_leaderboard, whole, and
-each request slices it. Only what the game wrote counts: an admin's edit keeps
-the save's data_id, which save-admin uses to skip unchanged saves, so it does
-not show there.
+The current-rank leaderboard and its holders come from one read of every save,
+cached for cache_ttl_current_rank_leaderboard as the leaderboard's two best
+characters per player and, per rank, who plays a character there --- so a
+request decodes only the slice it needs. Each request filters and slices it.
+Only what the game wrote counts: an admin's edit keeps the save's data_id,
+which save-admin uses to skip unchanged saves, so it does not show there.
 
 Admin calls go straight to the server, which checks the admin's password with
 RPCN every time.
 """
 
+import logging
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from itertools import groupby
 
 from auth.models import AuthUser
+from matching.constants import TEKKEN_RANKS, TTT2_CHARACTERS
 from saves.db import get_save_server
 from saves.exceptions import SaveNotFoundError
-from saves.models import SaveLogRequest, SaveRequest
+from saves.models import HOLDER_RANKS, SaveLogRequest, SaveRequest
 from shared.cache import cache_delete_pattern, cache_get, cache_set
 from shared.settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 # Audit fields that hold a path on the RPCN host; only the file's label means
 # anything here, and the path says nothing an admin needs.
@@ -54,7 +61,7 @@ def _profile(save: dict | None) -> dict | None:
             "total": save["total"], "wins": save["wins"], "losses": save["losses"], "chars": save["chars"]}
 
 
-# --- leaderboard ----------------------------------------------------------------
+# --- current rank: leaderboard and holders --------------------------------------
 
 _CURRENT_RANK_KEY = "saves:current-rank-leaderboard"
 
@@ -62,14 +69,80 @@ _CURRENT_RANK_KEY = "saves:current-rank-leaderboard"
 _NO_CHAR = {"rank": -1, "points": -1}
 
 
+def _holders_key(rank: int) -> str:
+    return f"saves:current-rank-holders:{rank}"
+
+
 async def get_current_rank_leaderboard(top: int, days: int | None = None) -> dict:
-    # The players are cached as save-admin answers them; filtering and ranking
-    # 1000 of them per request costs about a millisecond, so `days` needs no key of its own.
+    # Filtering and ranking 1000 players per request costs about a millisecond,
+    # so `days` needs no key of its own.
     if (players := cache_get(_CURRENT_RANK_KEY)) is None:
-        players = await get_save_server().read_top_ranks()
-        cache_set(_CURRENT_RANK_KEY, players, get_settings().cache_ttl_current_rank_leaderboard)
+        players, _ = await _fill_current_rank_cache()
     board = current_rank_board(_saved_within(_without_excluded(players), days))
     return {"total": len(board), "entries": board[:top]}
+
+
+async def get_current_rank_holders(rank: int, top: int, days: int) -> dict:
+    """Recent players with a character they play at `rank`, the lowest on the
+    leaderboard first: a strong player's other characters are lifted by rank
+    correction, and this looks for players who belong at that rank."""
+    if (holders := cache_get(_holders_key(rank))) is None:
+        _, by_rank = await _fill_current_rank_cache()
+        holders = by_rank[rank]
+    found = sorted(_saved_within(_without_excluded(holders), days),
+                   key=lambda h: (-h["place"], h["npid"].casefold()))
+    return {"rank": rank, "rank_name": TEKKEN_RANKS[rank]["name"], "total": len(found),
+            "entries": [_holder(h) for h in found[:top]]}
+
+
+async def _fill_current_rank_cache() -> tuple[list[dict], dict[int, list[dict]]]:
+    """Read every save once and cache both views of it, an empty rank included,
+    so a rank no one plays is not asked of save-admin every time."""
+    started = time.perf_counter()
+    players = await get_save_server().read_ranks()
+    board = [{**p, "chars": _top_two(p["chars"])} for p in players]
+    places = {e["username"]: e["rank"] for e in current_rank_board(board)}
+    by_rank = _holders_by_rank(players, places)
+    ttl = get_settings().cache_ttl_current_rank_leaderboard
+    cache_set(_CURRENT_RANK_KEY, board, ttl)
+    for rank, holders in by_rank.items():
+        cache_set(_holders_key(rank), holders, ttl)
+    logger.info("current rank cache filled: %d players, %d holders, largest rank %d, %.0f ms",
+                len(players), sum(map(len, by_rank.values())), max(map(len, by_rank.values())),
+                (time.perf_counter() - started) * 1000)
+    return board, by_rank
+
+
+def _top_two(chars: list[dict]) -> list[dict]:
+    # A stable sort keeps the lower id on a tie, as save-admin's own top two did.
+    return sorted(chars, key=lambda c: (c["rank"], c["points"]), reverse=True)[:2]
+
+
+def _holders_by_rank(players: list[dict], places: dict[str, int]) -> dict[int, list[dict]]:
+    by_rank = {rank: [] for rank in HOLDER_RANKS}
+    for player in players:
+        for rank, ids in _played_ids_by_rank(player["chars"]).items():
+            by_rank[rank].append({"npid": player["npid"], "saved_utc": player["saved_utc"],
+                                  "account_rank": player["account_rank"],
+                                  "place": places[player["npid"]], "chars": ids})
+    return by_rank
+
+
+def _played_ids_by_rank(chars: list[dict]) -> dict[int, list[int]]:
+    played = {}
+    for c in filter(_holds_its_rank, chars):
+        played.setdefault(c["rank"], []).append(c["id"])
+    return played
+
+
+def _holds_its_rank(char: dict) -> bool:
+    # The floor gives every character a rank; only one played there makes a holder.
+    return bool(char["wins"] or char["losses"]) and char["rank"] in HOLDER_RANKS
+
+
+def _holder(holder: dict) -> dict:
+    return {"username": holder["npid"], "saved_at": _saved_at(holder), "account_rank": holder["account_rank"],
+            "chars": [{"id": i, "character": TTT2_CHARACTERS[i]} for i in holder["chars"]]}
 
 
 def _without_excluded(players: list[dict]) -> list[dict]:

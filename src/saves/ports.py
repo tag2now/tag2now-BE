@@ -17,9 +17,9 @@ class SaveServer(ABC):
         SavesUnavailableError when the server cannot answer."""
 
     @abstractmethod
-    async def read_top_ranks(self) -> list[dict]:
-        """Every save's account rank and its two highest characters, for the
-        leaderboard. SavesUnavailableError when the server cannot answer."""
+    async def read_ranks(self) -> list[dict]:
+        """Every save's account rank and characters, for the current-rank
+        leaderboard and its holders. SavesUnavailableError when the server cannot answer."""
 
     @abstractmethod
     async def call(self, action: str, admin_username: str, admin_password: str, payload: dict) -> dict:

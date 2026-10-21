@@ -1,7 +1,7 @@
 """tag2now-save-admin's server: TTT2 save files on the RPCN host.
 
 Two kinds of call. `GET /player/save` is the read anyone's profile shows, and
-`GET /players/top-ranks` the one the leaderboard does; both need only the API key. The `/saves/*` routes are an admin's: like rpcn-narco's
+`GET /players/top-ranks` the one the current-rank leaderboard and its holders do; both need only the API key. The `/saves/*` routes are an admin's: like rpcn-narco's
 admin API they want the admin's password every time, and check it with RPCN
 itself; this service passes it through, derived, and keeps nothing. Each
 refusal comes back as {"error": "<code>", "message": ...}.
@@ -68,7 +68,7 @@ class SaveAdminServer(SaveServer):
             return None
         raise _fault(response, path)
 
-    async def read_top_ranks(self) -> list[dict]:
+    async def read_ranks(self) -> list[dict]:
         path = "/players/top-ranks"
         response = await self._send("GET", path)
         answer = _json(response)

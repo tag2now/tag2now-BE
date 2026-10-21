@@ -29,6 +29,19 @@ async def current_rank_leaderboard(
     return await service.get_current_rank_leaderboard(top, days)
 
 
+@router.get("/current-rank-holders", response_model=models.CurrentRankHoldersOut)
+async def current_rank_holders(
+    rank: int = Query(ge=models.HOLDER_RANKS.start, le=models.HOLDER_RANKS.stop - 1,
+                      description="Current rank code, from 1st dan (10)"),
+    top: int = Query(100, ge=1, le=1000, description="How many players to answer"),
+    days: int = Query(30, ge=1, le=365, description="Only players whose game saved within this many days"),
+):
+    """Players to play now at a rank: those who played a character currently at
+    `rank` and saved within `days`, the lowest on the leaderboard first.
+    Read-only, and up to five minutes behind the game."""
+    return await service.get_current_rank_holders(rank, top, days)
+
+
 # --- admin ----------------------------------------------------------------------
 # POST, not GET: the admin's password travels in the body, never in a URL.
 # Edits are two calls: dry_run first, then the same body with expect_sha256 set

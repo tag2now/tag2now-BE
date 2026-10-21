@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 RankCode = Annotated[int, Field(ge=0, le=42)]
 # Floor ranks need floor points, which start at 1 (9th kyu).
 FloorRank = Annotated[int, Field(ge=1, le=42)]
+# The floor has raised every save to 1st dan (10), so no one plays below it.
+HOLDER_RANKS = range(10, 43)
 
 
 class SaveRequest(BaseModel):
@@ -91,6 +93,28 @@ class CurrentRankLeaderboardOut(BaseModel):
     # Players on the board, of which entries are the first `top`.
     total: int
     entries: list[CurrentRankLeaderboardEntryOut]
+
+
+class HolderCharOut(BaseModel):
+    id: int
+    character: str
+
+
+class CurrentRankHolderOut(BaseModel):
+    username: str
+    # When the game last wrote this save.
+    saved_at: datetime
+    account_rank: int
+    # The characters played at the asked rank.
+    chars: list[HolderCharOut]
+
+
+class CurrentRankHoldersOut(BaseModel):
+    rank: int
+    rank_name: str
+    # Players found, of which entries are the first `top`.
+    total: int
+    entries: list[CurrentRankHolderOut]
 
 
 class SaveOut(BaseModel):
