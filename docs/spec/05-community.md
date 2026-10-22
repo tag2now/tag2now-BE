@@ -59,7 +59,7 @@ TTT2는 2인 태그 팀으로 싸우므로 글 하나에 **캐릭터를 최대 2
 
 `POST /community/posts/{post_id}/comments` — `body`(1~1000자), `parent_id`(선택).
 
-- 저장은 평면 구조이고, **트리는 조회 시점에 라우터가 조립한다**: `parent_id`가 부모의 `replies`에 붙고,
+- 저장은 평면 구조이고, **트리는 조회 시점에 서비스가 조립한다**: `parent_id`가 부모의 `replies`에 붙고,
   부모가 없거나 목록에 없으면 최상위로 승격된다(고아 댓글이 사라지지 않는다).
 - 상세 조회는 글과 댓글을 `asyncio.gather`로 동시에 읽는다.
 
@@ -80,7 +80,7 @@ TTT2는 2인 태그 팀으로 싸우므로 글 하나에 **캐릭터를 최대 2
 ## 캐싱
 
 - 목록: `community:posts:p{page}:s{size}:t{type}:c{정렬된 캐릭터}`, 상세: `community:post:{id}`. TTL 30초.
-- **무효화는 라우터가 소유한다**. 글 작성/삭제 시 `community:posts:*`, 댓글·추천 시 `community:post:{id}`.
+- **무효화는 서비스가 쓰기 직후에 한다**. 글 작성 시 목록(`community:posts:*`), 수정·삭제 시 목록과 해당 상세, 댓글·추천 시 상세(`community:post:{id}`).
 
 ## 저장소
 

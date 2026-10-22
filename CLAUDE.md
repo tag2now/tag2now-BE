@@ -322,7 +322,8 @@ cache_set(key, result, get_settings().cache_ttl_servers)
 return result
 ```
 
-Routers own cache invalidation on writes (see `community/router.py:_invalidate_posts`).
+Services invalidate right after a write succeeds, next to the read-through they
+invalidate (see `community/service.py`); routers never touch the cache.
 
 ### Chat
 

@@ -1,34 +1,12 @@
 """FastAPI router for the community board."""
 
-import asyncio
-
 from fastapi import APIRouter, Depends, Query
 
 from auth.dependencies import current_user
 from auth.models import AuthUser
 from community import models, service
-from shared.cache import cache_delete, cache_delete_pattern, cache_get, cache_set
-from shared.settings import get_settings
 
 router = APIRouter()
-
-
-def _ttl() -> int:
-    return get_settings().cache_ttl_community
-
-def _invalidate_posts():
-    cache_delete_pattern("community:posts:*")
-
-def _invalidate_post(post_id: int):
-    cache_delete(f"community:post:{post_id}")
-
-def _get_user(user: AuthUser = Depends(current_user)) -> str:
-    """The signed-in RPCN username: the author on writes, the voter on thumbs.
-
-    The board stores one name per post and compares it for ownership, so it
-    must be the unique, unchangeable username rather than the online name.
-    """
-    return user.username
 
 
 # ---------------------------------------------------------------------------
@@ -42,68 +20,27 @@ async def list_posts(
     post_type: str | None = Query(None),
     characters: list[str] = Query([], max_length=models.MAX_POST_CHARACTERS),
 ):
-    # A team is unordered: Jin+Kazuya and Kazuya+Jin share one cache entry.
-    characters = sorted(set(characters))
-    cache_key = f"community:posts:p{page}:s{page_size}:t{post_type or 'all'}:c{'+'.join(characters) or 'all'}"
-    cached = cache_get(cache_key)
-    if cached:
-        return cached
-
-    posts, total = await service.list_posts(page, page_size, post_type, characters)
-    result = {"posts": posts, "total": total, "page": page, "page_size": page_size}
-    cache_set(cache_key, result, _ttl())
-    return result
+    return await service.list_posts(page, page_size, post_type, characters)
 
 
 @router.post("/posts", status_code=201)
 async def create_post(req: models.CreatePostRequest, user: AuthUser = Depends(current_user)):
-    post = await service.create_post(user, req.title, req.body, req.post_type, req.characters, req.youtube_video_id)
-    _invalidate_posts()
-    return post
+    return await service.create_post(user, req.title, req.body, req.post_type, req.characters, req.youtube_video_id)
 
 
 @router.get("/posts/{post_id}", response_model=models.PostDetail)
 async def get_post(post_id: int):
-    cache_key = f"community:post:{post_id}"
-    cached = cache_get(cache_key)
-    if cached:
-        return cached
-
-    post, comments = await asyncio.gather(
-        service.get_post(post_id),
-        service.get_post_comments(post_id),
-    )
-
-    # nest replies under their parent
-    top_level: list[dict] = []
-    by_id: dict[int, dict] = {}
-    for c in comments:
-        c["replies"] = []
-        by_id[c["id"]] = c
-    for c in comments:
-        if c["parent_id"] and c["parent_id"] in by_id:
-            by_id[c["parent_id"]]["replies"].append(c)
-        else:
-            top_level.append(c)
-
-    post["comments"] = top_level
-    cache_set(cache_key, post, _ttl())
-    return post
+    return await service.get_post(post_id)
 
 
 @router.patch("/posts/{post_id}", response_model=models.PostSummary)
 async def update_post(post_id: int, req: models.UpdatePostRequest, user: AuthUser = Depends(current_user)):
-    post = await service.update_post(post_id, user, req.title, req.body, req.post_type, req.characters, req.youtube_video_id)
-    _invalidate_posts()
-    _invalidate_post(post_id)
-    return post
+    return await service.update_post(post_id, user, req.title, req.body, req.post_type, req.characters, req.youtube_video_id)
 
 
 @router.delete("/posts/{post_id}", status_code=204)
 async def delete_post(post_id: int, user: AuthUser = Depends(current_user)):
     await service.delete_post(post_id, user)
-    _invalidate_posts()
-    _invalidate_post(post_id)
 
 
 # ---------------------------------------------------------------------------
@@ -111,14 +48,8 @@ async def delete_post(post_id: int, user: AuthUser = Depends(current_user)):
 # ---------------------------------------------------------------------------
 
 @router.post("/posts/{post_id}/comments", status_code=201)
-async def create_comment(
-    post_id: int,
-    req: models.CreateCommentRequest,
-    user: str = Depends(_get_user),
-):
-    comment = await service.create_comment(post_id, user, req.body, req.parent_id)
-    _invalidate_post(post_id)
-    return comment
+async def create_comment(post_id: int, req: models.CreateCommentRequest, user: AuthUser = Depends(current_user)):
+    return await service.create_comment(post_id, user, req.body, req.parent_id)
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +57,5 @@ async def create_comment(
 # ---------------------------------------------------------------------------
 
 @router.post("/posts/{post_id}/thumb")
-async def thumb_post(post_id: int, req: models.ThumbRequest, user: str = Depends(_get_user)):
-    result = await service.toggle_thumb(post_id, user, req.direction_int)
-    _invalidate_post(post_id)
-    return result
+async def thumb_post(post_id: int, req: models.ThumbRequest, user: AuthUser = Depends(current_user)):
+    return await service.toggle_thumb(post_id, user, req.direction_int)
