@@ -1,75 +1,153 @@
 """SQLAlchemy ORM adapter for the community repository."""
+
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
 from community.entities import Comment, Post, Thumb
 from community.exceptions import CommentNotFoundError, NestingDepthError, PostNotFoundError
 from community.models import NOTICE_POST_TYPE
 from community.ports import CommunityRepository
 from shared.database import get_session_factory
 
-def _dict(row):
-    return {c.name: getattr(row, c.name) for c in row.__table__.columns}
+
+def _as_dict(row) -> dict:
+    return {column.name: getattr(row, column.name) for column in row.__table__.columns}
+
 
 class PostgresCommunityRepository(CommunityRepository):
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession] | None = None): self._sessions = session_factory
-    async def init(self): self._sessions = self._sessions or get_session_factory()
-    async def close(self): pass
+    """Community persistence using the application's shared session factory."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession] | None = None):
+        self._session_factory = session_factory
+
+    async def init(self) -> None:
+        self._session_factory = self._session_factory or get_session_factory()
+
+    async def close(self) -> None:
+        """The shared database lifecycle owns the engine."""
+
     @property
-    def sessions(self):
-        if self._sessions is None: raise RuntimeError("Community repository not initialized")
-        return self._sessions
+    def _sessions(self) -> async_sessionmaker[AsyncSession]:
+        if self._session_factory is None:
+            raise RuntimeError("Community repository not initialized")
+        return self._session_factory
+
+    # -- Posts ---------------------------------------------------------------
+
     async def list_posts(self, page, page_size, post_type=None, characters=None):
-        async with self.sessions() as s:
-            filters = []
-            # Notices are pinned above the list, so the unfiltered list leaves them out.
-            filters.append(Post.post_type == post_type if post_type else Post.post_type != NOTICE_POST_TYPE)
-            if characters: filters.append(Post.characters.contains(characters))
-            count = func.count(Comment.id).label("comment_count")
-            q = select(Post, count).outerjoin(Comment, Comment.post_id == Post.id).where(*filters).group_by(Post.id)
-            total = await s.scalar(select(func.count()).select_from(Post).where(*filters))
-            rows = (await s.execute(q.order_by(Post.created_at.desc()).limit(page_size).offset((page-1)*page_size))).all()
-            return [{**_dict(p), "comment_count": c} for p,c in rows], total
+        # Notices are pinned above the list, so the unfiltered list leaves them out.
+        filters = [Post.post_type == post_type if post_type else Post.post_type != NOTICE_POST_TYPE]
+        if characters:
+            filters.append(Post.characters.contains(characters))
+
+        comment_count = func.count(Comment.id).label("comment_count")
+        page_query = (
+            select(Post, comment_count)
+            .outerjoin(Comment, Comment.post_id == Post.id)
+            .where(*filters)
+            .group_by(Post.id)
+            .order_by(Post.created_at.desc())
+            .limit(page_size)
+            .offset((page - 1) * page_size)
+        )
+        async with self._sessions() as session:
+            total = await session.scalar(select(func.count()).select_from(Post).where(*filters))
+            rows = (await session.execute(page_query)).all()
+            return [{**_as_dict(post), "comment_count": count} for post, count in rows], total
+
     async def get_post(self, post_id):
-        async with self.sessions() as s:
-            row = await s.get(Post, post_id)
-            if row is None: raise PostNotFoundError("Post not found")
-            return _dict(row)
+        async with self._sessions() as session:
+            post = await session.get(Post, post_id)
+            if post is None:
+                raise PostNotFoundError("Post not found")
+            return _as_dict(post)
+
     async def get_post_comments(self, post_id):
-        async with self.sessions() as s:
-            return [_dict(x) for x in (await s.scalars(select(Comment).where(Comment.post_id==post_id).order_by(Comment.created_at))).all()]
+        query = select(Comment).where(Comment.post_id == post_id).order_by(Comment.created_at)
+        async with self._sessions() as session:
+            comments = (await session.scalars(query)).all()
+            return [_as_dict(comment) for comment in comments]
+
     async def create_post(self, author, title, body, post_type="자유", characters=None, youtube_video_id=None):
-        async with self.sessions() as s, s.begin():
-            row=Post(author=author,title=title,body=body,post_type=post_type,characters=list(characters or []),youtube_video_id=youtube_video_id); s.add(row); await s.flush(); await s.refresh(row); return _dict(row)
+        post = Post(
+            author=author, title=title, body=body, post_type=post_type,
+            characters=list(characters or []), youtube_video_id=youtube_video_id,
+        )
+        async with self._sessions() as session, session.begin():
+            session.add(post)
+            await session.flush()
+            await session.refresh(post)
+            return _as_dict(post)
+
     async def update_post(self, post_id, title, body, post_type, characters, youtube_video_id):
-        async with self.sessions() as s, s.begin():
-            row = await s.scalar(select(Post).where(Post.id == post_id).with_for_update())
-            if row is None: raise PostNotFoundError("Post not found")
-            row.title, row.body, row.post_type, row.characters = title, body, post_type, list(characters)
-            row.youtube_video_id = youtube_video_id
-            await s.flush()
-            return {**_dict(row), "comment_count": await s.scalar(select(func.count()).select_from(Comment).where(Comment.post_id == post_id))}
+        async with self._sessions() as session, session.begin():
+            post = await session.scalar(select(Post).where(Post.id == post_id).with_for_update())
+            if post is None:
+                raise PostNotFoundError("Post not found")
+            post.title = title
+            post.body = body
+            post.post_type = post_type
+            post.characters = list(characters)
+            post.youtube_video_id = youtube_video_id
+            await session.flush()
+            comment_count = await session.scalar(
+                select(func.count()).select_from(Comment).where(Comment.post_id == post_id)
+            )
+            return {**_as_dict(post), "comment_count": comment_count}
+
     async def delete_post(self, post_id):
-        async with self.sessions() as s, s.begin():
-            row=await s.get(Post,post_id)
-            if row is None: raise PostNotFoundError("Post not found")
-            await s.delete(row)
+        async with self._sessions() as session, session.begin():
+            post = await session.get(Post, post_id)
+            if post is None:
+                raise PostNotFoundError("Post not found")
+            await session.delete(post)
+
+    # -- Comments ------------------------------------------------------------
+
     async def create_comment(self, post_id, author, body, parent_id=None):
-        async with self.sessions() as s, s.begin():
-            if await s.get(Post,post_id) is None: raise PostNotFoundError("Post not found")
+        async with self._sessions() as session, session.begin():
+            if await session.get(Post, post_id) is None:
+                raise PostNotFoundError("Post not found")
             if parent_id is not None:
-                parent=await s.get(Comment,parent_id)
-                if parent is None or parent.post_id != post_id: raise CommentNotFoundError("Parent comment not found")
-                if parent.parent_id is not None: raise NestingDepthError("Cannot reply to a reply (max 1-depth nesting)")
-            row=Comment(post_id=post_id,parent_id=parent_id,author=author,body=body); s.add(row); await s.flush(); await s.refresh(row); return _dict(row)
+                await self._ensure_repliable(session, post_id, parent_id)
+            comment = Comment(post_id=post_id, parent_id=parent_id, author=author, body=body)
+            session.add(comment)
+            await session.flush()
+            await session.refresh(comment)
+            return _as_dict(comment)
+
+    @staticmethod
+    async def _ensure_repliable(session: AsyncSession, post_id: int, parent_id: int) -> None:
+        parent = await session.get(Comment, parent_id)
+        if parent is None or parent.post_id != post_id:
+            raise CommentNotFoundError("Parent comment not found")
+        if parent.parent_id is not None:
+            raise NestingDepthError("Cannot reply to a reply (max 1-depth nesting)")
+
+    # -- Thumbs (posts only) -------------------------------------------------
+
     async def toggle_thumb(self, post_id, voter, direction):
-        async with self.sessions() as s, s.begin():
-            post=await s.scalar(select(Post).where(Post.id==post_id).with_for_update())
-            if post is None: raise PostNotFoundError("Post not found")
-            thumb=await s.scalar(select(Thumb).where(Thumb.post_id==post_id,Thumb.voter==voter))
-            if thumb and thumb.direction == direction: await s.delete(thumb)
-            elif thumb: thumb.direction=direction
-            else: s.add(Thumb(post_id=post_id,voter=voter,direction=direction))
-            await s.flush()
-            up,down=(await s.execute(select(func.coalesce(func.sum(case((Thumb.direction==1,1),else_=0)),0),func.coalesce(func.sum(case((Thumb.direction==-1,1),else_=0)),0)).where(Thumb.post_id==post_id))).one()
-            post.thumbs_up,post.thumbs_down=up,down
-            return {"thumbs_up":up,"thumbs_down":down}
+        async with self._sessions() as session, session.begin():
+            # Locks the post so concurrent votes recount one after another.
+            post = await session.scalar(select(Post).where(Post.id == post_id).with_for_update())
+            if post is None:
+                raise PostNotFoundError("Post not found")
+            thumb = await session.scalar(select(Thumb).where(Thumb.post_id == post_id, Thumb.voter == voter))
+            if thumb is None:
+                session.add(Thumb(post_id=post_id, voter=voter, direction=direction))
+            elif thumb.direction == direction:
+                await session.delete(thumb)
+            else:
+                thumb.direction = direction
+            await session.flush()
+
+            up, down = (await session.execute(_thumb_counts(post_id))).one()
+            post.thumbs_up, post.thumbs_down = up, down
+            return {"thumbs_up": up, "thumbs_down": down}
+
+
+def _thumb_counts(post_id: int):
+    def votes(direction: int):
+        return func.coalesce(func.sum(case((Thumb.direction == direction, 1), else_=0)), 0)
+
+    return select(votes(1), votes(-1)).where(Thumb.post_id == post_id)
