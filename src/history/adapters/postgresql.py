@@ -30,18 +30,18 @@ STAT_DAY_TZ = timezone(timedelta(hours=9 - STAT_DAY_START_HOUR))
 # ---------------------------------------------------------------------------
 
 def stat_day(moment: datetime) -> date:
-	"""The 06:00-KST statistics day a moment belongs to."""
-	return moment.astimezone(STAT_DAY_TZ).date()
+    """The 06:00-KST statistics day a moment belongs to."""
+    return moment.astimezone(STAT_DAY_TZ).date()
 
 
 def _sql_stat_day(column):
-	"""The same boundary in SQL, for grouping stored timestamps by day."""
-	return func.cast(func.timezone("Asia/Seoul", column) - text(f"interval '{STAT_DAY_START_HOUR} hours'"), Date)
+    """The same boundary in SQL, for grouping stored timestamps by day."""
+    return func.cast(func.timezone("Asia/Seoul", column) - text(f"interval '{STAT_DAY_START_HOUR} hours'"), Date)
 
 
 def stat_day_start(day: date) -> datetime:
-	"""The UTC instant a statistics day begins."""
-	return datetime.combine(day, datetime.min.time(), STAT_DAY_TZ).astimezone(timezone.utc)
+    """The UTC instant a statistics day begins."""
+    return datetime.combine(day, datetime.min.time(), STAT_DAY_TZ).astimezone(timezone.utc)
 
 
 # ---------------------------------------------------------------------------
@@ -50,226 +50,226 @@ def stat_day_start(day: date) -> datetime:
 
 class PostgresHistoryAdapter(HistoryPort):
 
-	# -- Write ---------------------------------------------------------------
+    # -- Write ---------------------------------------------------------------
 
-	async def record_snapshot(self, session: AsyncSession, rooms: list[RankMatchSnapshotRecord]) -> None:
-		if not rooms:
-			return
+    async def record_snapshot(self, session: AsyncSession, rooms: list[RankMatchSnapshotRecord]) -> None:
+        if not rooms:
+            return
 
-		stmt = pg_insert(RankMatchSnapshotRow).values([
-			dict(
-				room_id=room.room_id,
-				created_dt=room.created_dt,
-				match_date=stat_day(room.created_dt),
-				rank_id=room.rank_id,
-				user1_npid=room.user1_npid,
-				user1_online_name=room.user1_online_name,
-				user2_npid=room.user2_npid,
-				user2_online_name=room.user2_online_name,
-			)
-			for room in rooms
-		]).on_conflict_do_nothing(
-			index_elements=["room_id", "user1_npid", "user2_npid", "match_date"]
-		)
-		await session.execute(stmt)
-		await session.flush()
+        stmt = pg_insert(RankMatchSnapshotRow).values([
+            dict(
+                room_id=room.room_id,
+                created_dt=room.created_dt,
+                match_date=stat_day(room.created_dt),
+                rank_id=room.rank_id,
+                user1_npid=room.user1_npid,
+                user1_online_name=room.user1_online_name,
+                user2_npid=room.user2_npid,
+                user2_online_name=room.user2_online_name,
+            )
+            for room in rooms
+        ]).on_conflict_do_nothing(
+            index_elements=["room_id", "user1_npid", "user2_npid", "match_date"]
+        )
+        await session.execute(stmt)
+        await session.flush()
 
-	async def record_daily_matched_players(
-		self, session: AsyncSession, npids: set[str], observed_at: datetime
-	) -> None:
-		"""Use the database unique key as the durable per-day participant set."""
-		valid_npids = {npid for npid in npids if npid}
-		if not valid_npids:
-			return
+    async def record_daily_matched_players(
+        self, session: AsyncSession, npids: set[str], observed_at: datetime
+    ) -> None:
+        """Use the database unique key as the durable per-day participant set."""
+        valid_npids = {npid for npid in npids if npid}
+        if not valid_npids:
+            return
 
-		stmt = pg_insert(DailyMatchedPlayerRow).values([
-			dict(date=stat_day(observed_at), npid=npid, first_seen_at=observed_at)
-			for npid in valid_npids
-		]).on_conflict_do_nothing(index_elements=["date", "npid"])
-		await session.execute(stmt)
+        stmt = pg_insert(DailyMatchedPlayerRow).values([
+            dict(date=stat_day(observed_at), npid=npid, first_seen_at=observed_at)
+            for npid in valid_npids
+        ]).on_conflict_do_nothing(index_elements=["date", "npid"])
+        await session.execute(stmt)
 
-	async def record_activity_snapshot(self, session: AsyncSession, snapshot: ActivitySnapshot) -> None:
-		session.add(ActivitySnapshotRow(
-			sampled_at=snapshot.observed_at,
-			total_players=snapshot.total_players,
-			total_rooms=snapshot.total_rooms,
-			rank_players=snapshot.rank_players,
-			rank_rooms=snapshot.rank_rooms,
-		))
-		await session.execute(delete(ActivitySnapshotRow).where(
-			ActivitySnapshotRow.sampled_at < func.now() - timedelta(days=_ACTIVITY_RETENTION_DAYS)
-		))
+    async def record_activity_snapshot(self, session: AsyncSession, snapshot: ActivitySnapshot) -> None:
+        session.add(ActivitySnapshotRow(
+            sampled_at=snapshot.observed_at,
+            total_players=snapshot.total_players,
+            total_rooms=snapshot.total_rooms,
+            rank_players=snapshot.rank_players,
+            rank_rooms=snapshot.rank_rooms,
+        ))
+        await session.execute(delete(ActivitySnapshotRow).where(
+            ActivitySnapshotRow.sampled_at < func.now() - timedelta(days=_ACTIVITY_RETENTION_DAYS)
+        ))
 
-	# -- Read: global stats --------------------------------------------------
+    # -- Read: global stats --------------------------------------------------
 
-	async def get_hourly_activity(self, session: AsyncSession, days: int = 7) -> list[HourlyActivity]:
-		# The collector's samples, the same ones the daily summary reads, so an
-		# hour's peak here and a day's peak there are the same measurement.
-		stmt = (
-			select(
-				func.extract("hour", func.timezone("Asia/Seoul", ActivitySnapshotRow.sampled_at)).cast(Integer).label("hour"),
-				func.round(func.avg(ActivitySnapshotRow.total_players), 1).label("avg_players"),
-				func.max(ActivitySnapshotRow.total_players).label("peak_players"),
-			)
-			.where(ActivitySnapshotRow.sampled_at >= func.now() - timedelta(days=days))
-			.group_by("hour")
-		)
+    async def get_hourly_activity(self, session: AsyncSession, days: int = 7) -> list[HourlyActivity]:
+        # The collector's samples, the same ones the daily summary reads, so an
+        # hour's peak here and a day's peak there are the same measurement.
+        stmt = (
+            select(
+                func.extract("hour", func.timezone("Asia/Seoul", ActivitySnapshotRow.sampled_at)).cast(Integer).label("hour"),
+                func.round(func.avg(ActivitySnapshotRow.total_players), 1).label("avg_players"),
+                func.max(ActivitySnapshotRow.total_players).label("peak_players"),
+            )
+            .where(ActivitySnapshotRow.sampled_at >= func.now() - timedelta(days=days))
+            .group_by("hour")
+        )
 
-		result = await session.execute(stmt)
-		result_map = {
-			row.hour: HourlyActivity(hour=row.hour, avg_players=float(row.avg_players), peak_players=row.peak_players)
-			for row in result
-		}
+        result = await session.execute(stmt)
+        result_map = {
+            row.hour: HourlyActivity(hour=row.hour, avg_players=float(row.avg_players), peak_players=row.peak_players)
+            for row in result
+        }
 
-		# Ordered from the statistics day's own start hour, so the late-night
-		# block reads as one run at the end instead of being cut at midnight.
-		return [
-			result_map.get(h, HourlyActivity(hour=h, avg_players=0, peak_players=0))
-			for h in ((STAT_DAY_START_HOUR + offset) % 24 for offset in range(24))
-		]
+        # Ordered from the statistics day's own start hour, so the late-night
+        # block reads as one run at the end instead of being cut at midnight.
+        return [
+            result_map.get(h, HourlyActivity(hour=h, avg_players=0, peak_players=0))
+            for h in ((STAT_DAY_START_HOUR + offset) % 24 for offset in range(24))
+        ]
 
-	async def get_daily_summary(self, session: AsyncSession, days: int = 30) -> list[DailySummary]:
-		start_date = stat_day(datetime.now(timezone.utc)) - timedelta(days=days - 1)
-		start_at = stat_day_start(start_date)
-		players = (
-			select(
-				DailyMatchedPlayerRow.date,
-				func.count().label("unique_players"),
-			)
-			.where(DailyMatchedPlayerRow.date >= start_date)
-			.group_by(DailyMatchedPlayerRow.date)
-		).subquery()
-		snapshot_date = _sql_stat_day(ActivitySnapshotRow.sampled_at).label("date")
-		snapshots = (
-			select(snapshot_date, func.max(ActivitySnapshotRow.total_players).label("peak_players"),
-				func.round(func.avg(ActivitySnapshotRow.total_players), 1).label("avg_players"),
-				func.max(ActivitySnapshotRow.total_rooms).label("peak_rooms"))
-			.where(ActivitySnapshotRow.sampled_at >= start_at)
-			.group_by(snapshot_date)
-		).subquery()
-		date = func.coalesce(snapshots.c.date, players.c.date).label("date")
-		stmt = select(date, snapshots.c.peak_players, snapshots.c.avg_players, snapshots.c.peak_rooms,
-			func.coalesce(players.c.unique_players, 0).label("unique_players")).select_from(
-			snapshots.outerjoin(players, snapshots.c.date == players.c.date, full=True)
-		).order_by(date)
+    async def get_daily_summary(self, session: AsyncSession, days: int = 30) -> list[DailySummary]:
+        start_date = stat_day(datetime.now(timezone.utc)) - timedelta(days=days - 1)
+        start_at = stat_day_start(start_date)
+        players = (
+            select(
+                DailyMatchedPlayerRow.date,
+                func.count().label("unique_players"),
+            )
+            .where(DailyMatchedPlayerRow.date >= start_date)
+            .group_by(DailyMatchedPlayerRow.date)
+        ).subquery()
+        snapshot_date = _sql_stat_day(ActivitySnapshotRow.sampled_at).label("date")
+        snapshots = (
+            select(snapshot_date, func.max(ActivitySnapshotRow.total_players).label("peak_players"),
+                func.round(func.avg(ActivitySnapshotRow.total_players), 1).label("avg_players"),
+                func.max(ActivitySnapshotRow.total_rooms).label("peak_rooms"))
+            .where(ActivitySnapshotRow.sampled_at >= start_at)
+            .group_by(snapshot_date)
+        ).subquery()
+        date = func.coalesce(snapshots.c.date, players.c.date).label("date")
+        stmt = select(date, snapshots.c.peak_players, snapshots.c.avg_players, snapshots.c.peak_rooms,
+            func.coalesce(players.c.unique_players, 0).label("unique_players")).select_from(
+            snapshots.outerjoin(players, snapshots.c.date == players.c.date, full=True)
+        ).order_by(date)
 
-		result = await session.execute(stmt)
-		return [
-			DailySummary(
-				date=row.date.isoformat(),
-				peak_players=row.peak_players,
-				avg_players=float(row.avg_players) if row.avg_players is not None else None,
-				peak_rooms=row.peak_rooms,
-				unique_players=row.unique_players,
-			)
-			for row in result
-		]
+        result = await session.execute(stmt)
+        return [
+            DailySummary(
+                date=row.date.isoformat(),
+                peak_players=row.peak_players,
+                avg_players=float(row.avg_players) if row.avg_players is not None else None,
+                peak_rooms=row.peak_rooms,
+                unique_players=row.unique_players,
+            )
+            for row in result
+        ]
 
-	# -- Read: per-player stats ----------------------------------------------
+    # -- Read: per-player stats ----------------------------------------------
 
-	async def get_player_stats(self, session: AsyncSession, npid: str, days: int = 30) -> PlayerStats:
-		cutoff = func.now() - timedelta(days=days)
+    async def get_player_stats(self, session: AsyncSession, npid: str, days: int = 30) -> PlayerStats:
+        cutoff = func.now() - timedelta(days=days)
 
-		player_snapshots = (
-			select(RankMatchSnapshotRow.room_id, RankMatchSnapshotRow.created_dt,
-				   RankMatchSnapshotRow.user1_npid, RankMatchSnapshotRow.user2_npid,
-				   RankMatchSnapshotRow.user1_online_name, RankMatchSnapshotRow.user2_online_name)
-			.where(
-				or_(RankMatchSnapshotRow.user1_npid == npid, RankMatchSnapshotRow.user2_npid == npid),
-				RankMatchSnapshotRow.created_dt >= cutoff,
-			)
-			.subquery()
-		)
+        player_snapshots = (
+            select(RankMatchSnapshotRow.room_id, RankMatchSnapshotRow.created_dt,
+                   RankMatchSnapshotRow.user1_npid, RankMatchSnapshotRow.user2_npid,
+                   RankMatchSnapshotRow.user1_online_name, RankMatchSnapshotRow.user2_online_name)
+            .where(
+                or_(RankMatchSnapshotRow.user1_npid == npid, RankMatchSnapshotRow.user2_npid == npid),
+                RankMatchSnapshotRow.created_dt >= cutoff,
+            )
+            .subquery()
+        )
 
-		stats_stmt = select(
-			func.count(func.distinct(_sql_stat_day(player_snapshots.c.created_dt))).label("days_active"),
-			func.count().label("times_seen"),
-			func.min(player_snapshots.c.created_dt).label("first_seen"),
-			func.max(player_snapshots.c.created_dt).label("last_seen"),
-		)
+        stats_stmt = select(
+            func.count(func.distinct(_sql_stat_day(player_snapshots.c.created_dt))).label("days_active"),
+            func.count().label("times_seen"),
+            func.min(player_snapshots.c.created_dt).label("first_seen"),
+            func.max(player_snapshots.c.created_dt).label("last_seen"),
+        )
 
-		co_stmt = (
-			select(
-				case(
-					(player_snapshots.c.user1_npid == npid, player_snapshots.c.user2_npid),
-					else_=player_snapshots.c.user1_npid,
-				).label("npid"),
-				case(
-					(player_snapshots.c.user1_npid == npid, player_snapshots.c.user2_online_name),
-					else_=player_snapshots.c.user1_online_name,
-				).label("online_name"),
-				func.count().label("times_together"),
-			)
-			.group_by("npid","online_name")
-			.order_by(func.count().desc())
-			.limit(4)
-		)
+        co_stmt = (
+            select(
+                case(
+                    (player_snapshots.c.user1_npid == npid, player_snapshots.c.user2_npid),
+                    else_=player_snapshots.c.user1_npid,
+                ).label("npid"),
+                case(
+                    (player_snapshots.c.user1_npid == npid, player_snapshots.c.user2_online_name),
+                    else_=player_snapshots.c.user1_online_name,
+                ).label("online_name"),
+                func.count().label("times_together"),
+            )
+            .group_by("npid","online_name")
+            .order_by(func.count().desc())
+            .limit(4)
+        )
 
-		row = (await session.execute(stats_stmt)).one_or_none()
-		top_rows = (await session.execute(co_stmt)).all()
+        row = (await session.execute(stats_stmt)).one_or_none()
+        top_rows = (await session.execute(co_stmt)).all()
 
-		cutoff_hours = func.now() - timedelta(days=7)
-		hours_stmt = (
-			select(
-				func.extract("hour", func.timezone("Asia/Seoul", RankMatchSnapshotRow.created_dt)).cast(Integer).label("hour"),
-				func.count(func.distinct(_sql_stat_day(RankMatchSnapshotRow.created_dt))).label("day_count"),
-			)
-			.where(
-				or_(RankMatchSnapshotRow.user1_npid == npid, RankMatchSnapshotRow.user2_npid == npid),
-				RankMatchSnapshotRow.created_dt >= cutoff_hours,
-			)
-			.group_by("hour")
-		)
-		hours_result = await session.execute(hours_stmt)
-		active_hours = sorted(row.hour for row in hours_result if row.day_count >= 2)
+        cutoff_hours = func.now() - timedelta(days=7)
+        hours_stmt = (
+            select(
+                func.extract("hour", func.timezone("Asia/Seoul", RankMatchSnapshotRow.created_dt)).cast(Integer).label("hour"),
+                func.count(func.distinct(_sql_stat_day(RankMatchSnapshotRow.created_dt))).label("day_count"),
+            )
+            .where(
+                or_(RankMatchSnapshotRow.user1_npid == npid, RankMatchSnapshotRow.user2_npid == npid),
+                RankMatchSnapshotRow.created_dt >= cutoff_hours,
+            )
+            .group_by("hour")
+        )
+        hours_result = await session.execute(hours_stmt)
+        active_hours = sorted(row.hour for row in hours_result if row.day_count >= 2)
 
-		return PlayerStats(
-			npid=npid,
-			days_active=row.days_active if row else 0,
-			times_seen=row.times_seen if row else 0,
-			first_seen=row.first_seen if row else None,
-			last_seen=row.last_seen if row else None,
-			room_type_counts={},
-			top_played_with=[
-				CoPlayer(npid=r.npid, online_name=r.online_name, times_together=r.times_together)
-				for r in top_rows
-			],
-			active_hours=active_hours,
-		)
+        return PlayerStats(
+            npid=npid,
+            days_active=row.days_active if row else 0,
+            times_seen=row.times_seen if row else 0,
+            first_seen=row.first_seen if row else None,
+            last_seen=row.last_seen if row else None,
+            room_type_counts={},
+            top_played_with=[
+                CoPlayer(npid=r.npid, online_name=r.online_name, times_together=r.times_together)
+                for r in top_rows
+            ],
+            active_hours=active_hours,
+        )
 
-	async def get_weekly_top_players(
-		self, session: AsyncSession, limit: int = 10, excluded_npids: Sequence[str] = (),
-	) -> list[TopPlayer]:
-		cutoff = func.now() - timedelta(days=7)
-		# RPCN usernames are unique case-insensitively, so the list is too.
-		excluded = [npid.lower() for npid in excluded_npids]
+    async def get_weekly_top_players(
+        self, session: AsyncSession, limit: int = 10, excluded_npids: Sequence[str] = (),
+    ) -> list[TopPlayer]:
+        cutoff = func.now() - timedelta(days=7)
+        # RPCN usernames are unique case-insensitively, so the list is too.
+        excluded = [npid.lower() for npid in excluded_npids]
 
-		user1_q = select(
-			RankMatchSnapshotRow.user1_npid.label("npid"),
-			RankMatchSnapshotRow.user1_online_name.label("online_name"),
-		).where(RankMatchSnapshotRow.created_dt >= cutoff)
+        user1_q = select(
+            RankMatchSnapshotRow.user1_npid.label("npid"),
+            RankMatchSnapshotRow.user1_online_name.label("online_name"),
+        ).where(RankMatchSnapshotRow.created_dt >= cutoff)
 
-		user2_q = select(
-			RankMatchSnapshotRow.user2_npid.label("npid"),
-			RankMatchSnapshotRow.user2_online_name.label("online_name"),
-		).where(RankMatchSnapshotRow.created_dt >= cutoff)
+        user2_q = select(
+            RankMatchSnapshotRow.user2_npid.label("npid"),
+            RankMatchSnapshotRow.user2_online_name.label("online_name"),
+        ).where(RankMatchSnapshotRow.created_dt >= cutoff)
 
-		sub = union_all(user1_q, user2_q).subquery()
-		stmt = (
-			select(
-				sub.c.npid,
-				func.max(sub.c.online_name).label("online_name"),
-				func.count().label("match_count"),
-			)
-			.where(func.lower(sub.c.npid).not_in(excluded))
-			.group_by(sub.c.npid)
-			.order_by(func.count().desc())
-			.limit(limit)
-		)
+        sub = union_all(user1_q, user2_q).subquery()
+        stmt = (
+            select(
+                sub.c.npid,
+                func.max(sub.c.online_name).label("online_name"),
+                func.count().label("match_count"),
+            )
+            .where(func.lower(sub.c.npid).not_in(excluded))
+            .group_by(sub.c.npid)
+            .order_by(func.count().desc())
+            .limit(limit)
+        )
 
-		result = await session.execute(stmt)
-		return [
-			TopPlayer(npid=row.npid, online_name=row.online_name, match_count=row.match_count)
-			for row in result
-		]
+        result = await session.execute(stmt)
+        return [
+            TopPlayer(npid=row.npid, online_name=row.online_name, match_count=row.match_count)
+            for row in result
+        ]
 

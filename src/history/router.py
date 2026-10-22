@@ -9,32 +9,32 @@ router = APIRouter(prefix="/history", tags=["History & Statistics"])
 
 @router.get("/stats", summary="Hourly player activity (KST)")
 async def hourly_activity(
-	days: int = Query(default=7, ge=1, le=90, description="Number of days to aggregate"),
+    days: int = Query(default=7, ge=1, le=90, description="Number of days to aggregate"),
 ):
-	"""Return average and peak player counts per KST hour."""
-	return await service.get_hourly_activity(days)
+    """Return average and peak player counts per KST hour."""
+    return await service.get_hourly_activity(days)
 
 
 @router.get("/stats/daily", summary="Daily summary")
 async def daily_summary(
-	days: int = Query(default=30, ge=1, le=90, description="Number of days"),
+    days: int = Query(default=30, ge=1, le=90, description="Number of days"),
 ):
-	"""Return daily peak/average player and room counts."""
-	return await service.get_daily_summary(days)
+    """Return daily peak/average player and room counts."""
+    return await service.get_daily_summary(days)
 
 
 @router.get("/stats/weekly-top", summary="Weekly top players")
 async def weekly_top_players(
-	limit: int = Query(default=10, ge=1, le=50, description="Number of top players to return"),
+    limit: int = Query(default=10, ge=1, le=50, description="Number of top players to return"),
 ):
-	"""Return the top N most frequently seen players in the last 7 days."""
-	return await service.get_weekly_top_players(limit)
+    """Return the top N most frequently seen players in the last 7 days."""
+    return await service.get_weekly_top_players(limit)
 
 
 @router.get("/players/{npid}", summary="Player history")
 async def player_history(
-	npid: str = Path(description="Player NPID"),
-	days: int = Query(default=30, ge=1, le=90, description="Number of days"),
+    npid: str = Path(description="Player NPID"),
+    days: int = Query(default=30, ge=1, le=90, description="Number of days"),
 ):
-	"""Return aggregated history stats for a player."""
-	return await service.get_player_stats(npid, days)
+    """Return aggregated history stats for a player."""
+    return await service.get_player_stats(npid, days)

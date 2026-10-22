@@ -22,93 +22,93 @@ logger = logging.getLogger(__name__)
 
 @transactional
 async def record_snapshot(session: AsyncSession, rooms: list[RankMatchSnapshotRecord]) -> None:
-	"""Persist a room snapshot (fire-and-forget safe)."""
-	await get_history_repo().record_snapshot(session, rooms)
+    """Persist a room snapshot (fire-and-forget safe)."""
+    await get_history_repo().record_snapshot(session, rooms)
 
 
 @transactional
 async def _record_daily_matched_players(session: AsyncSession, npids: set[str], observed_at: datetime) -> None:
-	await get_history_repo().record_daily_matched_players(session, npids, observed_at)
+    await get_history_repo().record_daily_matched_players(session, npids, observed_at)
 
 
 async def record_daily_matched_players(npids: set[str], observed_at: datetime) -> None:
-	"""Record participants, then invalidate summaries only after commit."""
-	if not any(npids):
-		return
-	await _record_daily_matched_players(npids, observed_at)
-	cache_delete_pattern("history:daily:*")
+    """Record participants, then invalidate summaries only after commit."""
+    if not any(npids):
+        return
+    await _record_daily_matched_players(npids, observed_at)
+    cache_delete_pattern("history:daily:*")
 
 
 @transactional
 async def _record_activity_snapshot(session: AsyncSession, snapshot: ActivitySnapshot) -> None:
-	await get_history_repo().record_activity_snapshot(session, snapshot)
+    await get_history_repo().record_activity_snapshot(session, snapshot)
 
 
 async def record_activity_snapshot(snapshot: ActivitySnapshot) -> None:
-	await _record_activity_snapshot(snapshot)
-	cache_delete_pattern("history:daily:*")
+    await _record_activity_snapshot(snapshot)
+    cache_delete_pattern("history:daily:*")
 
 
 # -- Read: global stats ------------------------------------------------------
 
 async def get_hourly_activity(days: int = 7) -> list[HourlyActivity]:
-	key = f"history:hourly:{days}"
-	if cached := cache_get(key):
-		return cached
-	result = await _get_hourly_activity(days)
-	cache_set(key, result, get_settings().cache_ttl_activity)
-	return result
+    key = f"history:hourly:{days}"
+    if cached := cache_get(key):
+        return cached
+    result = await _get_hourly_activity(days)
+    cache_set(key, result, get_settings().cache_ttl_activity)
+    return result
 
 
 @read_only
 async def _get_hourly_activity(session: AsyncSession, days: int) -> list[HourlyActivity]:
-	return await get_history_repo().get_hourly_activity(session, days)
+    return await get_history_repo().get_hourly_activity(session, days)
 
 
 async def get_daily_summary(days: int = 30) -> list[DailySummary]:
-	key = f"history:daily:{days}"
-	if cached := cache_get(key):
-		return cached
-	result = await _get_daily_summary(days)
-	cache_set(key, result, get_settings().cache_ttl_activity)
-	return result
+    key = f"history:daily:{days}"
+    if cached := cache_get(key):
+        return cached
+    result = await _get_daily_summary(days)
+    cache_set(key, result, get_settings().cache_ttl_activity)
+    return result
 
 
 @read_only
 async def _get_daily_summary(session: AsyncSession, days: int) -> list[DailySummary]:
-	return await get_history_repo().get_daily_summary(session, days)
+    return await get_history_repo().get_daily_summary(session, days)
 
 
 # -- Read: weekly top players ------------------------------------------------
 
 async def get_weekly_top_players(limit: int = 10) -> list[TopPlayer]:
-	key = f"history:weekly_top:{limit}"
-	if cached := cache_get(key):
-		return cached
-	result = await _get_weekly_top_players(limit)
-	cache_set(key, result, get_settings().cache_ttl_activity)
-	return result
+    key = f"history:weekly_top:{limit}"
+    if cached := cache_get(key):
+        return cached
+    result = await _get_weekly_top_players(limit)
+    cache_set(key, result, get_settings().cache_ttl_activity)
+    return result
 
 
 @read_only
 async def _get_weekly_top_players(session: AsyncSession, limit: int) -> list[TopPlayer]:
-	excluded = get_settings().ranking_excluded_npids
-	return await get_history_repo().get_weekly_top_players(session, limit, excluded)
+    excluded = get_settings().ranking_excluded_npids
+    return await get_history_repo().get_weekly_top_players(session, limit, excluded)
 
 
 # -- Read: per-player stats --------------------------------------------------
 
 async def get_player_stats(npid: str, days: int = 30) -> PlayerStats:
-	key = f"history:player_stats:{npid}:{days}"
-	if cached := cache_get(key):
-		return cached
-	result = await _get_player_stats(npid=npid, days=days)
-	cache_set(key, result, get_settings().cache_ttl_player_hours)
-	return result
+    key = f"history:player_stats:{npid}:{days}"
+    if cached := cache_get(key):
+        return cached
+    result = await _get_player_stats(npid=npid, days=days)
+    cache_set(key, result, get_settings().cache_ttl_player_hours)
+    return result
 
 
 @read_only
 async def _get_player_stats(session: AsyncSession, npid: str, days: int) -> PlayerStats:
-	return await get_history_repo().get_player_stats(session, npid, days)
+    return await get_history_repo().get_player_stats(session, npid, days)
 
 

@@ -47,10 +47,10 @@ REAL_NIGHT_OWL = "doStudyy"
 # active_hours only reports an hour seen on two distinct days, so each player
 # needs the same hours on more than one day to show up at all.
 SESSIONS = {
-	NIGHT_OWL: [22, 23, 0, 1, 2],
-	DAWN_QUITTER: [3, 4, 5],
-	EARLY_BIRD: [6, 7, 8],
-	REAL_NIGHT_OWL: [22, 23, 0, 1],
+    NIGHT_OWL: [22, 23, 0, 1, 2],
+    DAWN_QUITTER: [3, 4, 5],
+    EARLY_BIRD: [6, 7, 8],
+    REAL_NIGHT_OWL: [22, 23, 0, 1],
 }
 DAYS = 3
 OPPONENT = "seed-opponent"
@@ -61,63 +61,63 @@ SEED_ROOM_ID = 900000
 
 
 def _sessions_for(npid: str, hours: list[int], today: datetime, slot: int) -> list[dict]:
-	"""One room per hour per day, walking back from yesterday."""
-	rows = []
-	for day_offset in range(1, DAYS + 1):
-		# Anchor on the statistics day, so an hour after midnight lands on the
-		# following calendar date --- which is what makes it the same play day.
-		day_start = datetime.combine(today - timedelta(days=day_offset), time(6), tzinfo=KST)
-		for hour in hours:
-			moment = day_start + timedelta(hours=(hour - 6) % 24)
-			rows.append(dict(
-				room_id=SEED_ROOM_ID + slot * 1000 + day_offset * 100 + hour,
-				created_dt=moment.astimezone(timezone.utc),
-				match_date=stat_day(moment),
-				rank_id=10,
-				user1_npid=npid,
-				user1_online_name=npid,
-				user2_npid=OPPONENT,
-				user2_online_name=OPPONENT,
-			))
-	return rows
+    """One room per hour per day, walking back from yesterday."""
+    rows = []
+    for day_offset in range(1, DAYS + 1):
+        # Anchor on the statistics day, so an hour after midnight lands on the
+        # following calendar date --- which is what makes it the same play day.
+        day_start = datetime.combine(today - timedelta(days=day_offset), time(6), tzinfo=KST)
+        for hour in hours:
+            moment = day_start + timedelta(hours=(hour - 6) % 24)
+            rows.append(dict(
+                room_id=SEED_ROOM_ID + slot * 1000 + day_offset * 100 + hour,
+                created_dt=moment.astimezone(timezone.utc),
+                match_date=stat_day(moment),
+                rank_id=10,
+                user1_npid=npid,
+                user1_online_name=npid,
+                user2_npid=OPPONENT,
+                user2_online_name=OPPONENT,
+            ))
+    return rows
 
 
 async def _clean(session) -> int:
-	result = await session.execute(delete(RankMatchSnapshotRow).where(
-		RankMatchSnapshotRow.room_id >= SEED_ROOM_ID
-	))
-	return result.rowcount or 0
+    result = await session.execute(delete(RankMatchSnapshotRow).where(
+        RankMatchSnapshotRow.room_id >= SEED_ROOM_ID
+    ))
+    return result.rowcount or 0
 
 
 async def main(clean_only: bool) -> None:
-	await init_database()
-	factory = get_session_factory()
-	async with factory() as session:
-		async with session.begin():
-			removed = await _clean(session)
-			print(f"removed {removed} previously seeded rows")
-			if clean_only:
-				return
+    await init_database()
+    factory = get_session_factory()
+    async with factory() as session:
+        async with session.begin():
+            removed = await _clean(session)
+            print(f"removed {removed} previously seeded rows")
+            if clean_only:
+                return
 
-			today = stat_day(datetime.now(timezone.utc))
-			rows = [
-				row
-				for slot, (npid, hours) in enumerate(SESSIONS.items())
-				for row in _sessions_for(npid, hours, today, slot)
-			]
-			session.add_all([RankMatchSnapshotRow(**row) for row in rows])
+            today = stat_day(datetime.now(timezone.utc))
+            rows = [
+                row
+                for slot, (npid, hours) in enumerate(SESSIONS.items())
+                for row in _sessions_for(npid, hours, today, slot)
+            ]
+            session.add_all([RankMatchSnapshotRow(**row) for row in rows])
 
-		async with session.begin():
-			for npid, hours in SESSIONS.items():
-				seeded = len((await session.execute(select(RankMatchSnapshotRow).where(
-					RankMatchSnapshotRow.user1_npid == npid,
-					RankMatchSnapshotRow.room_id >= SEED_ROOM_ID,
-				))).scalars().all())
-				print(f"{npid:18} hours {hours} over {DAYS} days -> {seeded} seeded rows")
-	await close_database()
+        async with session.begin():
+            for npid, hours in SESSIONS.items():
+                seeded = len((await session.execute(select(RankMatchSnapshotRow).where(
+                    RankMatchSnapshotRow.user1_npid == npid,
+                    RankMatchSnapshotRow.room_id >= SEED_ROOM_ID,
+                ))).scalars().all())
+                print(f"{npid:18} hours {hours} over {DAYS} days -> {seeded} seeded rows")
+    await close_database()
 
 
 if __name__ == "__main__":
-	parser = argparse.ArgumentParser(description=__doc__)
-	parser.add_argument("--clean", action="store_true", help="remove seeded rows and exit")
-	asyncio.run(main(parser.parse_args().clean))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--clean", action="store_true", help="remove seeded rows and exit")
+    asyncio.run(main(parser.parse_args().clean))

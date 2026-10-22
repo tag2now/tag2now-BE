@@ -13,20 +13,20 @@ PKT_SERVERINFO = 3
 
 
 class Cmd(IntEnum):
-	LOGIN                  = 0
-	TERMINATE              = 1
-	GET_SERVER_LIST        = 12
-	GET_WORLD_LIST         = 13
-	SEARCH_ROOM            = 17
-	GET_ROOM_EXTERNAL_LIST = 18
-	GET_SCORE_RANGE        = 34
-	GET_SCORE_FRIENDS      = 35
-	GET_SCORE_NPID         = 36
-	SEARCH_ROOM_ALL        = 0x0105
+    LOGIN                  = 0
+    TERMINATE              = 1
+    GET_SERVER_LIST        = 12
+    GET_WORLD_LIST         = 13
+    SEARCH_ROOM            = 17
+    GET_ROOM_EXTERNAL_LIST = 18
+    GET_SCORE_RANGE        = 34
+    GET_SCORE_FRIENDS      = 35
+    GET_SCORE_NPID         = 36
+    SEARCH_ROOM_ALL        = 0x0105
 
-	@property
-	def label(self) -> str:
-		return self.name.replace("_", " ").title().replace(" ", "")
+    @property
+    def label(self) -> str:
+        return self.name.replace("_", " ").title().replace(" ", "")
 
 
 # ErrorType::NoError

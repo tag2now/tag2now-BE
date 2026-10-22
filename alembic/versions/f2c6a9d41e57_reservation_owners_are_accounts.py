@@ -21,23 +21,23 @@ depends_on = None
 
 
 def upgrade() -> None:
-	op.add_column("reservation_comments", sa.Column("author_subject", sa.Text(), nullable=True))
-	op.drop_column("reservation_comments", "author_token_hash")
-	# Dropping the column takes its (reservation_id, participant_token_hash)
-	# unique constraint with it.
-	op.drop_column("reservation_participants", "participant_token_hash")
-	op.drop_column("reservations", "host_token_hash")
-	op.create_index(
-		"uq_reservation_participants_active_subject", "reservation_participants", ["reservation_id", "subject"],
-		unique=True, postgresql_where=sa.text("cancelled_at IS NULL AND subject IS NOT NULL"),
-	)
+    op.add_column("reservation_comments", sa.Column("author_subject", sa.Text(), nullable=True))
+    op.drop_column("reservation_comments", "author_token_hash")
+    # Dropping the column takes its (reservation_id, participant_token_hash)
+    # unique constraint with it.
+    op.drop_column("reservation_participants", "participant_token_hash")
+    op.drop_column("reservations", "host_token_hash")
+    op.create_index(
+        "uq_reservation_participants_active_subject", "reservation_participants", ["reservation_id", "subject"],
+        unique=True, postgresql_where=sa.text("cancelled_at IS NULL AND subject IS NOT NULL"),
+    )
 
 
 def downgrade() -> None:
-	# The hashes are gone; the empty string restores the columns' shape, and no
-	# token hashes to it, so every row comes back ownerless as it went.
-	op.drop_index("uq_reservation_participants_active_subject", table_name="reservation_participants")
-	op.add_column("reservations", sa.Column("host_token_hash", sa.Text(), nullable=False, server_default=""))
-	op.add_column("reservation_participants", sa.Column("participant_token_hash", sa.Text(), nullable=False, server_default=""))
-	op.add_column("reservation_comments", sa.Column("author_token_hash", sa.Text(), nullable=False, server_default=""))
-	op.drop_column("reservation_comments", "author_subject")
+    # The hashes are gone; the empty string restores the columns' shape, and no
+    # token hashes to it, so every row comes back ownerless as it went.
+    op.drop_index("uq_reservation_participants_active_subject", table_name="reservation_participants")
+    op.add_column("reservations", sa.Column("host_token_hash", sa.Text(), nullable=False, server_default=""))
+    op.add_column("reservation_participants", sa.Column("participant_token_hash", sa.Text(), nullable=False, server_default=""))
+    op.add_column("reservation_comments", sa.Column("author_token_hash", sa.Text(), nullable=False, server_default=""))
+    op.drop_column("reservation_comments", "author_subject")

@@ -18,14 +18,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-	op.create_table(
-		"daily_matched_players",
-		sa.Column("date", sa.Date(), nullable=False),
-		sa.Column("npid", sa.String(), nullable=False),
-		sa.Column("first_seen_at", sa.DateTime(timezone=True), nullable=False),
-		sa.PrimaryKeyConstraint("date", "npid"),
-	)
-	op.execute("""
+    op.create_table(
+        "daily_matched_players",
+        sa.Column("date", sa.Date(), nullable=False),
+        sa.Column("npid", sa.String(), nullable=False),
+        sa.Column("first_seen_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("date", "npid"),
+    )
+    op.execute("""
 		INSERT INTO daily_matched_players (date, npid, first_seen_at)
 		SELECT
 			(created_dt AT TIME ZONE 'Asia/Seoul')::date,
@@ -43,4 +43,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-	op.drop_table("daily_matched_players")
+    op.drop_table("daily_matched_players")
