@@ -72,13 +72,8 @@ LEAD_TIME = timedelta(minutes=10)
 # A play session ends at dawn, not at midnight, so the day boundary is 06:00 KST.
 DAY_END_HOUR = 6
 
-# How long a reservation stays alive once it has started.
-#
-# Hosts used to declare how long they expected to play, and that estimate drove
-# expiry. Nobody can predict it — a set runs long or ends in ten minutes — so a
-# reservation now simply outlives its start by a fixed hour. That hour is also
-# the only window in which the detail page is reachable, since the listing is
-# how anyone gets to it.
+# A fixed hour after the start, because nobody can predict how long a set runs.
+# It is also the only window in which the detail page is reachable from the listing.
 LISTING_GRACE = timedelta(hours=1)
 
 

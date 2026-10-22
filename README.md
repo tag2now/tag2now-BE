@@ -125,17 +125,16 @@ deployment, not a reason to degrade: the app calls `os._exit(1)` at import time.
 | `CACHE_TTL_PLAYER_HOURS` | `300` | Per-player hourly stats cache TTL |
 | `MATCHMAKING_TTL` | `60` | Matchmaking tracker entry TTL |
 
-**Database** — `DB_URL` is read two different ways. If it starts with `postgresql://`
-it is used as a complete DSN and `DB_USER`/`DB_PASSWORD`/`DB_NAME` are ignored;
-otherwise it is treated as a bare `host:port` and the DSN is assembled from the
-other three (see [`shared/database.py`](src/shared/database.py)).
+**Database** — `DB_URL` is a bare `host:port`, never a full DSN: the scheme
+and credentials are added from the other three (see
+[`shared/database.py`](src/shared/database.py)).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DB_URL` | `postgresql://127.0.0.1:5432/tag2now` | Full DSN, or bare `host:port` |
-| `DB_NAME` | `tag2now` | Database name (bare-host form only) |
-| `DB_USER` | `postgres` | Database user (bare-host form only) |
-| `DB_PASSWORD` | `postgres` | Database password (bare-host form only) |
+| `DB_URL` | `127.0.0.1:5432` | `host:port` only |
+| `DB_NAME` | `tag2now` | Database name |
+| `DB_USER` | `postgres` | Database user |
+| `DB_PASSWORD` | `postgres` | Database password |
 
 **HTTP**
 

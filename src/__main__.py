@@ -1,8 +1,8 @@
-"""Run the Tekken Tag Tournament 2 API server.
+"""Run the API server with uvicorn, from the repository root.
 
 Usage:
-    python -m matching
-    python -m matching --host 0.0.0.0 --port 8000 --reload
+    python -m src
+    python -m src --host 0.0.0.0 --port 8000 --reload
 """
 import argparse
 

@@ -1,15 +1,5 @@
-"""Tekken Tag Tournament 2 RPCN queries and API server.
-
-Credentials are read from environment variables (or a .env file):
-  RPCN_USER      - RPCN username (required)
-  RPCN_PASSWORD  - RPCN password (required)
-  RPCN_TOKEN     - RPCN token   (optional, default: "")
-  RPCN_HOST      - server host  (optional, default: np.rpcs3.net)
-  RPCN_PORT      - server port  (optional, default: 31313)
-
-API usage:
-  RPCN_USER=you RPCN_PASSWORD=secret uvicorn app:app --reload
-"""
+"""The ASGI app: every module's router, and their lifecycles in dependency order.
+Configuration is shared.settings; how to run it is in CLAUDE.md."""
 import json
 import logging
 import os
