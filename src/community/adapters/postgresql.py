@@ -7,7 +7,6 @@ from community.entities import Comment, Post, Thumb
 from community.exceptions import CommentNotFoundError, NestingDepthError, PostNotFoundError
 from community.models import NOTICE_POST_TYPE
 from community.ports import CommunityRepository
-from shared.database import get_session_factory
 
 
 def _as_dict(row) -> dict:
@@ -17,20 +16,9 @@ def _as_dict(row) -> dict:
 class PostgresCommunityRepository(CommunityRepository):
     """Community persistence using the application's shared session factory."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession] | None = None):
-        self._session_factory = session_factory
-
-    async def init(self) -> None:
-        self._session_factory = self._session_factory or get_session_factory()
-
-    async def close(self) -> None:
-        """The shared database lifecycle owns the engine."""
-
-    @property
-    def _sessions(self) -> async_sessionmaker[AsyncSession]:
-        if self._session_factory is None:
-            raise RuntimeError("Community repository not initialized")
-        return self._session_factory
+    def __init__(self, sessions: async_sessionmaker[AsyncSession]):
+        # The shared database lifecycle owns the engine; this only borrows sessions.
+        self._sessions = sessions
 
     # -- Posts ---------------------------------------------------------------
 

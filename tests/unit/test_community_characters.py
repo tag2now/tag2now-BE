@@ -6,8 +6,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from community.dependencies import community_service
 from community.models import CreatePostRequest, UpdatePostRequest
 from community.router import router
+from community.service import CommunityService
 
 
 def test_create_defaults_to_no_characters():
@@ -24,15 +26,14 @@ def test_edit_requires_an_explicit_character_list():
 
 
 @pytest.fixture
-def listing(monkeypatch):
-    from community import service
+def listing():
     from shared.cache import cache_delete_pattern
 
     repo = AsyncMock()
     repo.list_posts.return_value = ([], 0)
-    monkeypatch.setattr(service, 'get_repo', lambda: repo)
     app = FastAPI()
     app.include_router(router, prefix='/community')
+    app.dependency_overrides[community_service] = lambda: CommunityService(repo)
     cache_delete_pattern('community:*')
     with TestClient(app) as client:
         yield client, repo

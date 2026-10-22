@@ -1,36 +1,26 @@
-"""The ASGI app: every module's router, and their lifecycles in dependency order.
-Configuration is shared.settings; how to run it is in CLAUDE.md."""
+"""The ASGI app: every module's router, and a lifespan that builds the services
+(container.py) and runs the collector. How to run it is in CLAUDE.md."""
 import json
 import logging
 import os
 import asyncio
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from container import build_container
 from shared.cache import redis_health_check
-from shared.database import init_database, close_database
-from shared.rpcn_api import init_rpcn_api, close_rpcn_api
 from shared.error_handlers import register_exception_handlers
-from admin.db import init_admin, close_admin
 from admin.router import router as admin_router
-from auth.db import init_auth, close_auth
 from auth.router import router as auth_router
-from chat.db import init_chat
 from chat.router import router as chat_router
-from history import init_history_repo, close_history_repo
 from history.collector import run_collector, stop_collector
 from history.router import router as history_router
 from matching.router import router as ttt2_router
-from matching.db import init_game_repo, close_game_repo
-from community import init_db, close_db
 from community.router import router as community_router
-from reservation.db import init_db as init_reservation_db, close_db as close_reservation_db
 from reservation.router import router as reservation_router
-from saves import init_saves, close_saves
 from saves.router import router as saves_router, admin_router as saves_admin_router
-from streaming import init_streaming, close_streaming
 from streaming.router import router as streaming_router, admin_router as streaming_admin_router
 from shared.settings import get_settings
 
@@ -50,32 +40,12 @@ except Exception:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_rpcn_api()
-    await init_auth()
-    await init_admin()
-    await init_saves()
-    await init_database()
-    await init_db()
-    await init_reservation_db()
-    await init_history_repo()
-    await init_game_repo()
-    await init_chat()
-    await init_streaming()
-    collector_task = asyncio.create_task(run_collector(), name="match-history-collector")
-    try:
+    async with AsyncExitStack() as stack:
+        app.state.container = await build_container(stack)
+        collector_task = asyncio.create_task(run_collector(), name="match-history-collector")
+        # Registered last, so it is cancelled before anything it reads from closes.
+        stack.push_async_callback(stop_collector, collector_task)
         yield
-    finally:
-        await stop_collector(collector_task)
-    await close_streaming()
-    await close_game_repo()
-    await close_history_repo()
-    await close_reservation_db()
-    await close_db()
-    await close_database()
-    await close_saves()
-    await close_admin()
-    await close_auth()
-    await close_rpcn_api()
 
 
 app = FastAPI(

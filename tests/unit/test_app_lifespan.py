@@ -3,40 +3,67 @@
 import asyncio
 import importlib
 import sys
-from unittest.mock import AsyncMock
 
 import pytest
 
 
-@pytest.mark.asyncio
-async def test_lifespan_starts_and_cancels_the_match_history_collector(monkeypatch):
+@pytest.fixture
+def app_module(monkeypatch):
     import shared.cache
 
     monkeypatch.setattr(shared.cache, "redis_health_check", lambda: None)
     sys.modules.pop("app", None)
-    app_module = importlib.import_module("app")
+    return importlib.import_module("app")
 
-    initializers = ["init_rpcn_api", "init_auth", "init_admin", "init_saves", "init_database", "init_db", "init_reservation_db", "init_history_repo", "init_game_repo", "init_chat", "init_streaming"]
-    closers = ["close_streaming", "close_game_repo", "close_history_repo", "close_reservation_db", "close_db", "close_database", "close_saves", "close_admin", "close_auth", "close_rpcn_api"]
-    mocks = {name: AsyncMock() for name in initializers + closers}
-    for name, mock in mocks.items():
-        monkeypatch.setattr(app_module, name, mock)
+
+async def test_lifespan_runs_the_collector_between_startup_and_shutdown(app_module, monkeypatch):
+    events = []
+    container = object()
+
+    async def build_container(stack):
+        events.append("built")
+        stack.push_async_callback(_record, events, "closed")
+        return container
 
     started = asyncio.Event()
-    cancelled = asyncio.Event()
 
     async def collector():
         started.set()
         try:
             await asyncio.Event().wait()
         finally:
-            cancelled.set()
+            events.append("collector stopped")
 
+    monkeypatch.setattr(app_module, "build_container", build_container)
     monkeypatch.setattr(app_module, "run_collector", collector)
 
     async with app_module.lifespan(app_module.app):
         await asyncio.wait_for(started.wait(), timeout=0.1)
+        assert app_module.app.state.container is container
 
-    await asyncio.wait_for(cancelled.wait(), timeout=0.1)
-    for name in initializers + closers:
-        mocks[name].assert_awaited_once()
+    # The collector reads through services, so it stops before they close.
+    assert events == ["built", "collector stopped", "closed"]
+
+
+async def test_a_failing_startup_closes_what_it_had_opened(app_module, monkeypatch):
+    events = []
+
+    async def build_container(stack):
+        stack.push_async_callback(_record, events, "closed")
+        raise RuntimeError("database unreachable")
+
+    async def collector():
+        events.append("collector started")
+
+    monkeypatch.setattr(app_module, "build_container", build_container)
+    monkeypatch.setattr(app_module, "run_collector", collector)
+
+    with pytest.raises(RuntimeError, match="database unreachable"):
+        async with app_module.lifespan(app_module.app):
+            pass
+
+    assert events == ["closed"]
+
+
+async def _record(events, event):
+    events.append(event)

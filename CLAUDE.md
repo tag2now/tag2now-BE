@@ -274,27 +274,38 @@ errors, and `admin/` knows nothing of saves. Spec: `docs/spec/09-save-admin.md`.
 
 ### Hexagonal layering
 
-**Follow this pattern when adding a module.** Each domain module uses the same file layout:
+**Follow this pattern when adding a module** (`community/` is the reference).
+Each domain module uses the same file layout:
 
 | File | Role |
 |------|------|
 | `ports.py` | Abstract repository interface (`ABC` with `@abstractmethod`) |
 | `adapters/` | Concrete implementations of the port (PostgreSQL, RPCN, HTTP services) |
-| `db.py` | Repository factory + lifecycle — module-level `_repo`, `init_*`, `close_*`, `get_*` |
-| `service.py` | Application service — orchestrates ports, caching, and domain logic |
-| `router.py` | FastAPI `APIRouter`; delegates to `service`, holds no business logic |
+| `service.py` | A service class that receives its ports in `__init__`; orchestrates them, caching and domain rules |
+| `dependencies.py` | The `Depends` provider that hands a route its service from `app.state.container` |
+| `router.py` | FastAPI `APIRouter`; takes the service through `Depends`, holds no business logic |
 | `models.py` | Pydantic request/response models and domain DTOs |
 | `exceptions.py` | Domain-specific exceptions |
 
-Routers depend on services; services depend on ports; only adapters know about a concrete store. Do not import an adapter directly from a service — go through the `db.py` accessor.
+Routers depend on services; services depend on ports; only adapters know about
+a concrete store.
 
-The repository singleton is module-level state, initialised in the FastAPI `lifespan` and torn down in reverse order. `get_*_repo()` raises `RuntimeError` if called before init, so no null checks are needed at call sites.
+**`src/container.py` is the composition root.** `build_container(stack)` is the
+one place adapters and services are constructed, called from `lifespan` with an
+`AsyncExitStack`: each module that needs closing registers its close as it
+opens, so shutdown runs in reverse and a failure part-way closes exactly what
+was already open. Code outside a request (the collector) is handed its services
+by the lifespan rather than reaching for them.
 
-`reservation/` and `chat/` are the exceptions to that accessor rule: their
-`db.py` **injects** the repository (and chat's event bus) with
-`service.configure(...)`, and `service.py` keeps its own `_repository()` guard. Copy the `matching`/`history`/`community` shape for a new
-module unless you want the injection seam that makes the service testable
-without touching `db.py`.
+Tests swap a service with FastAPI's own seam,
+`app.dependency_overrides[community_service] = lambda: CommunityService(fake_repo)`,
+or construct the service directly; neither needs a module patched.
+
+**Migration in progress.** Only `community/` is built this way so far. The other
+modules still keep a module-level repository in `db.py` (`init_*`, `close_*`,
+`get_*`, test seams `set_*`) and are opened from `container._LIFECYCLES`;
+`reservation/` and `chat/` inject theirs with `service.configure(...)`. Each moves
+to the pattern above in turn, and its `db.py` is deleted when it does.
 
 ### Caching
 

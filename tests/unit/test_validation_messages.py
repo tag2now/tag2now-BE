@@ -16,12 +16,22 @@ logging.disable(logging.CRITICAL)
 
 @pytest.fixture
 def client(auth_headers):
-    """Signed in: the auth dependency answers 401 before the body is validated."""
-    from app import app
+    """Signed in: the auth dependency answers 401 before the body is validated.
 
+    FastAPI also resolves every other dependency before it reports the body's
+    errors, so the services are stood in for; no test here gets far enough to call one.
+    """
+    from unittest.mock import AsyncMock
+
+    from app import app
+    from community.dependencies import community_service
+    from community.service import CommunityService
+
+    app.dependency_overrides[community_service] = lambda: CommunityService(AsyncMock())
     c = TestClient(app)
     c.headers.update(auth_headers("tester"))
-    return c
+    yield c
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture

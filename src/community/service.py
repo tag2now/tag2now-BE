@@ -4,9 +4,9 @@ invalidation after every write."""
 import asyncio
 
 from auth.models import AuthUser
-from community.db import get_repo
 from community.exceptions import NoticeAdminOnlyError, OwnershipError
 from community.models import NOTICE_POST_TYPE
+from community.ports import CommunityRepository
 from shared.cache import cache_delete, cache_delete_pattern, cache_get, cache_set
 from shared.settings import get_settings
 
@@ -57,34 +57,6 @@ def ensure_can_manage_post(post: dict, user: AuthUser) -> None:
         raise OwnershipError("Not your post")
 
 
-# ---------------------------------------------------------------------------
-# Posts
-# ---------------------------------------------------------------------------
-
-async def list_posts(page: int, page_size: int, post_type: str | None = None, characters: list[str] | None = None) -> dict:
-    # A team is unordered: Jin+Kazuya and Kazuya+Jin share one cache entry.
-    team = sorted(set(characters or ()))
-    key = _list_key(page, page_size, post_type, team)
-    if cached := cache_get(key):
-        return cached
-    posts, total = await get_repo().list_posts(page, page_size, post_type, team)
-    result = {"posts": posts, "total": total, "page": page, "page_size": page_size}
-    cache_set(key, result, _ttl())
-    return result
-
-
-async def get_post(post_id: int) -> dict:
-    """The post with its comments, each top-level comment carrying its replies."""
-    key = _post_key(post_id)
-    if cached := cache_get(key):
-        return cached
-    repo = get_repo()
-    post, comments = await asyncio.gather(repo.get_post(post_id), repo.get_post_comments(post_id))
-    post["comments"] = _nest_replies(comments)
-    cache_set(key, post, _ttl())
-    return post
-
-
 def _nest_replies(comments: list[dict]) -> list[dict]:
     # A reply whose parent is missing is shown as a top-level comment.
     by_id = {c["id"]: {**c, "replies": []} for c in comments}
@@ -98,46 +70,63 @@ def _nest_replies(comments: list[dict]) -> list[dict]:
     return top_level
 
 
-async def create_post(author: AuthUser, title: str, body: str, post_type: str = "자유", characters: list[str] | None = None, youtube_video_id: str | None = None) -> dict:
-    ensure_can_use_post_type(post_type, author)
-    post = await get_repo().create_post(author.username, title, body, post_type, characters, youtube_video_id)
-    _invalidate_lists()
-    return post
+class CommunityService:
+    def __init__(self, repo: CommunityRepository):
+        self._repo = repo
 
+    # -- Posts ---------------------------------------------------------------
 
-async def update_post(post_id: int, user: AuthUser, title: str, body: str, post_type: str, characters: list[str], youtube_video_id: str | None) -> dict:
-    ensure_can_use_post_type(post_type, user)
-    repo = get_repo()
-    ensure_can_manage_post(await repo.get_post(post_id), user)
-    post = await repo.update_post(post_id, title, body, post_type, characters, youtube_video_id)
-    _invalidate_lists()
-    _invalidate_post(post_id)
-    return post
+    async def list_posts(self, page: int, page_size: int, post_type: str | None = None, characters: list[str] | None = None) -> dict:
+        # A team is unordered: Jin+Kazuya and Kazuya+Jin share one cache entry.
+        team = sorted(set(characters or ()))
+        key = _list_key(page, page_size, post_type, team)
+        if cached := cache_get(key):
+            return cached
+        posts, total = await self._repo.list_posts(page, page_size, post_type, team)
+        result = {"posts": posts, "total": total, "page": page, "page_size": page_size}
+        cache_set(key, result, _ttl())
+        return result
 
+    async def get_post(self, post_id: int) -> dict:
+        """The post with its comments, each top-level comment carrying its replies."""
+        key = _post_key(post_id)
+        if cached := cache_get(key):
+            return cached
+        post, comments = await asyncio.gather(self._repo.get_post(post_id), self._repo.get_post_comments(post_id))
+        post["comments"] = _nest_replies(comments)
+        cache_set(key, post, _ttl())
+        return post
 
-async def delete_post(post_id: int, user: AuthUser) -> None:
-    repo = get_repo()
-    ensure_can_manage_post(await repo.get_post(post_id), user)
-    await repo.delete_post(post_id)
-    _invalidate_lists()
-    _invalidate_post(post_id)
+    async def create_post(self, author: AuthUser, title: str, body: str, post_type: str = "자유", characters: list[str] | None = None, youtube_video_id: str | None = None) -> dict:
+        ensure_can_use_post_type(post_type, author)
+        post = await self._repo.create_post(author.username, title, body, post_type, characters, youtube_video_id)
+        _invalidate_lists()
+        return post
 
+    async def update_post(self, post_id: int, user: AuthUser, title: str, body: str, post_type: str, characters: list[str], youtube_video_id: str | None) -> dict:
+        ensure_can_use_post_type(post_type, user)
+        ensure_can_manage_post(await self._repo.get_post(post_id), user)
+        post = await self._repo.update_post(post_id, title, body, post_type, characters, youtube_video_id)
+        _invalidate_lists()
+        _invalidate_post(post_id)
+        return post
 
-# ---------------------------------------------------------------------------
-# Comments
-# ---------------------------------------------------------------------------
+    async def delete_post(self, post_id: int, user: AuthUser) -> None:
+        ensure_can_manage_post(await self._repo.get_post(post_id), user)
+        await self._repo.delete_post(post_id)
+        _invalidate_lists()
+        _invalidate_post(post_id)
 
-async def create_comment(post_id: int, author: AuthUser, body: str, parent_id: int | None = None) -> dict:
-    comment = await get_repo().create_comment(post_id, author.username, body, parent_id)
-    _invalidate_post(post_id)
-    return comment
+    # -- Comments ------------------------------------------------------------
 
+    async def create_comment(self, post_id: int, author: AuthUser, body: str, parent_id: int | None = None) -> dict:
+        comment = await self._repo.create_comment(post_id, author.username, body, parent_id)
+        _invalidate_post(post_id)
+        return comment
 
-# ---------------------------------------------------------------------------
-# Thumbs (posts only)
-# ---------------------------------------------------------------------------
+    # -- Thumbs (posts only) -------------------------------------------------
 
-async def toggle_thumb(post_id: int, voter: AuthUser, direction: int) -> dict:
-    result = await get_repo().toggle_thumb(post_id, voter.username, direction)
-    _invalidate_post(post_id)
-    return result
+    async def toggle_thumb(self, post_id: int, voter: AuthUser, direction: int) -> dict:
+        result = await self._repo.toggle_thumb(post_id, voter.username, direction)
+        _invalidate_post(post_id)
+        return result

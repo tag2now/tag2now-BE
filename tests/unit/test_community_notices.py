@@ -17,9 +17,10 @@ def stored(author: str, post_type: str) -> dict:
 
 
 @pytest.fixture
-def board(monkeypatch):
+def board():
     from app import app
-    from community import service
+    from community.dependencies import community_service
+    from community.service import CommunityService
     from shared.cache import cache_delete_pattern
 
     repo = AsyncMock()
@@ -27,10 +28,11 @@ def board(monkeypatch):
     # A notice written by `root`; a test about another post says so.
     repo.get_post.return_value = stored("root", "공지")
     repo.update_post.return_value = stored("root", "공지")
-    monkeypatch.setattr(service, "get_repo", lambda: repo)
+    app.dependency_overrides[community_service] = lambda: CommunityService(repo)
     cache_delete_pattern("community:*")
-    # No `with`: lifespan stays off, the repository is ours.
+    # No `with`: lifespan stays off, the service is ours.
     yield TestClient(app), repo
+    app.dependency_overrides.pop(community_service)
     cache_delete_pattern("community:*")
 
 

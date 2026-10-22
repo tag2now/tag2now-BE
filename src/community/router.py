@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends, Query
 
 from auth.dependencies import current_user
 from auth.models import AuthUser
-from community import models, service
+from community import models
+from community.dependencies import community_service
+from community.service import CommunityService
 
 router = APIRouter()
 
@@ -19,27 +21,41 @@ async def list_posts(
     page_size: int = Query(20, ge=1, le=100),
     post_type: str | None = Query(None),
     characters: list[str] = Query([], max_length=models.MAX_POST_CHARACTERS),
+    service: CommunityService = Depends(community_service),
 ):
     return await service.list_posts(page, page_size, post_type, characters)
 
 
 @router.post("/posts", status_code=201)
-async def create_post(req: models.CreatePostRequest, user: AuthUser = Depends(current_user)):
+async def create_post(
+    req: models.CreatePostRequest,
+    user: AuthUser = Depends(current_user),
+    service: CommunityService = Depends(community_service),
+):
     return await service.create_post(user, req.title, req.body, req.post_type, req.characters, req.youtube_video_id)
 
 
 @router.get("/posts/{post_id}", response_model=models.PostDetail)
-async def get_post(post_id: int):
+async def get_post(post_id: int, service: CommunityService = Depends(community_service)):
     return await service.get_post(post_id)
 
 
 @router.patch("/posts/{post_id}", response_model=models.PostSummary)
-async def update_post(post_id: int, req: models.UpdatePostRequest, user: AuthUser = Depends(current_user)):
+async def update_post(
+    post_id: int,
+    req: models.UpdatePostRequest,
+    user: AuthUser = Depends(current_user),
+    service: CommunityService = Depends(community_service),
+):
     return await service.update_post(post_id, user, req.title, req.body, req.post_type, req.characters, req.youtube_video_id)
 
 
 @router.delete("/posts/{post_id}", status_code=204)
-async def delete_post(post_id: int, user: AuthUser = Depends(current_user)):
+async def delete_post(
+    post_id: int,
+    user: AuthUser = Depends(current_user),
+    service: CommunityService = Depends(community_service),
+):
     await service.delete_post(post_id, user)
 
 
@@ -48,7 +64,12 @@ async def delete_post(post_id: int, user: AuthUser = Depends(current_user)):
 # ---------------------------------------------------------------------------
 
 @router.post("/posts/{post_id}/comments", status_code=201)
-async def create_comment(post_id: int, req: models.CreateCommentRequest, user: AuthUser = Depends(current_user)):
+async def create_comment(
+    post_id: int,
+    req: models.CreateCommentRequest,
+    user: AuthUser = Depends(current_user),
+    service: CommunityService = Depends(community_service),
+):
     return await service.create_comment(post_id, user, req.body, req.parent_id)
 
 
@@ -57,5 +78,10 @@ async def create_comment(post_id: int, req: models.CreateCommentRequest, user: A
 # ---------------------------------------------------------------------------
 
 @router.post("/posts/{post_id}/thumb")
-async def thumb_post(post_id: int, req: models.ThumbRequest, user: AuthUser = Depends(current_user)):
+async def thumb_post(
+    post_id: int,
+    req: models.ThumbRequest,
+    user: AuthUser = Depends(current_user),
+    service: CommunityService = Depends(community_service),
+):
     return await service.toggle_thumb(post_id, user, req.direction_int)

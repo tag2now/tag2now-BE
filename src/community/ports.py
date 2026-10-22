@@ -5,14 +5,6 @@ from abc import ABC, abstractmethod
 
 class CommunityRepository(ABC):
 
-    @abstractmethod
-    async def init(self) -> None:
-        """Initialise the backing store (create tables, pool, etc.)."""
-
-    @abstractmethod
-    async def close(self) -> None:
-        """Release resources held by the backing store."""
-
     # -- Posts ---------------------------------------------------------------
 
     @abstractmethod

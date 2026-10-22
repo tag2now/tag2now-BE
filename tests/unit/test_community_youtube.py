@@ -6,8 +6,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from community.dependencies import community_service
 from community.models import CreatePostRequest
 from community.router import router
+from community.service import CommunityService
 
 
 @pytest.mark.parametrize('value', ['', 'short', 'x' * 12, 'https://youtu.be/dQw4w9WgXcQ', 'dQw4w9WgXc!', 'dQw4w9WgXcQ\n'])
@@ -21,8 +23,7 @@ def test_existing_request_has_no_video():
 
 
 @pytest.mark.parametrize('video_id', [None, 'dQw4w9WgXcQ'])
-def test_create_and_read_video_through_api(monkeypatch, video_id, auth_headers):
-    from community import service
+def test_create_and_read_video_through_api(video_id, auth_headers):
     from shared.cache import cache_delete_pattern
 
     post = dict(id=987654, author='testuser', title='test', body='body', post_type='자유',
@@ -33,9 +34,9 @@ def test_create_and_read_video_through_api(monkeypatch, video_id, auth_headers):
     repo.get_post.return_value = post.copy()
     repo.get_post_comments.return_value = []
     repo.list_posts.return_value = ([post.copy()], 1)
-    monkeypatch.setattr(service, 'get_repo', lambda: repo)
     app = FastAPI()
     app.include_router(router, prefix='/community')
+    app.dependency_overrides[community_service] = lambda: CommunityService(repo)
     cache_delete_pattern('community:*')
     try:
         with TestClient(app) as client:
