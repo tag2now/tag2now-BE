@@ -23,12 +23,12 @@ from datetime import datetime, timedelta, timezone
 from itertools import groupby
 
 from auth.models import AuthUser
-from matching.constants import TEKKEN_RANKS, TTT2_CHARACTERS
 from saves.db import get_save_server
 from saves.exceptions import SaveNotFoundError
 from saves.models import HOLDER_RANKS, SaveLogRequest, SaveRequest
 from shared.cache import cache_delete, cache_get, cache_set
 from shared.settings import get_settings
+from shared.ttt2 import TEKKEN_RANKS, TTT2_CHARACTERS
 
 logger = logging.getLogger(__name__)
 

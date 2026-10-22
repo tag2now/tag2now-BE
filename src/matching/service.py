@@ -7,7 +7,7 @@ from fastapi.encoders import jsonable_encoder
 
 from shared.cache import cache_get, cache_set
 from shared.settings import get_settings
-from matching.constants import TEKKEN_RANKS, TTT2_CHARACTERS
+from shared.ttt2 import TEKKEN_RANKS, TTT2_CHARACTERS
 from matching.db import get_game_server_repo
 from matching.matchmaking_tracker import update_and_get_phantoms
 from matching.models import (

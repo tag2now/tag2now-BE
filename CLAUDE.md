@@ -196,7 +196,7 @@ Nine modules under `src/` --- seven domains plus `auth/` and `admin/` --- a `sha
 | `saves/` | TTT2 saves through tag2now-save-admin: anyone's ranks for the profile, and admins' reads and edits |
 | `streaming/` | Players' own Chzzk channels, and who in a room is live — carried on `/rooms/all` as each user's `stream` |
 | `admin/` | RPCN account moderation (lookup, ban) through rpcn-narco's admin API, and the admin gate other routers use |
-| `shared/` | Settings, cache, database, exceptions, and the rpcn-narco API server client `auth/` and `admin/` share (`rpcn_api.py`) |
+| `shared/` | Settings, cache, database, exceptions, TTT2's ids and character/rank tables (`ttt2.py`), and the rpcn-narco API server client `auth/` and `admin/` share (`rpcn_api.py`) |
 | `rpcn_client/` | Standalone RPCN protocol client (no FastAPI dependency) |
 
 ### Authentication
@@ -484,7 +484,7 @@ TLS uses `CERT_NONE` because RPCN presents a self-signed certificate.
 
 Game communication IDs are exactly 12 ASCII bytes. The result is prepended to
 most request payloads. TTT2's are `TTT2_COM_ID` (`NPWR02973_00`) and
-`TTT2_RANK_BOARD_ID` (`4`) in `matching/models.py`.
+`TTT2_RANK_BOARD_ID` (`4`) in `shared/ttt2.py`.
 
 ## Deployment
 

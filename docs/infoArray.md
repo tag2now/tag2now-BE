@@ -24,7 +24,7 @@ The `gameInfo` structure is composed of a header containing IDs and Ranks, follo
 
 ## 2. Character ID Reference Table
 
-Hex ID별 캐릭터 이름은 [`src/matching/constants.py`](../src/matching/constants.py)의 `TTT2_CHARACTERS`를 따른다.
+Hex ID별 캐릭터 이름은 [`src/shared/ttt2.py`](../src/shared/ttt2.py)의 `TTT2_CHARACTERS`를 따른다.
 
 ---
 

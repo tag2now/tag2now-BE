@@ -10,11 +10,14 @@ from matching.models import (
     TTT2GameInfo,
     TTT2LeaderboardEntry,
     TTT2LeaderboardResult,
-    _GAME_INFO_FMT,
-    _GAME_INFO_SIZE,
 )
 from matching.ports import GameServerPort
 from matching.rpcn_lifecycle import api_client, shutdown_client
+
+# The leading bytes of a leaderboard entry's game_info: both characters' ids,
+# ranks, wins and losses.
+_GAME_INFO_FMT = ">4B4I"
+_GAME_INFO_SIZE = 20
 
 
 class RpcnGameServerAdapter(GameServerPort):

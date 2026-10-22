@@ -2,7 +2,7 @@
 
 import pytest
 
-from matching.constants import TEKKEN_RANKS, TTT2_CHARACTERS
+from shared.ttt2 import TEKKEN_RANKS, TTT2_CHARACTERS
 
 
 @pytest.fixture

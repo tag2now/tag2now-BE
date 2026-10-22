@@ -4,7 +4,8 @@ import logging
 
 from fastapi import APIRouter, Query, Response
 
-from matching.models import TTT2_COM_ID, TTT2_RANK_BOARD_ID, GameDataOut
+from matching.models import GameDataOut
+from shared.ttt2 import TTT2_COM_ID, TTT2_RANK_BOARD_ID
 from matching import service
 from matching.service import LEADERBOARD_CACHE_SIZE
 

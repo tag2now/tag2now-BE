@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import pytest
 
-from matching.constants import TEKKEN_RANKS, TTT2_CHARACTERS
+from shared.ttt2 import TEKKEN_RANKS, TTT2_CHARACTERS
 from saves import db
 from saves.adapters.save_admin_server import SaveAdminServer
 from saves.exceptions import SavesUnavailableError

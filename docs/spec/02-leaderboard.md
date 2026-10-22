@@ -61,7 +61,7 @@
 }
 ```
 
-- 출처는 `matching/constants.py`의 `TTT2_CHARACTERS`·`TEKKEN_RANKS`이고, 이 둘이 이름표의 유일한 원본이다.
+- 출처는 `shared/ttt2.py`의 `TTT2_CHARACTERS`·`TEKKEN_RANKS`이고, 이 둘이 이름표의 유일한 원본이다.
   tag2now-save-admin도 이름을 여기서 받아 쓴다(09-save-admin.md).
 - ID 순으로 캐릭터 59개(0–58), 계급 43개(0–42)를 빠짐없이 준다.
 - 표는 배포로만 바뀌므로 `Cache-Control: public, max-age=300`을 붙인다.

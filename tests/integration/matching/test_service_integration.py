@@ -16,12 +16,12 @@ import asyncio
 import pytest
 from rpcn_client import SearchRoomsResult
 from matching import (
-    TTT2_COM_ID,
     get_server_world_tree,
     get_leaderboard,
 )
 from matching.db import init_game_repo, close_game_repo
 from matching.rpcn_lifecycle import api_client, shutdown_client
+from shared.ttt2 import TTT2_COM_ID, TTT2_RANK_BOARD_ID
 
 # These reach RPCN through the shared api_client(), so they carry the same
 # one-session-per-account restriction as tests/integration/test_rpcn_client.py.
@@ -32,7 +32,7 @@ pytestmark = pytest.mark.rpcn
 # ---------------------------------------------------------------------------
 
 COM_ID = TTT2_COM_ID
-BOARD_ID = 4
+BOARD_ID = TTT2_RANK_BOARD_ID
 
 
 # ---------------------------------------------------------------------------

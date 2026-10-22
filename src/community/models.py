@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
-from matching.constants import TTT2_CHARACTERS
+from shared.ttt2 import TTT2_CHARACTERS
 
 # Pinned above the board and kept out of its list, so only an admin may post one.
 NOTICE_POST_TYPE = "공지"

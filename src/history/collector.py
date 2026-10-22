@@ -7,9 +7,10 @@ from datetime import datetime, timezone
 
 from history import service as history_service
 from history.models import ActivitySnapshot, RankMatchSnapshotRecord
-from matching.models import TTT2_COM_ID, RoomInfoDTO
+from matching.models import RoomInfoDTO
 from matching.service import collect_activity_observation
 from shared.settings import get_settings
+from shared.ttt2 import TTT2_COM_ID
 
 logger = logging.getLogger(__name__)
 

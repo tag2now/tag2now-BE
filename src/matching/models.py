@@ -1,4 +1,4 @@
-"""TTT2 dataclasses and game constants."""
+"""TTT2 dataclasses."""
 
 from dataclasses import dataclass, field
 from enum import Enum
@@ -6,19 +6,7 @@ from enum import Enum
 from pydantic import BaseModel
 
 from rpcn_client import RoomInfo, UserInfo
-from matching.constants import TEKKEN_RANKS, TTT2_CHARACTERS
-
-# ---------------------------------------------------------------------------
-# Game constants
-# ---------------------------------------------------------------------------
-
-# noinspection SpellCheckingInspection
-TTT2_COM_ID = "NPWR02973_00"
-TTT2_RANK_BOARD_ID = 4
-
-_GAME_INFO_FMT = ">4B4I"
-_GAME_INFO_SIZE = 20
-
+from shared.ttt2 import TEKKEN_RANKS, TTT2_CHARACTERS
 
 # ---------------------------------------------------------------------------
 # Dataclasses

@@ -1,4 +1,9 @@
-"""Tekken Tag Tournament 2 static data (character tables, etc.)."""
+"""Tekken Tag Tournament 2 game data every module shares: its RPCN ids and its
+character and rank tables."""
+
+# noinspection SpellCheckingInspection
+TTT2_COM_ID = "NPWR02973_00"
+TTT2_RANK_BOARD_ID = 4
 
 # Character ID → name mapping (hex IDs from game_info bytes)
 TTT2_CHARACTERS = {

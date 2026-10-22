@@ -12,7 +12,7 @@ RPCN에 현재 존재하는 TTT2 방을 모아 "지금 누가 무슨 매치를 �
 3. 각 방의 `int_attrs[4]` 값으로 방 종류를 판별한다.
    - `0` → `player_match` (플레이어 매치, 계급 없음)
    - `0` 이외 → `rank_match` (랭크 매치, 해당 값이 계급 ID)
-4. 계급 ID는 `matching/constants.py:TEKKEN_RANKS`로 이름/티어를 해석한다.
+4. 계급 ID는 `shared/ttt2.py:TEKKEN_RANKS`로 이름/티어를 해석한다.
 
 ### 응답 형태 (`GET /rooms/all`)
 
