@@ -16,7 +16,7 @@ from saves.exceptions import (
     BackupNotFoundError, SaveConflictError, SaveNotFoundError, SaveRequestError, SavesUnavailableError,
 )
 from saves.ports import SaveServer
-from shared.rpcn_password import derive_rpcn_password
+from shared.rpcn_password import derive_rpcn_password_in_thread
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ class SaveAdminServer(SaveServer):
         raise _fault(response, path)
 
     async def call(self, action: str, admin_username: str, admin_password: str, payload: dict) -> dict:
-        body = {**payload, "admin_username": admin_username, "admin_password": derive_rpcn_password(admin_password)}
+        body = {**payload, "admin_username": admin_username, "admin_password": await derive_rpcn_password_in_thread(admin_password)}
         path = f"/saves/{action}"
         response = await self._send("POST", path, json=body)
         answer = _json(response)

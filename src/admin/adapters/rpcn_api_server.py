@@ -14,7 +14,7 @@ from admin.exceptions import AccountNotFoundError, AdminPasswordError, AdminUnav
 from admin.models import AccountStatus, BanResult
 from admin.ports import AccountAdmin
 from shared.rpcn_api import RpcnApiClient, RpcnApiNotConfigured, RpcnApiUnreachable
-from shared.rpcn_password import derive_rpcn_password
+from shared.rpcn_password import derive_rpcn_password_in_thread
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class RpcnApiServerAccountAdmin(AccountAdmin):
         return _read(_to_ban_result, body)
 
     async def _post(self, path: str, admin_username: str, admin_password: str, username: str) -> dict:
-        payload = {"admin_username": admin_username, "admin_password": derive_rpcn_password(admin_password), "username": username}
+        payload = {"admin_username": admin_username, "admin_password": await derive_rpcn_password_in_thread(admin_password), "username": username}
         try:
             response = await self._api.post(path, payload)
         except RpcnApiNotConfigured as exc:

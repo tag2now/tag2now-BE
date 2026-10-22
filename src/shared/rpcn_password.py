@@ -6,6 +6,7 @@ hex. rpcn-narco stores an Argon2 hash of this derived value, so API callers
 must use the same first-stage derivation before verification.
 """
 
+import asyncio
 import hashlib
 
 _SALT = b"No matter where you go, everybody's connected."
@@ -23,3 +24,9 @@ def derive_rpcn_password(password: str) -> str:
         dklen=_DERIVED_KEY_LENGTH,
     )
     return digest.hex().upper()
+
+
+async def derive_rpcn_password_in_thread(password: str) -> str:
+    # ~200 ms of CPU that would stall every request on the event loop; OpenSSL
+    # releases the GIL while it hashes, so the thread runs truly in parallel.
+    return await asyncio.to_thread(derive_rpcn_password, password)

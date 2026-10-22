@@ -11,7 +11,7 @@ from auth.exceptions import AuthUnavailableError, InvalidCredentialsError
 from auth.models import VerifiedAccount
 from auth.ports import AccountVerifier
 from shared.rpcn_api import RpcnApiClient, RpcnApiNotConfigured, RpcnApiUnreachable
-from shared.rpcn_password import derive_rpcn_password
+from shared.rpcn_password import derive_rpcn_password_in_thread
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class RpcnApiServerAccountVerifier(AccountVerifier):
 
     async def verify(self, username: str, password: str) -> VerifiedAccount:
         try:
-            response = await self._api.post(_VERIFY_PATH, {"username": username, "password": derive_rpcn_password(password)})
+            response = await self._api.post(_VERIFY_PATH, {"username": username, "password": await derive_rpcn_password_in_thread(password)})
         except RpcnApiNotConfigured as exc:
             raise AuthUnavailableError("로그인이 설정되지 않았습니다.") from exc
         except RpcnApiUnreachable as exc:
