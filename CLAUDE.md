@@ -14,9 +14,10 @@ The frontend lives in a sibling repository, `tag2now-FE`.
 .venv/Scripts/python.exe -m pip install -r requirements.txt
 .venv/Scripts/python.exe -m pip install -e .
 .venv/Scripts/python.exe -m grpc_tools.protoc -I. --python_out=src/rpcn_client np2_structs.proto
+.venv/Scripts/python.exe -m pip install ruff==0.17.1   # lint; the version CI pins
 ```
 
-The last command generates `src/rpcn_client/np2_structs_pb2.py` (not committed). It is required by `search_rooms`, `get_score_range`, and `get_score_npid`, and must be regenerated whenever `np2_structs.proto` changes.
+The protoc command generates `src/rpcn_client/np2_structs_pb2.py` (not committed). It is required by `search_rooms`, `get_score_range`, and `get_score_npid`, and must be regenerated whenever `np2_structs.proto` changes.
 
 ## Python environment
 

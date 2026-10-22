@@ -35,3 +35,11 @@ markers = [
     # Deselect them with -m 'not rpcn' wherever that exclusivity is not held.
     "rpcn: hits the live RPCN server and needs sole use of RPCN_USER",
 ]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+# Pyflakes only: unused imports and variables, undefined names. Formatting
+# rules come later, with `ruff format`.
+select = ["F"]

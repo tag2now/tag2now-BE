@@ -6,7 +6,7 @@ from contextlib import contextmanager
 
 from rpcn_client import RpcnClient, RpcnError
 from matching.exceptions import RpcnUnavailableError
-from shared.settings import get_settings, Settings
+from shared.settings import get_settings
 from rpcn_client.metrics import TrackedRpcnClient
 
 logger = logging.getLogger(__name__)

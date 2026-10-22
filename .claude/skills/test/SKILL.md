@@ -112,6 +112,16 @@ a local dev server holds it too. They are a deliberate local-only extra: run the
 bare `pytest tests/integration/ -v` only when testing RPCN client behaviour
 specifically, after stopping every local backend.
 
+### 5. Lint
+
+```bash
+.venv/Scripts/ruff.exe check . > test-results/lint.log 2>&1; echo "exit=$?"
+```
+
+CI runs this as its own job. ruff is not in `requirements.txt` (the production
+image installs that file), so install it once into the venv at the version CI
+pins: `.venv/Scripts/python.exe -m pip install ruff==0.17.1`.
+
 ## After the run
 
 **A red suite blocks the commit.** This holds even when the failures look

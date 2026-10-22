@@ -7,6 +7,23 @@ on:
     branches: [master]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # Pinned here, not in requirements.txt, which the production image installs.
+      - name: Install ruff
+        run: pip install ruff==0.17.1
+
+      - name: Lint
+        run: ruff check .
+
   unit-tests:
     runs-on: ubuntu-latest
     steps:

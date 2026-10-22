@@ -1,7 +1,7 @@
 """Fixtures for history unit tests."""
 
 from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
