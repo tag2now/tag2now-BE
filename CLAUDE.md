@@ -69,7 +69,7 @@ load `get_settings()` and look at the values before concluding anything.
 account around the clock, so startup may fail with `LoginAlreadyLoggedIn`. That
 is a self-announcing failure with a clear message, not a risk to production and
 not something to plan around --- just start the server and read the log. The
-RPCN *tests* are the case that genuinely collides (see Tests above).
+RPCN *tests* are the case that genuinely collides (see Tests below).
 
 **Redis is optional.** `shared/cache.py` picks its backend from `redis_url`: set,
 and it is `RedisCache`; empty (the default), and it is `DictCache`, an
@@ -78,9 +78,9 @@ import time and `os._exit(1)`s on failure, but that check returns immediately
 when no `redis_url` is configured — so a local run with the setting blank starts
 fine and caches in memory.
 
-The dict cache is per-process and dies with it. That is a fine default for a
-local run and wrong for production, where the restart would silently drop every
-cached value.
+The dict cache is per-process and dies with it. **Production runs it too:**
+`compose.prod.yml` has no `redis` service and the instance's `REDIS_URL` is
+empty, so every deploy or restart starts with an empty cache.
 
 ## Tests
 
@@ -88,8 +88,8 @@ cached value.
 .venv/Scripts/python.exe -m pytest tests/unit/ -v                        # no external services needed
 docker compose -f compose.test.yml up -d --wait                          # Redis + PostgreSQL
 DATABASE_URL=postgresql+psycopg://tag2now:tag2now@127.0.0.1:5433/tag2now .venv/Scripts/python.exe -m alembic upgrade head
-.venv/Scripts/python.exe -m pytest tests/integration/ -v -m "not rpcn"   # 116, services only
-.venv/Scripts/python.exe -m pytest tests/integration/ -v                 # all 129, adds live RPCN
+.venv/Scripts/python.exe -m pytest tests/integration/ -v -m "not rpcn"   # 134, services only
+.venv/Scripts/python.exe -m pytest tests/integration/ -v                 # all 147, adds live RPCN
 ```
 
 - `tests/unit/` — pure logic; no network, no database.
@@ -104,7 +104,7 @@ community tests' `TRUNCATE` wiped the dev server's posts. Startup creates no
 tables, hence the `alembic` line above, once per fresh container.
 
 **The `rpcn` marker separates the live-RPCN modules from the rest.** Both live-RPCN modules carry a
-module-level `pytestmark = pytest.mark.rpcn`, so `-m "not rpcn"` leaves 116 tests
+module-level `pytestmark = pytest.mark.rpcn`, so `-m "not rpcn"` leaves 134 tests
 that need nothing but the two containers. CI runs exactly that: it cannot hold
 the account (production is logged in as that user around the clock, and two
 overlapping runs would collide with each other besides), so the 13 marked tests
@@ -182,7 +182,7 @@ Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leade
 
 ## Architecture
 
-Ten modules under `src/` --- eight domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
+Nine modules under `src/` --- seven domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
 
 | Module | Responsibility |
 |--------|----------------|
@@ -289,9 +289,9 @@ Routers depend on services; services depend on ports; only adapters know about a
 
 The repository singleton is module-level state, initialised in the FastAPI `lifespan` and torn down in reverse order. `get_*_repo()` raises `RuntimeError` if called before init, so no null checks are needed at call sites.
 
-`reservation/` is the exception to that accessor rule: its `db.py` **injects**
-the repository with `service.configure(_repo)`, and `service.py` keeps its own
-`_repository()` guard. Copy the `matching`/`history`/`community` shape for a new
+`reservation/` and `chat/` are the exceptions to that accessor rule: their
+`db.py` **injects** the repository (and chat's event bus) with
+`service.configure(...)`, and `service.py` keeps its own `_repository()` guard. Copy the `matching`/`history`/`community` shape for a new
 module unless you want the injection seam that makes the service testable
 without touching `db.py`.
 
@@ -489,7 +489,7 @@ most request payloads. TTT2's are `TTT2_COM_ID` (`NPWR02973_00`) and
 
 Docker image built from `python:3.12-alpine`; protobuf is generated during the build. Images go to ECR (`864573346741.dkr.ecr.ap-northeast-2.amazonaws.com/tag2-now/be`).
 
-Production is a **single AWS Lightsail instance** running docker compose — `fe`, `be`, `redis`, `postgres`, `dynamodb-local`. Not ECS. Because there is one process, module-level state (the matchmaking tracker, the shared RPCN client) is safe here but would break under horizontal scaling.
+Production is a **single AWS Lightsail instance** running docker compose — `be`, `save-admin`, `fe`, `postgres`; no Redis, no DynamoDB. Not ECS. Because there is one process, module-level state (the matchmaking tracker, the shared RPCN client) is safe here but would break under horizontal scaling.
 
 - `.github/workflows/ci.yml` — on pushes and PRs to `master`: unit tests, then the `not rpcn` integration tests against `compose.test.yml`. Both jobs generate the protobuf first; without it `import matching` raises `RpcnError` and collection fails before a single test runs.
 - `.github/workflows/deploy.yml` — on `v*` tags: build and push to ECR, then deploy to production over SSH.
@@ -511,6 +511,8 @@ org, shared with tag2now-FE; this repo defines only `ECR_REPOSITORY`
 (`tag2-now/be`) and its own `production` environment. See the
 [Actions configuration](docs/aws-setup.md#actions-configuration) table.
 
-Full infrastructure notes, including the Athena analytics setup, live in [docs/aws-setup.md](docs/aws-setup.md). The RPCN reference server source is at `C:/project/rpcn`.
+Full infrastructure notes, including the Athena analytics setup, live in [docs/aws-setup.md](docs/aws-setup.md). The RPCN server source (rpcn-narco) is at `D:/project/tag2now/rpcn-narco`.
 
-Note that `/api` traffic reaches the instance directly and does **not** pass through CloudFront — only static assets do.
+`/api` traffic passes through CloudFront like the static assets do (responses
+carry `Via: … cloudfront.net`), but is never cached there: every request is
+forwarded to the instance. See [docs/aws-setup.md](docs/aws-setup.md#architecture).

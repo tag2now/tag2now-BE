@@ -11,11 +11,10 @@ Route 53 (match.tag2now.click)
                                nginx serves /dist and proxies /api/
 
 Lightsail single instance — docker compose
-    ├── fe    (nginx + built SPA)
-    ├── be    (FastAPI)
-    ├── redis
-    ├── postgres
-    └── dynamodb-local
+    ├── fe          (nginx + built SPA)
+    ├── be          (FastAPI)
+    ├── save-admin  (tag2now-save-admin; loopback :8001 only)
+    └── postgres
 ```
 
 **Everything is behind CloudFront**, `/api/` included: responses on both the
