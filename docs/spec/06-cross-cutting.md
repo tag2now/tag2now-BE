@@ -10,6 +10,7 @@
 | `DictCache` | `redis_url` 빈 값(기본) | 프로세스 내 dict + 항목별 TTL. 프로세스와 함께 사라진다 |
 
 - `cache_get` / `cache_set(key, value, ttl)` — JSON 왕복. `_DataclassEncoder`가 dataclass와 `datetime`을 처리.
+- `cache_delete(key)` — 키 하나를 글자 그대로 지운다. 키를 알 때는 이것을 쓴다(npid에 `[`, `*`가 들어갈 수 있다).
 - `cache_delete_pattern(pattern)` — Redis는 `SCAN`(운영 안전), dict는 `fnmatch`.
 - 서비스 표준 패턴은 read-through이고, **쓰기 시 무효화는 라우터가 소유**한다.
 

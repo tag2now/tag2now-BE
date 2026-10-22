@@ -27,7 +27,7 @@ from matching.constants import TEKKEN_RANKS, TTT2_CHARACTERS
 from saves.db import get_save_server
 from saves.exceptions import SaveNotFoundError
 from saves.models import HOLDER_RANKS, SaveLogRequest, SaveRequest
-from shared.cache import cache_delete_pattern, cache_get, cache_set
+from shared.cache import cache_delete, cache_get, cache_set
 from shared.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -201,7 +201,7 @@ async def edit_save(action: str, admin: AuthUser, request: SaveRequest) -> dict:
     answer = await _admin_call(action, admin, request)
     # Profiles show the save from a cache; a written one shows at once.
     if answer["applied"]:
-        cache_delete_pattern(_key(answer["username"]))
+        cache_delete(_key(answer["username"]))
     return answer
 
 

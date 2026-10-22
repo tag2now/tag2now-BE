@@ -302,12 +302,13 @@ without touching `db.py`.
 chosen once at import by `_make_cache()` from whether `redis_url` is set:
 `RedisCache` (module-level synchronous `redis` client) or `DictCache`
 (thread-safe in-process dict). `cache_get` / `cache_set` /
-`cache_delete_pattern` are module-level shims over whichever is active.
+`cache_delete` / `cache_delete_pattern` are module-level shims over whichever is active.
 
 `RedisCache` swallows every Redis error and logs a warning — an outage degrades
 to cache misses rather than 500s.
 
 - `cache_get(key)` / `cache_set(key, value, ttl)` — JSON round-trip; `_DataclassEncoder` handles dataclasses and `datetime`.
+- `cache_delete(key)` — one key, taken literally. Use it whenever the key is known: an npid may contain `[` or `*`.
 - `cache_delete_pattern(pattern)` — SCAN on Redis (safe in production), `fnmatch` over the keys on the dict backend.
 
 The standard service pattern is read-through:

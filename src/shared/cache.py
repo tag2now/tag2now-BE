@@ -38,6 +38,10 @@ class CacheBackend(ABC):
         """Store *value* under *key* with a TTL in seconds."""
 
     @abstractmethod
+    def delete(self, key: str):
+        """Delete *key*, taken literally; a missing key is not an error."""
+
+    @abstractmethod
     def delete_pattern(self, pattern: str):
         """Delete all keys matching glob-style *pattern*."""
 
@@ -71,6 +75,10 @@ class DictCache(CacheBackend):
         expire_at = time.monotonic() + ttl
         with self._lock:
             self._store[key] = (serialised, expire_at)
+
+    def delete(self, key: str):
+        with self._lock:
+            self._store.pop(key, None)
 
     def delete_pattern(self, pattern: str):
         # Match outside the lock: fnmatch over every key dominates the cost, and
@@ -109,6 +117,12 @@ class RedisCache(CacheBackend):
             self._client.setex(key, ttl, json.dumps(value, cls=_DataclassEncoder))
         except Exception as e:
             logger.warning("Redis set failed: %s", e)
+
+    def delete(self, key: str):
+        try:
+            self._client.delete(key)
+        except Exception as e:
+            logger.warning("Redis delete failed: %s", e)
 
     def delete_pattern(self, pattern: str):
         """Delete all keys matching *pattern* (uses SCAN, safe for production)."""
@@ -151,6 +165,10 @@ def cache_get(key: str):
 
 def cache_set(key: str, value, ttl: int):
     _cache.set(key, value, ttl)
+
+
+def cache_delete(key: str):
+    _cache.delete(key)
 
 
 def cache_delete_pattern(pattern: str):

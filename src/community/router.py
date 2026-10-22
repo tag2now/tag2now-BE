@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from auth.dependencies import current_user
 from auth.models import AuthUser
 from community import models, service
-from shared.cache import cache_get, cache_set, cache_delete_pattern
+from shared.cache import cache_delete, cache_delete_pattern, cache_get, cache_set
 from shared.settings import get_settings
 
 router = APIRouter()
@@ -20,7 +20,7 @@ def _invalidate_posts():
     cache_delete_pattern("community:posts:*")
 
 def _invalidate_post(post_id: int):
-    cache_delete_pattern(f"community:post:{post_id}")
+    cache_delete(f"community:post:{post_id}")
 
 def _get_user(user: AuthUser = Depends(current_user)) -> str:
     """The signed-in RPCN username: the author on writes, the voter on thumbs.

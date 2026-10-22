@@ -59,7 +59,7 @@ def cache(monkeypatch):
     fresh = DictCache()
     monkeypatch.setattr("saves.service.cache_get", fresh.get)
     monkeypatch.setattr("saves.service.cache_set", fresh.set)
-    monkeypatch.setattr("saves.service.cache_delete_pattern", fresh.delete_pattern)
+    monkeypatch.setattr("saves.service.cache_delete", fresh.delete)
     return fresh
 
 

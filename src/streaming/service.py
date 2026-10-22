@@ -10,7 +10,7 @@ from collections.abc import Collection
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.models import AuthUser
-from shared.cache import cache_delete_pattern, cache_get, cache_set
+from shared.cache import cache_delete, cache_get, cache_set
 from shared.database import read_only, transactional
 from shared.settings import get_settings
 from streaming.db import get_channel_repo, get_stream_platform
@@ -94,13 +94,13 @@ async def register_channel(user: AuthUser, text: str) -> dict:
     if found is None:
         raise InvalidChannelError("치지직에서 찾을 수 없는 채널입니다.")
     channel = await _upsert(user.username, found)
-    cache_delete_pattern(CHANNELS_KEY)
+    cache_delete(CHANNELS_KEY)
     return {"channel": _channel_out(channel)}
 
 
 async def unregister_channel(user: AuthUser) -> None:
     await _delete(user.username)
-    cache_delete_pattern(CHANNELS_KEY)
+    cache_delete(CHANNELS_KEY)
 
 
 # --- admin --------------------------------------------------------------------
@@ -113,7 +113,7 @@ async def list_channels() -> dict:
 async def remove_channel(username: str) -> None:
     if not await _delete(username):
         raise ChannelNotFoundError("연결된 방송 채널이 없습니다.")
-    cache_delete_pattern(CHANNELS_KEY)
+    cache_delete(CHANNELS_KEY)
 
 
 # --- persistence --------------------------------------------------------------

@@ -80,6 +80,31 @@ def test_pattern_deletion_without_matches_is_harmless(cache):
 
 
 # ---------------------------------------------------------------------------
+# Single-key deletion
+# ---------------------------------------------------------------------------
+
+def test_deleting_a_key_removes_it(cache):
+    cache.set("saves:player:alice", "a", 60)
+    cache.delete("saves:player:alice")
+    assert cache.get("saves:player:alice") is None
+
+
+def test_deleting_a_key_takes_glob_characters_literally(cache):
+    # As a pattern, "a[b]" matches "ab" and not itself.
+    cache.set("saves:player:a[b]", "bracketed", 60)
+    cache.set("saves:player:ab", "plain", 60)
+    cache.delete("saves:player:a[b]")
+    assert cache.get("saves:player:a[b]") is None
+    assert cache.get("saves:player:ab") == "plain"
+
+
+def test_deleting_an_unknown_key_is_harmless(cache):
+    cache.set("k", "v", 60)
+    cache.delete("never-written")
+    assert cache.get("k") == "v"
+
+
+# ---------------------------------------------------------------------------
 # Serialisation — the dict cache stores JSON, like Redis does
 # ---------------------------------------------------------------------------
 

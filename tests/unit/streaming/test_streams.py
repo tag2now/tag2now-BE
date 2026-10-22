@@ -86,7 +86,7 @@ def cache(monkeypatch):
     fresh = DictCache()
     monkeypatch.setattr("streaming.service.cache_get", fresh.get)
     monkeypatch.setattr("streaming.service.cache_set", fresh.set)
-    monkeypatch.setattr("streaming.service.cache_delete_pattern", fresh.delete_pattern)
+    monkeypatch.setattr("streaming.service.cache_delete", fresh.delete)
     return fresh
 
 
