@@ -74,8 +74,6 @@ from auth.models import AuthUser
 async def create(req: Req, user: AuthUser = Depends(current_user)): ...
 ```
 
-`optional_user`는 토큰이 없으면 `None`을 돌려주되, **잘못된 토큰은 여전히 401**이다.
-
 FastAPI는 의존성을 body 검증보다 먼저 풀기 때문에, 로그인이 필요한 라우트에 토큰 없이 잘못된 body를 보내면
 422가 아니라 401이 먼저 나간다.
 

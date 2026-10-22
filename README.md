@@ -11,7 +11,7 @@ src/
   app.py               # FastAPI app — mounts all routers, exception handlers, lifespan
   __main__.py          # `python -m src` entry point (uvicorn launcher)
   rpcn_client/         # Core library — RPCN TLS transport and protocol
-  matching/            # Live RPCN data: servers, rooms, leaderboard, player lookup
+  matching/            # Live RPCN data: servers, rooms, leaderboard
   history/             # Player activity statistics and match history
   community/           # Community board (PostgreSQL or DynamoDB backed)
   reservation/         # Match reservations
@@ -119,7 +119,6 @@ deployment, not a reason to degrade: the app calls `os._exit(1)` at import time.
 | `REDIS_URL` | `""` | Redis connection URL; empty means in-process caching |
 | `CACHE_TTL_SERVERS` | `3600` | Server list cache TTL (seconds) |
 | `CACHE_TTL_LEADERBOARD` | `60` | Leaderboard cache TTL |
-| `CACHE_TTL_ROOMS` | `5` | Rooms cache TTL |
 | `CACHE_TTL_ROOMS_ALL` | `5` | `/rooms/all` cache TTL |
 | `CACHE_TTL_COMMUNITY` | `30` | Community board cache TTL |
 | `CACHE_TTL_ACTIVITY` | `300` | Activity statistics cache TTL |
@@ -261,7 +260,6 @@ are the wire surface only.
 | GET | `/servers` | Server and world hierarchy |
 | GET | `/rooms/all` | All rooms including hidden ones |
 | GET | `/leaderboard` | Top N leaderboard entries with character info |
-| GET | `/players/{npid}` | Player lookup by NPID |
 
 ### History & statistics
 

@@ -50,22 +50,6 @@
 - 캐릭터 필터(`leaderboardFilter.ts`), 정렬/개수 컨트롤(`LeaderboardControls`)을 제공한다.
 - 상위 1~3위 메달 색상은 `medalColors.ts`, 계급 티어 색은 `tierColors.ts`.
 
-## 플레이어 조회
-
-`GET /players/{npid}` — 세 소스를 합성한다. **RPCN을 새로 호출하지 않는다.**
-
-| 항목 | 출처 |
-|------|------|
-| `online_status.is_matchmaking` | 캐시된 `/rooms/all`에 해당 npid가 있는지 |
-| `online_status.is_online` | 매칭 중이거나, 이력상 `last_seen`이 5분 이내 |
-| `online_status.last_seen` | `history` 플레이어 통계 |
-| `leaderboard` | 캐시된 전체 리더보드에서 npid 일치 항목(없으면 `null`) |
-| `usual_playing_hours_kst` | 이력에서 집계한 주 활동 시간대(KST 시각 리스트) |
-
-캐시가 비어 있으면 `leaderboard`는 `null`이 된다 — 의도된 동작이며, 조회 한 번이 RPCN 부하로 번지지 않게 한다.
-
-FE는 `PlayerHistoryPanel`, `ActiveHoursClock`에서 이 응답과 `GET /history/players/{npid}`를 함께 사용한다.
-
 ## 게임 데이터
 
 `GET /game-data` — 캐릭터 ID와 계급 코드의 이름표. 공개, 인증 없음.

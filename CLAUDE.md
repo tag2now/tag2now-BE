@@ -178,7 +178,7 @@ bytes). They default to empty so the app still boots without them, but then
 get a `JWT_SECRET` from `tests/conftest.py`, which also provides the
 `auth_headers(username)` fixture for signed-in requests.
 
-Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leaderboard`, `cache_ttl_rooms`, `cache_ttl_rooms_all`, `cache_ttl_community`, `cache_ttl_activity`, `cache_ttl_player_hours`, `cache_ttl_player_save`, `cache_ttl_current_rank_leaderboard`, `cache_ttl_live_streams`, `cache_ttl_stream_channels`, `matchmaking_ttl`.
+Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leaderboard`, `cache_ttl_rooms_all`, `cache_ttl_community`, `cache_ttl_activity`, `cache_ttl_player_hours`, `cache_ttl_player_save`, `cache_ttl_current_rank_leaderboard`, `cache_ttl_live_streams`, `cache_ttl_stream_channels`, `matchmaking_ttl`.
 
 ## Architecture
 
@@ -186,7 +186,7 @@ Nine modules under `src/` --- seven domains plus `auth/` and `admin/` --- a `sha
 
 | Module | Responsibility |
 |--------|----------------|
-| `matching/` | Live rooms, leaderboard, player lookup, matchmaking detection |
+| `matching/` | Live rooms, leaderboard, matchmaking detection |
 | `history/` | Persisted snapshots, time-series statistics, the match collector |
 | `community/` | Message board — posts, comments, thumbs |
 | `reservation/` | Appointments — create, join, edit, cancel |
@@ -206,8 +206,8 @@ the answer as an HS256 JWT. Nothing is stored: no session table, no cache
 entry. Logout is the client discarding the token, and rotating `jwt_secret`
 is the only way to revoke early.
 
-Routers get the caller from `auth.dependencies.current_user` (401 when absent)
-or `optional_user`, never by reading a header themselves. **Ownership keys on
+Routers get the caller from `auth.dependencies.current_user` (401 when absent),
+never by reading a header themselves. **Ownership keys on
 `user.username`** --- RPCN's canonical, unique spelling --- stored as
 `host_subject` / `subject` / `author_subject` in reservations and as `author` /
 `voter` on the board. `online_name` is only ever displayed. Because the
@@ -434,7 +434,7 @@ error array. A new user-facing request field belongs in that map.
 | `/saves` | `saves/router.py` — `GET /players/{npid}`, `GET /leaderboard`, `GET /current-rank-holders`, public |
 | `/streams` | `streaming/router.py` — `GET`/`PUT`/`DELETE /me`, the signed-in account's channel |
 | `/admin/streams` | `streaming/router.py` (`admin_router`) — `GET`, `DELETE /{username}`; admins only, no password |
-| *(none)* | `matching/router.py` — `/game-data`, `/servers`, `/rooms/all`, `/leaderboard`, `/players/{npid}` |
+| *(none)* | `matching/router.py` — `/game-data`, `/servers`, `/rooms/all`, `/leaderboard` |
 | `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/stats/weekly-top`, `/players/{npid}` |
 | `/community` | `community/router.py` — posts, comments, thumbs |
 | `/reservations` | `reservation/router.py` — list, create, read one (`GET /{id}`), edit (`PATCH`), join, cancel |

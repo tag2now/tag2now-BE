@@ -1,7 +1,6 @@
 """TTT2 dataclasses and game constants."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum
 
 from pydantic import BaseModel
@@ -68,23 +67,6 @@ class TTT2GameInfo:
 	main_char_info: CharInfo
 	sub_char_info: CharInfo
 
-	@classmethod
-	def from_cache(cls, data: dict) -> "TTT2GameInfo":
-		return cls(
-			main_char_info=CharInfo(
-				char_id=data["main_char_info"]["char_id"],
-				rank_info=Rank(id=data["main_char_info"]["rank_info"]["id"]),
-				wins=data["main_char_info"]["wins"],
-				losses=data["main_char_info"]["losses"],
-			),
-			sub_char_info=CharInfo(
-				char_id=data["sub_char_info"]["char_id"],
-				rank_info=Rank(id=data["sub_char_info"]["rank_info"]["id"]),
-				wins=data["sub_char_info"]["wins"],
-				losses=data["sub_char_info"]["losses"],
-			),
-		)
-
 	def __str__(self):
 		return f"{self.main_char_info} + {self.sub_char_info}"
 
@@ -102,21 +84,6 @@ class TTT2LeaderboardEntry:
 	comment: str
 	player_info: TTT2GameInfo | None
 
-	@classmethod
-	def from_cache(cls, data: dict) -> "TTT2LeaderboardEntry":
-		pi = data.get("player_info")
-		return cls(
-			rank=data["rank"],
-			np_id=data["np_id"],
-			online_name=data.get("online_name", ""),
-			score=data["score"],
-			pc_id=data.get("pc_id", 0),
-			record_date=data.get("record_date", 0),
-			has_game_data=data.get("has_game_data", False),
-			comment=data.get("comment", ""),
-			player_info=TTT2GameInfo.from_cache(pi) if pi else None,
-		)
-
 	def __str__(self):
 		base = f"#{self.rank} {self.online_name} ({self.np_id}) score={self.score}"
 		if self.player_info:
@@ -132,13 +99,6 @@ class TTT2LeaderboardResult:
 	entries: list[TTT2LeaderboardEntry]
 
 @dataclass
-class HourlyActivityEntry:
-	"""Average player count for a single KST hour."""
-	hour: int
-	avg_players: float
-
-
-@dataclass
 class ActivityObservation:
 	rank_player_npids: set[str]
 	total_players: int
@@ -147,23 +107,6 @@ class ActivityObservation:
 	rank_rooms: int
 	# Two-member rank rooms: matches in progress at the moment of observation.
 	rank_matches: list["RoomInfoDTO"]
-
-
-@dataclass
-class PlayerOnlineStatus:
-	"""Current online status of a player."""
-	is_online: bool
-	is_matchmaking: bool
-	last_seen: datetime | None = None
-
-
-@dataclass
-class PlayerLookupResponse:
-	"""Combined player information from rooms, leaderboard, and activity."""
-	npid: str
-	online_status: PlayerOnlineStatus
-	leaderboard: TTT2LeaderboardEntry | None
-	usual_playing_hours_kst: list[int]
 
 
 @dataclass
@@ -202,13 +145,6 @@ class RoomInfoDTO:
 		obj.rank_info = rank_info
 		obj.users = [UserInfo(npid=owner_npid, online_name=owner_online_name, avatar_url="")]
 		return obj
-
-@dataclass
-class RoomUser:
-	user_id: str
-	online_name: str
-	avatar_url: str
-
 
 # ---------------------------------------------------------------------------
 # Game data (the one table every other service reads)

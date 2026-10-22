@@ -7,7 +7,7 @@ RPCN에 현재 존재하는 TTT2 방을 모아 "지금 누가 무슨 매치를 �
 
 ## 데이터 획득
 
-1. `GET /servers` — RPCN의 서버 → 월드 계층을 조회한다(`{server_id: [world_id...]}`). 변동이 거의 없어 TTL 3600s로 캐시한다.
+1. RPCN의 서버 → 월드 계층을 조회한다(`{server_id: [world_id...]}`). 변동이 거의 없어 TTL 3600s로 캐시한다. `GET /servers`로도 공개돼 있지만 FE는 부르지 않는다.
 2. 모든 월드 ID를 모아 `SearchRoomAll`로 **숨김 방 포함** 전체 방을 조회한다.
 3. 각 방의 `int_attrs[4]` 값으로 방 종류를 판별한다.
    - `0` → `player_match` (플레이어 매치, 계급 없음)

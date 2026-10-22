@@ -17,10 +17,3 @@ def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(_bea
     if credentials is None:
         raise InvalidTokenError("로그인이 필요합니다.")
     return service.authenticate(credentials.credentials)
-
-
-def optional_user(credentials: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> AuthUser | None:
-    """The signed-in user, or None when no token was sent. A bad token is still 401."""
-    if credentials is None:
-        return None
-    return service.authenticate(credentials.credentials)

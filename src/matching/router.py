@@ -2,8 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, Path, Query, Response
-from fastapi.encoders import jsonable_encoder
+from fastapi import APIRouter, Query, Response
 
 from matching.models import TTT2_COM_ID, TTT2_RANK_BOARD_ID, GameDataOut
 from matching import service
@@ -44,11 +43,3 @@ def leaderboard(
 ):
     """Return the top N leaderboard entries with TTT2 character info decoded."""
     return service.get_leaderboard(TTT2_COM_ID, board, num_ranks=top)
-
-
-# is it necessary?
-@router.get("/players/{npid}", summary="Player lookup")
-async def player_lookup(npid: str = Path(description="Player NPID")):
-    """Look up a player: online status, leaderboard stats, and usual playing hours."""
-    result = await service.lookup_player(npid)
-    return jsonable_encoder(result)

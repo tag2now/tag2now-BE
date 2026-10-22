@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
 
 from fastapi.encoders import jsonable_encoder
 
@@ -12,14 +11,9 @@ from matching.constants import TEKKEN_RANKS, TTT2_CHARACTERS
 from matching.db import get_game_server_repo
 from matching.matchmaking_tracker import update_and_get_phantoms
 from matching.models import (
-	PlayerLookupResponse,
-	PlayerOnlineStatus,
 	RoomInfoDTO,
 	ActivityObservation,
 	RoomType,
-	TTT2_COM_ID,
-	TTT2_RANK_BOARD_ID,
-	TTT2LeaderboardEntry,
 )
 from streaming import service as streaming_service
 
@@ -166,53 +160,3 @@ def _without_excluded(lb: dict) -> dict:
 		for e in lb["entries"] if not settings.is_ranking_excluded(e["np_id"])
 	]
 	return {**lb, "total_records": lb["total_records"] - len(excluded_ranks), "entries": entries}
-
-
-def _find_leaderboard_entry(npid: str) -> TTT2LeaderboardEntry | None:
-	"""Locate a player in the cached leaderboard. Cache-only: never triggers an RPCN fetch."""
-	lb = cache_get(_leaderboard_cache_key(TTT2_COM_ID, TTT2_RANK_BOARD_ID))
-	if not lb:
-		return None
-	for entry in lb.get("entries", []):
-		if entry.get("np_id") == npid:
-			return TTT2LeaderboardEntry.from_cache(entry)
-	return None
-
-
-def _is_matchmaking(npid: str) -> bool:
-	"""Hosting, searching or in a match: listed in the cached rank-match group.
-
-	Cache-only. Searching players are there as phantom rooms; player matches are not matchmaking.
-	"""
-	rooms = cache_get(f"ttt2:rooms_all:{TTT2_COM_ID}") or {}
-	return any(user["npid"] == npid for room in rooms.get(RoomType.RANK_MATCH.value, []) for user in room["users"])
-
-
-async def lookup_player(npid: str) -> PlayerLookupResponse:
-	"""Look up a player by NPID using cached room/leaderboard data + history."""
-
-	# 1. Online status from cached /rooms/all + last_seen from history
-	from history import service as history_service
-	is_matchmaking = _is_matchmaking(npid)
-
-	player_stats = await history_service.get_player_stats(npid)
-	last_seen = player_stats.last_seen
-	recently_seen = last_seen is not None and (datetime.now(timezone.utc) - last_seen) < timedelta(minutes=5)
-	online_status = PlayerOnlineStatus(
-		is_online=is_matchmaking or recently_seen,
-		is_matchmaking=is_matchmaking,
-		last_seen=last_seen,
-	)
-
-	# 2. Leaderboard entry from the cached full leaderboard
-	lb_entry = _find_leaderboard_entry(npid)
-
-	# 3. Usual playing hours from history
-	usual_hours = player_stats.active_hours
-
-	return PlayerLookupResponse(
-		npid=npid,
-		online_status=online_status,
-		leaderboard=lb_entry,
-		usual_playing_hours_kst=usual_hours,
-	)

@@ -21,10 +21,6 @@ class GameServerPort(ABC):
         """Return {server_id: [world_ids]} hierarchy."""
 
     @abstractmethod
-    def search_rooms(self, com_id: str, worlds: list[int]) -> list[RoomInfoDTO]:
-        """Search active rooms across given worlds."""
-
-    @abstractmethod
     def search_rooms_all(self, com_id: str, worlds: list[int]) -> list[RoomInfoDTO]:
         """Search all rooms (including hidden) across given worlds."""
 
