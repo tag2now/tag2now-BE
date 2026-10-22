@@ -84,8 +84,7 @@ TTT2는 2인 태그 팀으로 싸우므로 글 하나에 **캐릭터를 최대 2
 
 ## 저장소
 
-`community/db.py`가 `db_type` 설정에 따라 PostgreSQL 또는 DynamoDB 어댑터를 런타임에 고른다(어댑터는 분기 안에서 지연 임포트).
-현재 운영은 PostgreSQL이며, `db_type` 설정은 소스에 제거 예정으로 표시되어 있다.
+PostgreSQL(`community/adapters/postgresql.py`)에 저장한다. 테이블은 `posts`, `comments`, `thumbs`이며 Alembic이 관리한다.
 
 ## 화면
 

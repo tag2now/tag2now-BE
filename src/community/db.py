@@ -2,32 +2,17 @@
 
 import logging
 
+from community.adapters.postgresql import PostgresCommunityRepository
 from community.ports import CommunityRepository
-from shared.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
 _repo: CommunityRepository | None = None
 
 
-def _create_repo() -> CommunityRepository:
-    settings = get_settings()
-    db_type = settings.db_type
-
-    if db_type == "postgresql":
-        from community.adapters.postgresql import PostgresCommunityRepository
-        return PostgresCommunityRepository()
-
-    if db_type == "dynamodb":
-        from community.adapters.dynamodb import DynamoCommunityRepository
-        return DynamoCommunityRepository(table_name=settings.dynamodb_table_name)
-
-    raise ValueError(f"Unknown db_type: {db_type!r}")
-
-
 async def init_db():
     global _repo
-    _repo = _create_repo()
+    _repo = PostgresCommunityRepository()
     await _repo.init()
 
 

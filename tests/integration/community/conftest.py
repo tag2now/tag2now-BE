@@ -23,19 +23,16 @@ def _truncate_postgresql():
 
 @pytest.fixture()
 def client():
-    """Create a TestClient backed by the configured DB backend and Redis."""
+    """Create a TestClient backed by PostgreSQL and Redis."""
     from fastapi.testclient import TestClient
     from app import app
     from shared.cache import cache_delete_pattern
-    from shared.settings import get_settings
 
-    settings = get_settings()
     cache_delete_pattern("community:*")
 
     with TestClient(app) as tc:
         yield tc
 
     # Clean up after the app pool is closed
-    if settings.db_type == "postgresql":
-        _truncate_postgresql()
+    _truncate_postgresql()
     cache_delete_pattern("community:*")

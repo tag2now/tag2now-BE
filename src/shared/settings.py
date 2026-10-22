@@ -43,15 +43,6 @@ class Settings(BaseSettings):
     db_user: str = "postgres"
     db_password: str = "postgres"
 
-    #community db_type. this should be removed
-    db_type: str = "postgresql"
-    dynamodb_region: str = "ap-northeast-2"
-    dynamodb_table_name: str = "tag2now-community"
-
-    dynamodb_endpoint_url: str | None = None
-    aws_access_key_id: str | None = None
-    aws_secret_access_key: str | None = None
-
     rpcn_metric_enable: bool = False
 
     # Account login. rpcn-narco's API server verifies the password; this service

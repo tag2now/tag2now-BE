@@ -13,7 +13,7 @@ src/
   rpcn_client/         # Core library — RPCN TLS transport and protocol
   matching/            # Live RPCN data: servers, rooms, leaderboard
   history/             # Player activity statistics and match history
-  community/           # Community board (PostgreSQL or DynamoDB backed)
+  community/           # Community board
   reservation/         # Match reservations
   shared/              # Settings, Redis cache, SQLAlchemy engine, events, exceptions
 alembic/               # PostgreSQL migrations
@@ -136,12 +136,6 @@ other three (see [`shared/database.py`](src/shared/database.py)).
 | `DB_NAME` | `tag2now` | Database name (bare-host form only) |
 | `DB_USER` | `postgres` | Database user (bare-host form only) |
 | `DB_PASSWORD` | `postgres` | Database password (bare-host form only) |
-| `DB_TYPE` | `postgresql` | Community board backend: `postgresql` or `dynamodb` |
-| `DYNAMODB_REGION` | `ap-northeast-2` | DynamoDB region (`DB_TYPE=dynamodb`) |
-| `DYNAMODB_TABLE_NAME` | `tag2now-community` | DynamoDB table |
-| `DYNAMODB_ENDPOINT_URL` | *(none)* | Override for DynamoDB Local |
-| `AWS_ACCESS_KEY_ID` | *(none)* | AWS credentials for DynamoDB |
-| `AWS_SECRET_ACCESS_KEY` | *(none)* | AWS credentials for DynamoDB |
 
 **HTTP**
 
@@ -149,14 +143,11 @@ other three (see [`shared/database.py`](src/shared/database.py)).
 |----------|---------|-------------|
 | `CORS_ORIGINS` | `["*"]` | Allowed CORS origins (JSON list) |
 
-`DB_TYPE` selects the community backend only. History and reservations always
-use PostgreSQL, so a working `DB_URL` is required regardless.
-
 ## Running
 
 ### With docker compose (recommended)
 
-Brings up the backend, frontend, Redis, PostgreSQL, and DynamoDB Local. Reads
+Brings up the backend, frontend, Redis and PostgreSQL. Reads
 its configuration from `env/.env.dev`, so create that file first:
 
 ```bash

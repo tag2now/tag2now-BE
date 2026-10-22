@@ -46,7 +46,7 @@ The ASGI app is `src/app.py:app`. Note `--app-dir src`, since packages live unde
 # config it needs (env/.env.local) lives.
 .venv/Scripts/python.exe -m uvicorn app:app --reload --app-dir src
 
-# Dependencies (Redis, PostgreSQL, DynamoDB Local) + both images
+# Dependencies (Redis, PostgreSQL) + both images
 docker compose up
 
 # RPCN client CLI smoke test (connect + login + disconnect)
@@ -278,7 +278,7 @@ errors, and `admin/` knows nothing of saves. Spec: `docs/spec/09-save-admin.md`.
 | File | Role |
 |------|------|
 | `ports.py` | Abstract repository interface (`ABC` with `@abstractmethod`) |
-| `adapters/` | Concrete implementations of the port (PostgreSQL, DynamoDB, RPCN) |
+| `adapters/` | Concrete implementations of the port (PostgreSQL, RPCN, HTTP services) |
 | `db.py` | Repository factory + lifecycle — module-level `_repo`, `init_*`, `close_*`, `get_*` |
 | `service.py` | Application service — orchestrates ports, caching, and domain logic |
 | `router.py` | FastAPI `APIRouter`; delegates to `service`, holds no business logic |
@@ -294,8 +294,6 @@ The repository singleton is module-level state, initialised in the FastAPI `life
 `service.configure(...)`, and `service.py` keeps its own `_repository()` guard. Copy the `matching`/`history`/`community` shape for a new
 module unless you want the injection seam that makes the service testable
 without touching `db.py`.
-
-`community/db.py` selects its adapter at runtime from the `db_type` setting (`postgresql` or `dynamodb`), importing the adapter lazily inside the branch. The `db_type` setting is marked for removal in the source.
 
 ### Caching
 
