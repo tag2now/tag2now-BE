@@ -26,11 +26,14 @@ def client(auth_headers):
     from app import app
     from community.dependencies import community_service
     from community.service import CommunityService
+    from auth.dependencies import auth_service
+    from auth.service import AuthService
     from reservation.dependencies import reservation_service
     from reservation.service import ReservationService
 
     app.dependency_overrides[community_service] = lambda: CommunityService(AsyncMock())
     app.dependency_overrides[reservation_service] = lambda: ReservationService(AsyncMock())
+    app.dependency_overrides[auth_service] = lambda: AuthService(AsyncMock())
     c = TestClient(app)
     c.headers.update(auth_headers("tester"))
     yield c

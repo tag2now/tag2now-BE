@@ -5,6 +5,8 @@ from contextlib import AsyncExitStack
 import pytest
 
 import container
+from admin.service import AdminService
+from auth.service import AuthService
 from community.service import CommunityService
 from reservation.service import ReservationService
 from saves.service import SavesService
@@ -35,6 +37,8 @@ async def test_every_module_opens_in_order_and_closes_in_reverse(monkeypatch):
         assert calls == ["init0", "init1", "init2", "init3"]
 
     assert calls[4:] == ["close3", "close2", "close1", "close0"]
+    assert isinstance(built.auth, AuthService)
+    assert isinstance(built.admin, AdminService)
     assert isinstance(built.community, CommunityService)
     assert isinstance(built.reservations, ReservationService)
     assert isinstance(built.saves, SavesService)

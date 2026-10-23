@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends
 
-from auth import models, service
-from auth.dependencies import current_user
+from auth import models
+from auth.dependencies import auth_service, current_user
+from auth.service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/login", response_model=models.LoginOut)
-async def login(request: models.LoginRequest):
+async def login(request: models.LoginRequest, service: AuthService = Depends(auth_service)):
     """Verify an RPCN account and issue an access token.
 
     There is no logout route: the token is stateless, so signing out is the

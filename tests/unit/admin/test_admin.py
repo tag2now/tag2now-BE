@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import httpx
 import pytest
 
-from admin import db
+from admin.service import AdminService
 from admin.adapters.rpcn_api_server import RpcnApiServerAccountAdmin
 from admin.exceptions import AccountNotFoundError, AdminPasswordError, AdminUnavailableError, NotAdminError
 from shared.rpcn_api import RpcnApiClient
@@ -52,17 +52,15 @@ async def _adapter(transport, api_key="key") -> RpcnApiServerAccountAdmin:
 
 
 @pytest.fixture
-async def use_rpcn():
-    """Install an adapter for the service, and restore whatever was there."""
-    previous = db._admin
+async def use_rpcn(installed):
+    """Give the routes a service over an adapter talking to `transport`."""
 
     async def install(transport):
         adapter = await _adapter(transport)
-        db.set_account_admin(adapter)
+        installed["service"] = AdminService(adapter)
         return adapter
 
-    yield install
-    db.set_account_admin(previous)
+    return install
 
 
 # --- RPCN adapter -----------------------------------------------------------

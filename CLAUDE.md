@@ -216,8 +216,8 @@ dependency resolves before the body, a signed-in route answers 401, not 422,
 to an anonymous request with a bad body. Spec: `docs/spec/07-auth.md`.
 
 `auth/` and `admin/` call the same API server with the same key, through one
-`shared.rpcn_api.RpcnApiClient` (one connection pool, opened first in
-`lifespan` and closed last). It answers the HTTP response or raises
+`shared.rpcn_api.RpcnApiClient` (one connection pool, which `container.py` opens
+and hands to both). It answers the HTTP response or raises
 `RpcnApiNotConfigured` / `RpcnApiUnreachable`; what a status means, and the
 Korean message a user sees, stay in each module's adapter.
 
@@ -304,8 +304,9 @@ or construct the service directly; neither needs a module patched.
 A service that judges time takes a `shared.clock.Clock` (default `SystemClock`),
 so its tests pass a fixed one.
 
-**Migration in progress.** `community/`, `reservation/` and `saves/` are built
-this way so far. The other modules still keep a module-level repository in `db.py`
+**Migration in progress.** `auth/`, `admin/`, `community/`, `reservation/` and
+`saves/` are built this way so far; `current_user` and `admin_user` read only the
+token, so they need no service. The other modules still keep a module-level repository in `db.py`
 (`init_*`, `close_*`, `get_*`, test seams `set_*`) and are opened from
 `container._LIFECYCLES`; `chat/` injects its own with `service.configure(...)`.
 Each moves to the pattern above in turn, and its `db.py` is deleted when it does.

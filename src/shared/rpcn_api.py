@@ -11,7 +11,6 @@ import logging
 
 import httpx
 
-from shared.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -60,28 +59,3 @@ class RpcnApiClient:
             logger.warning("RPCN API server unreachable at %s%s (%s: %s); check RPCN_API_SERVER_URL",
                            self._base_url, path, type(exc).__name__, exc)
             raise RpcnApiUnreachable(path) from exc
-
-
-_api: RpcnApiClient | None = None
-
-
-async def init_rpcn_api() -> None:
-    # Empty settings still start: login and the admin routes answer 502, and
-    # init_auth says why.
-    global _api
-    settings = get_settings()
-    _api = RpcnApiClient(settings.rpcn_api_server_url, settings.rpcn_api_server_key.get_secret_value(), settings.rpcn_api_server_timeout_seconds)
-    await _api.init()
-
-
-async def close_rpcn_api() -> None:
-    global _api
-    if _api:
-        await _api.close()
-        _api = None
-
-
-def get_rpcn_api() -> RpcnApiClient:
-    if _api is None:
-        raise RuntimeError("RPCN API client not initialized")
-    return _api

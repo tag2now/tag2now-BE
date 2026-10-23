@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import pytest
 
-from auth import db, service, tokens
+from auth import service, tokens
 from auth.adapters.rpcn_api_server import RpcnApiServerAccountVerifier
 from auth.exceptions import AccountBannedError, AuthUnavailableError, InvalidCredentialsError, InvalidTokenError
 from auth.models import AuthUser
@@ -48,17 +48,14 @@ async def _verifier(transport, base_url="http://rpcn:31315", api_key="key") -> R
 
 
 @pytest.fixture
-async def use_verifier():
-    """Install a verifier for the service, and restore whatever was there."""
-    previous = db._verifier
+async def use_verifier(installed):
+    """Give the routes a service over a verifier talking to `transport`, and return it."""
 
     async def install(transport, **kwargs):
-        verifier = await _verifier(transport, **kwargs)
-        db.set_verifier(verifier)
-        return verifier
+        installed["service"] = service.AuthService(await _verifier(transport, **kwargs))
+        return installed["service"]
 
-    yield install
-    db.set_verifier(previous)
+    return install
 
 
 # --- RPCN adapter -----------------------------------------------------------
@@ -197,9 +194,9 @@ def test_a_short_secret_disables_signing(monkeypatch):
 # --- Service ----------------------------------------------------------------
 
 async def test_login_issues_a_token_for_the_canonical_username(use_verifier):
-    await use_verifier(_rpcn())
+    auth = await use_verifier(_rpcn())
 
-    token, _, user = await service.login("alice", "pw")
+    token, _, user = await auth.login("alice", "pw")
 
     assert user.username == "Alice"
     assert user.online_name == "앨리스"
@@ -207,16 +204,16 @@ async def test_login_issues_a_token_for_the_canonical_username(use_verifier):
 
 
 async def test_login_refuses_a_banned_account(use_verifier):
-    await use_verifier(_rpcn(body={**ACCOUNT, "banned": True}))
+    auth = await use_verifier(_rpcn(body={**ACCOUNT, "banned": True}))
 
     with pytest.raises(AccountBannedError):
-        await service.login("alice", "pw")
+        await auth.login("alice", "pw")
 
 
 async def test_login_falls_back_to_the_username_when_there_is_no_online_name(use_verifier):
-    await use_verifier(_rpcn(body={**ACCOUNT, "online_name": ""}))
+    auth = await use_verifier(_rpcn(body={**ACCOUNT, "online_name": ""}))
 
-    _, _, user = await service.login("alice", "pw")
+    _, _, user = await auth.login("alice", "pw")
 
     assert user.online_name == "Alice"
 

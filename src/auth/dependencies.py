@@ -1,6 +1,6 @@
 """FastAPI dependencies other routers use to learn who is calling."""
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from auth import service
@@ -17,3 +17,7 @@ def current_user(credentials: HTTPAuthorizationCredentials | None = Depends(_bea
     if credentials is None:
         raise InvalidTokenError("로그인이 필요합니다.")
     return service.authenticate(credentials.credentials)
+
+
+def auth_service(request: Request) -> service.AuthService:
+    return request.app.state.container.auth

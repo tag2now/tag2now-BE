@@ -5,11 +5,14 @@ reads it from `app.state.container`); code outside a request, such as the
 collector, is handed one by the lifespan.
 """
 
+import logging
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 
-from admin.db import close_admin, init_admin
-from auth.db import close_auth, init_auth
+from admin.adapters.rpcn_api_server import RpcnApiServerAccountAdmin
+from admin.service import AdminService
+from auth.adapters.rpcn_api_server import RpcnApiServerAccountVerifier
+from auth.service import AuthService
 from chat.db import init_chat
 from community.adapters.postgresql import PostgresCommunityRepository
 from community.service import CommunityService
@@ -20,9 +23,11 @@ from reservation.service import ReservationService
 from saves.adapters.save_admin_server import SaveAdminServer
 from saves.service import SavesService
 from shared.database import close_database, get_session_factory, init_database
-from shared.rpcn_api import close_rpcn_api, init_rpcn_api
+from shared.rpcn_api import RpcnApiClient
 from shared.settings import get_settings
 from streaming.db import close_streaming, init_streaming
+
+logger = logging.getLogger(__name__)
 
 
 async def _no_close() -> None:
@@ -31,9 +36,6 @@ async def _no_close() -> None:
 
 # Modules still initialised through module-level state, in dependency order.
 _LIFECYCLES = (
-    (init_rpcn_api, close_rpcn_api),
-    (init_auth, close_auth),
-    (init_admin, close_admin),
     (init_database, close_database),
     (init_history_repo, close_history_repo),
     (init_game_repo, close_game_repo),
@@ -44,6 +46,8 @@ _LIFECYCLES = (
 
 @dataclass
 class Container:
+    auth: AuthService
+    admin: AdminService
     community: CommunityService
     reservations: ReservationService
     saves: SavesService
@@ -56,6 +60,19 @@ async def build_container(stack: AsyncExitStack) -> Container:
         await init()
         stack.push_async_callback(close)
     settings = get_settings()
+
+    # rpcn-narco's API server answers both login and moderation, with one key.
+    # Unconfigured, it still starts: login and every signed-in route answer 502.
+    if not (settings.rpcn_api_server_url and settings.rpcn_api_server_key.get_secret_value()
+            and settings.jwt_secret.get_secret_value()):
+        logger.warning("Login is not configured: set RPCN_API_SERVER_URL, RPCN_API_SERVER_KEY and JWT_SECRET")
+    rpcn_api = RpcnApiClient(
+        settings.rpcn_api_server_url, settings.rpcn_api_server_key.get_secret_value(),
+        settings.rpcn_api_server_timeout_seconds,
+    )
+    await rpcn_api.init()
+    stack.push_async_callback(rpcn_api.close)
+
     # Unconfigured, it still starts; the save routes answer 502 and log why.
     save_server = SaveAdminServer(
         settings.save_admin_url, settings.save_admin_key.get_secret_value(), settings.save_admin_timeout_seconds,
@@ -65,6 +82,8 @@ async def build_container(stack: AsyncExitStack) -> Container:
 
     sessions = get_session_factory()
     return Container(
+        auth=AuthService(RpcnApiServerAccountVerifier(rpcn_api)),
+        admin=AdminService(RpcnApiServerAccountAdmin(rpcn_api)),
         community=CommunityService(PostgresCommunityRepository(sessions)),
         reservations=ReservationService(PostgresReservationRepository(sessions)),
         saves=SavesService(save_server),

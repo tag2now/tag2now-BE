@@ -1,8 +1,9 @@
 """The admin gate routers depend on."""
 
-from fastapi import Depends
+from fastapi import Depends, Request
 
 from admin.exceptions import NotAdminError
+from admin.service import AdminService
 from auth.dependencies import current_user
 from auth.models import AuthUser
 
@@ -16,3 +17,7 @@ def admin_user(user: AuthUser = Depends(current_user)) -> AuthUser:
     if not user.admin:
         raise NotAdminError("관리자 권한이 없습니다.")
     return user
+
+
+def admin_service(request: Request) -> AdminService:
+    return request.app.state.container.admin
