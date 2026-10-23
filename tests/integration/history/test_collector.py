@@ -5,7 +5,7 @@ unique key are real. The service commits, so rows are removed by npid.
 Run with: pytest tests/integration/history/ -v
 """
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
@@ -53,12 +53,10 @@ async def collector(monkeypatch):
         rank_player_npids=set(_NPIDS), total_players=2, total_rooms=1,
         rank_players=2, rank_rooms=1, rank_matches=[room],
     )
-    monkeypatch.setattr(collector_mod, "collect_activity_observation", AsyncMock(return_value=observation))
     monkeypatch.setattr(collector_mod.history_service, "record_daily_matched_players", AsyncMock())
     monkeypatch.setattr(collector_mod.history_service, "record_activity_snapshot", AsyncMock())
-    monkeypatch.setattr(collector_mod, "_prev_rank_match_ids", set())
 
-    yield collector_mod
+    yield collector_mod.Collector(MagicMock(collect_activity_observation=AsyncMock(return_value=observation)))
 
     await _delete_test_rows()
     await close_history_repo()

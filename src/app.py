@@ -15,7 +15,7 @@ from shared.error_handlers import register_exception_handlers
 from admin.router import router as admin_router
 from auth.router import router as auth_router
 from chat.router import router as chat_router
-from history.collector import run_collector, stop_collector
+from history.collector import stop_collector
 from history.router import router as history_router
 from matching.router import router as ttt2_router
 from community.router import router as community_router
@@ -41,8 +41,8 @@ except Exception:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with AsyncExitStack() as stack:
-        app.state.container = await build_container(stack)
-        collector_task = asyncio.create_task(run_collector(), name="match-history-collector")
+        app.state.container = container = await build_container(stack)
+        collector_task = asyncio.create_task(container.collector.run(), name="match-history-collector")
         # Registered last, so it is cancelled before anything it reads from closes.
         stack.push_async_callback(stop_collector, collector_task)
         yield

@@ -304,13 +304,11 @@ or construct the service directly; neither needs a module patched.
 A service that judges time takes a `shared.clock.Clock` (default `SystemClock`),
 so its tests pass a fixed one.
 
-**Migration in progress.** `auth/`, `admin/`, `community/`, `reservation/`,
-`saves/` and `streaming/` are built this way so far (`matching/` still receives
-the streaming service through `use_streaming`, until it becomes a class too); `current_user` and `admin_user` read only the
-token, so they need no service. The other modules still keep a module-level repository in `db.py`
-(`init_*`, `close_*`, `get_*`, test seams `set_*`) and are opened from
-`container._LIFECYCLES`; `chat/` injects its own with `service.configure(...)`.
-Each moves to the pattern above in turn, and its `db.py` is deleted when it does.
+**Migration in progress.** `auth/`, `admin/`, `community/`, `matching/` (with the
+collector), `reservation/`, `saves/` and `streaming/` are built this way so far;
+`history/` still keeps its repository in `db.py` and is opened from
+`container._LIFECYCLES`, and `chat/` injects its own with `service.configure(...)`.
+`current_user` and `admin_user` read only the token, so they need no service.
 
 ### Caching
 
@@ -382,14 +380,21 @@ or close the chat panel before saving.
 
 Consecutive snapshots are diffed: everyone in a `RANK_MATCH` room that disappeared, hosting or in match, is presumed searching until they appear in a real room again or `matchmaking_ttl` passes. Each searching player is surfaced as a **phantom room** — built by `RoomInfoDTO.phantom()` and merged into the rank-match group. A phantom is how a searching player is shown, not a state of its own.
 
-The tracker holds module-level state (`_prev_rooms`, `_searching_players`) — it is stateful across requests and not safe to run in multiple processes without coordination.
+The tracker is a `MatchmakingTracker` that `MatchingService` holds; its snapshot lives in process memory, so it is stateful across requests and not safe to run in multiple processes without coordination.
+
+`GET /rooms/all` is composed in the router: `MatchingService.get_rooms_all()`
+answers the rooms (cached for `cache_ttl_rooms_all`), and
+`StreamingService.live_or_empty()` marks each user's `stream` from its own caches.
+Matching knows nothing of streaming, and a streaming failure leaves every
+`stream` null rather than failing the room list.
 
 ### Match-history collector
 
-`history/collector.py` runs as a background asyncio task started in `lifespan`
+`history/collector.py`'s `Collector`, built by the container with the matching
+service, runs as a background asyncio task started in `lifespan`
 and cancelled before the database closes. Every
 `match_history_collection_interval_seconds` (default 30) it calls
-`matching.service.collect_activity_observation()`, which reads RPCN directly and
+`MatchingService.collect_activity_observation()`, which reads RPCN directly and
 bypasses the `/rooms/all` response cache, then records three things:
 
 1. ranked-room participants — `record_daily_matched_players()`
@@ -402,7 +407,7 @@ bad poll.
 **This is the only writer of history.** Nothing is recorded from HTTP traffic,
 so statistics do not depend on anyone having the site open.
 
-A rank match is a two-member `RANK_MATCH` room. The collector keeps the room ids
+A rank match is a two-member `RANK_MATCH` room. The collector instance keeps the room ids
 of the previous cycle in `_prev_rank_match_ids` and writes only the new ones;
 the set advances after the write commits, so a failed write is retried next
 cycle. A restart empties it, and the unique key
@@ -506,7 +511,7 @@ most request payloads. TTT2's are `TTT2_COM_ID` (`NPWR02973_00`) and
 
 Docker image built from `python:3.12-alpine`; protobuf is generated during the build. Images go to ECR (`864573346741.dkr.ecr.ap-northeast-2.amazonaws.com/tag2-now/be`).
 
-Production is a **single AWS Lightsail instance** running docker compose — `be`, `save-admin`, `fe`, `postgres`; no Redis, no DynamoDB. Not ECS. Because there is one process, module-level state (the matchmaking tracker, the shared RPCN client) is safe here but would break under horizontal scaling.
+Production is a **single AWS Lightsail instance** running docker compose — `be`, `save-admin`, `fe`, `postgres`; no Redis, no DynamoDB. Not ECS. Because there is one process, in-process state (the matchmaking tracker, the shared RPCN client) is safe here but would break under horizontal scaling.
 
 - `.github/workflows/ci.yml` — on pushes and PRs to `master`: unit tests, then the `not rpcn` integration tests against `compose.test.yml`. Both jobs generate the protobuf first; without it `import matching` raises `RpcnError` and collection fails before a single test runs.
 - `.github/workflows/deploy.yml` — on `v*` tags: build and push to ECR, then deploy to production over SSH.

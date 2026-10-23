@@ -28,6 +28,9 @@ RPCN에 현재 존재하는 TTT2 방을 모아 "지금 누가 무슨 매치를 �
 
 랭크 매치 그룹은 계급 ID 오름차순으로 정렬한다. 캐시 TTL은 10초(`cache_ttl_rooms_all`).
 
+각 user의 `stream`(방송 중이면 채널·제목·시청자 수, 아니면 `null`)은 라우터가 붙인다. 방 목록은 matching이, 방송 여부는
+`StreamingService.live_or_empty()`가 각자의 캐시로 답하고, 방송 조회가 실패해도 방 목록은 `stream: null`로 나간다.
+
 ## 매치메이킹 감지 (팬텀 룸)
 
 TTT2 클라이언트는 매칭(matchmaking) 동안 `searchRoom → createRoom → 대기 → quit` 루프를 돌며,
@@ -56,7 +59,7 @@ RPCN은 방만 나열하므로 searching 플레이어는 목록에서 사라진�
 searching 플레이어는 `RoomInfoDTO.phantom()`으로 만든 **phantom 방**(`room_id=0`, `current_members=1`, `max_slots=2`,
 마지막으로 있던 방의 계급)으로 랭크 매치 그룹에 합쳐져 노출된다. phantom은 상태가 아니라 searching 플레이어를 보여 주는 표현이다.
 
-**제약**: 트래커는 모듈 레벨 상태(`_prev_rooms`, `_searching_players`)를 들고 있다.
+**제약**: 트래커(`MatchmakingTracker`, `MatchingService`가 소유)는 직전 스냅샷을 프로세스 메모리에 들고 있다.
 프로세스가 여러 개면 스냅샷이 갈라져 감지가 어긋난다. 현재 단일 프로세스 배포가 전제 조건이다.
 
 ## 화면 (FE)

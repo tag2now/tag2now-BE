@@ -5,6 +5,7 @@ grow with who is in a room, not with how many have registered.
 """
 
 import asyncio
+import logging
 from collections.abc import Collection
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -16,6 +17,8 @@ from streaming.domain import CHZZK, chzzk_live_url, parse_chzzk_channel_id
 from streaming.exceptions import ChannelNotFoundError, InvalidChannelError, StreamingUnavailableError
 from streaming.models import PlatformChannel, StreamChannel
 from streaming.ports import StreamChannelRepository, StreamPlatform
+
+logger = logging.getLogger(__name__)
 
 CHANNELS_KEY = "streaming:channels"
 _CONCURRENCY = 8
@@ -60,6 +63,14 @@ class StreamingService:
         results = await asyncio.gather(*(check(username) for username in wanted))
         return {username: {**_stream_head(registered[username]), **broadcast}
                 for username, broadcast in results if broadcast}
+
+    async def live_or_empty(self, npids: Collection[str]) -> dict[str, dict]:
+        """live_for, or nobody when it fails: callers show streams as an extra."""
+        try:
+            return await self.live_for(npids)
+        except Exception:
+            logger.warning("Live streams unavailable; answering without them", exc_info=True)
+            return {}
 
     async def _registered_channels(self) -> dict[str, dict]:
         if (cached := cache_get(CHANNELS_KEY)) is not None:

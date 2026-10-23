@@ -3,6 +3,7 @@
 import asyncio
 import importlib
 import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -18,24 +19,23 @@ def app_module(monkeypatch):
 
 async def test_lifespan_runs_the_collector_between_startup_and_shutdown(app_module, monkeypatch):
     events = []
-    container = object()
-
-    async def build_container(stack):
-        events.append("built")
-        stack.push_async_callback(_record, events, "closed")
-        return container
-
     started = asyncio.Event()
 
-    async def collector():
+    async def run():
         started.set()
         try:
             await asyncio.Event().wait()
         finally:
             events.append("collector stopped")
 
+    container = SimpleNamespace(collector=SimpleNamespace(run=run))
+
+    async def build_container(stack):
+        events.append("built")
+        stack.push_async_callback(_record, events, "closed")
+        return container
+
     monkeypatch.setattr(app_module, "build_container", build_container)
-    monkeypatch.setattr(app_module, "run_collector", collector)
 
     async with app_module.lifespan(app_module.app):
         await asyncio.wait_for(started.wait(), timeout=0.1)
@@ -52,11 +52,7 @@ async def test_a_failing_startup_closes_what_it_had_opened(app_module, monkeypat
         stack.push_async_callback(_record, events, "closed")
         raise RuntimeError("database unreachable")
 
-    async def collector():
-        events.append("collector started")
-
     monkeypatch.setattr(app_module, "build_container", build_container)
-    monkeypatch.setattr(app_module, "run_collector", collector)
 
     with pytest.raises(RuntimeError, match="database unreachable"):
         async with app_module.lifespan(app_module.app):

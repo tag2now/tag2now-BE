@@ -44,76 +44,74 @@ class _SearchingPlayer:
     last_seen: float  # time.time() of the snapshot their room disappeared in
 
 
-# None until the first snapshot; an empty dict is a real observation of an empty server.
-_prev_rooms: dict[int, _SnapshotRoom] | None = None
-_searching_players: dict[str, _SearchingPlayer] = {}  # keyed by npid
+class MatchmakingTracker:
+    """Holds the previous snapshot and who is searching, across calls."""
 
+    def __init__(self):
+        # None until the first snapshot; an empty dict is a real observation of an empty server.
+        self._prev_rooms: dict[int, _SnapshotRoom] | None = None
+        self._searching_players: dict[str, _SearchingPlayer] = {}  # keyed by npid
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
+    def update_and_get_phantoms(self, current_rooms: list[RoomInfoDTO]) -> list[RoomInfoDTO]:
+        """Diff current rooms against the previous snapshot; return a phantom room per searching player."""
+        now = time.time()
+        current = {
+            room.room_id: _SnapshotRoom(
+                room_id=room.room_id,
+                owner_npid=room.owner_npid,
+                owner_online_name=room.owner_online_name,
+                current_members=room.current_members,
+                room_type=room.room_type.value,
+                rank_info=room.rank_info,
+                users=room.users
+            )
+            for room in current_rooms
+        }
 
-def update_and_get_phantoms(current_rooms: list[RoomInfoDTO]) -> list[RoomInfoDTO]:
-    """Diff current rooms against the previous snapshot; return a phantom room per searching player."""
-    global _prev_rooms
+        if self._prev_rooms is None:
+            self._prev_rooms = current
+            return []
 
-    now = time.time()
-    current = {
-        room.room_id: _SnapshotRoom(
-            room_id=room.room_id,
-            owner_npid=room.owner_npid,
-            owner_online_name=room.owner_online_name,
-            current_members=room.current_members,
-            room_type=room.room_type.value,
-            rank_info=room.rank_info,
-            users=room.users
-        )
-        for room in current_rooms
-    }
+        prev_keys = set(self._prev_rooms)
+        curr_keys = set(current)
 
-    if _prev_rooms is None:
-        _prev_rooms = current
-        return []
+        for room_id in prev_keys - curr_keys:
+            self._send_to_searching(self._prev_rooms[room_id], now)
 
-    prev_keys = set(_prev_rooms)
-    curr_keys = set(current)
+        # Seen in a room again, a player is hosting (solo) or in a match (two members):
+        # either way the real room shows them, so they are no longer searching
+        for room in current.values():
+            for user in room.users:
+                self._searching_players.pop(user.npid, None)
 
-    # A disappeared RANK_MATCH room sends everyone in it, host or both players, to searching
-    for room_id in prev_keys - curr_keys:
-        prev = _prev_rooms[room_id]
-        if prev.room_type == RoomType.PLAYER_MATCH:
-            continue
+        # Unseen for matchmaking_ttl, a player has most likely left the loop
+        ttl = get_settings().matchmaking_ttl
+        for npid in list(self._searching_players):
+            mp = self._searching_players[npid]
+            if now - mp.last_seen > ttl:
+                del self._searching_players[npid]
 
-        for user in prev.users:
-            _searching_players[user.npid] = _SearchingPlayer(
+        self._prev_rooms = current
+
+        return [
+            RoomInfoDTO.phantom(
+                owner_npid=mp.npid,
+                owner_online_name=mp.online_name,
+                room_type=mp.room_type,
+                rank_info=mp.rank_info,
+            )
+            for mp in self._searching_players.values()
+        ]
+
+    def _send_to_searching(self, room: _SnapshotRoom, now: float) -> None:
+        # A disappeared RANK_MATCH room sends everyone in it, host or both players, to searching
+        if room.room_type == RoomType.PLAYER_MATCH:
+            return
+        for user in room.users:
+            self._searching_players[user.npid] = _SearchingPlayer(
                 npid=user.npid,
                 online_name=user.online_name,
                 room_type=RoomType.RANK_MATCH,
-                rank_info=prev.rank_info,
+                rank_info=room.rank_info,
                 last_seen=now,
             )
-
-    # Seen in a room again, a player is hosting (solo) or in a match (two members):
-    # either way the real room shows them, so they are no longer searching
-    for room in current.values():
-        for user in room.users:
-            _searching_players.pop(user.npid, None)
-
-    # Unseen for matchmaking_ttl, a player has most likely left the loop
-    ttl = get_settings().matchmaking_ttl
-    for npid in list(_searching_players):
-        mp = _searching_players[npid]
-        if now - mp.last_seen > ttl:
-            del _searching_players[npid]
-
-    _prev_rooms = current
-
-    return [
-        RoomInfoDTO.phantom(
-            owner_npid=mp.npid,
-            owner_online_name=mp.online_name,
-            room_type=mp.room_type,
-            rank_info=mp.rank_info,
-        )
-        for mp in _searching_players.values()
-    ]

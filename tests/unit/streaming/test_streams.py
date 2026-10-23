@@ -163,6 +163,16 @@ async def test_nobody_asked_reads_nothing(repo, use_platform, installed):
     assert (platform.checked, repo.listed) == ([], 0)
 
 
+async def test_when_channels_cannot_be_read_nobody_is_live(sessions):
+    class BrokenRepository(MemoryRepository):
+        async def list_all(self, session):
+            raise RuntimeError("database down")
+
+    service = StreamingService(BrokenRepository(), FakePlatform(), sessions)
+
+    assert await service.live_or_empty({"alice"}) == {}
+
+
 # --- own channel ----------------------------------------------------------------
 
 async def test_registers_a_pasted_url_under_the_signed_in_account(client, repo, use_platform, auth_headers):

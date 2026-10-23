@@ -10,7 +10,7 @@
 `history/collector.py`가 lifespan에서 백그라운드 asyncio 태스크로 뜬다.
 `match_history_collection_interval_seconds`(기본 30s)마다:
 
-1. `matching.service.collect_activity_observation()` — HTTP 응답 캐시를 **우회**해 RPCN에서 직접 조회
+1. `MatchingService.collect_activity_observation()` — HTTP 응답 캐시를 **우회**해 RPCN에서 직접 조회
 2. 랭크 방(인원 1명 이상) 참가자 npid 집합을 `record_daily_matched_players()`로 기록
 3. 전체/랭크의 인원 수·방 수를 `record_activity_snapshot()`으로 기록
 4. 인원 2명인 랭크 방(= 대전 성사) 중 **직전 사이클에 없던 방(신규)** 만 `record_snapshot()`으로 기록
@@ -22,7 +22,7 @@
 
 같은 대전이 사이클마다 다시 적재되지 않도록 두 겹으로 막는다.
 
-- **메모리 diff** — 직전 사이클의 대전 방 id를 `_prev_rank_match_ids`로 들고 신규만 쓴다.
+- **메모리 diff** — `Collector` 인스턴스가 직전 사이클의 대전 방 id를 `_prev_rank_match_ids`로 들고 신규만 쓴다.
   쓰기가 커밋된 뒤에만 갱신하므로, 쓰기가 실패한 대전은 다음 사이클에 다시 시도된다.
 - **유니크 키** — `(room_id, user1_npid, user2_npid, match_date)`.
   재시작으로 메모리 diff가 비었을 때 다시 관측되는 진행 중 대전을 걸러낸다.

@@ -11,16 +11,11 @@ These tests require a running RPCN server and Redis instance.
 The RPCN connection settings are read from shared.settings (env vars).
 """
 
-import asyncio
-
 import pytest
 from rpcn_client import SearchRoomsResult
-from matching import (
-    get_server_world_tree,
-    get_leaderboard,
-)
-from matching.db import init_game_repo, close_game_repo
+from matching.adapters.rpcn import RpcnGameServerAdapter
 from matching.rpcn_lifecycle import api_client, shutdown_client
+from matching.service import MatchingService
 from shared.ttt2 import TTT2_COM_ID, TTT2_RANK_BOARD_ID
 
 # These reach RPCN through the shared api_client(), so they carry the same
@@ -39,12 +34,10 @@ BOARD_ID = TTT2_RANK_BOARD_ID
 # Fixtures
 # ---------------------------------------------------------------------------
 
-@pytest.fixture(scope="module", autouse=True)
-def _init_repo():
-    """Initialize and tear down the game server repository for the module."""
-    asyncio.run(init_game_repo())
-    yield
-    asyncio.run(close_game_repo())
+@pytest.fixture(scope="module")
+def service():
+    """One service over the shared RPCN connection, disconnected after the module."""
+    yield MatchingService(RpcnGameServerAdapter())
     shutdown_client()
 
 
@@ -52,9 +45,9 @@ def _init_repo():
 # Service integration tests
 # ---------------------------------------------------------------------------
 
-def test_get_server_world_tree():
+def test_get_server_world_tree(service):
     """get_server_world_tree returns dict[str, list[int]]."""
-    tree = get_server_world_tree(COM_ID)
+    tree = service.get_server_world_tree(COM_ID)
     print(f"Returned tree: {tree}")
     assert isinstance(tree, dict)
     for server_id, worlds in tree.items():
@@ -63,10 +56,10 @@ def test_get_server_world_tree():
         assert all(isinstance(w, int) for w in worlds)
 
 
-def test_search_rooms_all():
+def test_search_rooms_all(service):
     """search_rooms_all returns all rooms including HIDDEN ones."""
     pytest.importorskip("rpcn_client.np2_structs_pb2")
-    tree = get_server_world_tree(COM_ID)
+    tree = service.get_server_world_tree(COM_ID)
     all_worlds = [w for worlds in tree.values() for w in worlds]
     with api_client() as client:
         for world_id in all_worlds:
@@ -78,9 +71,9 @@ def test_search_rooms_all():
                 assert room.room_id > 0
 
 
-def test_get_leaderboard():
+def test_get_leaderboard(service):
     """get_leaderboard returns parsed leaderboard dict."""
     pytest.importorskip("rpcn_client.np2_structs_pb2")
-    resp = get_leaderboard(COM_ID, BOARD_ID, 200)
+    resp = service.get_leaderboard(COM_ID, BOARD_ID, 200)
     print(f"Returned leaderboard: {resp}")
     assert isinstance(resp, dict)

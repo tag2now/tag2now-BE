@@ -16,9 +16,10 @@ from auth.service import AuthService
 from chat.db import init_chat
 from community.adapters.postgresql import PostgresCommunityRepository
 from community.service import CommunityService
+from history.collector import Collector
 from history.db import close_history_repo, init_history_repo
-from matching import service as matching_service
-from matching.db import close_game_repo, init_game_repo
+from matching.adapters.rpcn import RpcnGameServerAdapter
+from matching.service import MatchingService
 from reservation.adapters.postgresql import PostgresReservationRepository
 from reservation.service import ReservationService
 from saves.adapters.save_admin_server import SaveAdminServer
@@ -41,16 +42,17 @@ async def _no_close() -> None:
 _LIFECYCLES = (
     (init_database, close_database),
     (init_history_repo, close_history_repo),
-    (init_game_repo, close_game_repo),
     (init_chat, _no_close),
 )
 
 
 @dataclass
 class Container:
+    collector: Collector
     auth: AuthService
     admin: AdminService
     community: CommunityService
+    matching: MatchingService
     reservations: ReservationService
     saves: SavesService
     streaming: StreamingService
@@ -87,13 +89,19 @@ async def build_container(stack: AsyncExitStack) -> Container:
     await chzzk.init()
     stack.push_async_callback(chzzk.close)
 
+    # Connects to RPCN on first use; closing disconnects it.
+    game_server = RpcnGameServerAdapter()
+    stack.push_async_callback(game_server.close)
+    matching = MatchingService(game_server)
+
     sessions = get_session_factory()
     streaming = StreamingService(PostgresStreamChannelRepository(), chzzk, sessions)
-    matching_service.use_streaming(streaming)
     return Container(
+        collector=Collector(matching),
         auth=AuthService(RpcnApiServerAccountVerifier(rpcn_api)),
         admin=AdminService(RpcnApiServerAccountAdmin(rpcn_api)),
         community=CommunityService(PostgresCommunityRepository(sessions)),
+        matching=matching,
         reservations=ReservationService(PostgresReservationRepository(sessions)),
         saves=SavesService(save_server),
         streaming=streaming,

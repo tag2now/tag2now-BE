@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from matching.matchmaking_tracker import update_and_get_phantoms
+from matching.matchmaking_tracker import MatchmakingTracker
 from matching.models import RoomInfoDTO, RoomType
 from rpcn_client import UserInfo
 
@@ -44,6 +44,11 @@ def _phantom_owners(phantoms):
 
 
 @pytest.fixture
+def tracker():
+    return MatchmakingTracker()
+
+
+@pytest.fixture
 def clock(monkeypatch, mock_settings):
     """A settable time.time(), with matchmaking_ttl at 60 s."""
     mock_settings.matchmaking_ttl = 60
@@ -54,42 +59,42 @@ def clock(monkeypatch, mock_settings):
 
 # -- Baseline ----------------------------------------------------------------
 
-def test_first_snapshot_has_nothing_to_compare_so_no_phantoms(mock_settings):
-    assert update_and_get_phantoms([hosting(1, "p1")]) == []
+def test_first_snapshot_has_nothing_to_compare_so_no_phantoms(tracker, mock_settings):
+    assert tracker.update_and_get_phantoms([hosting(1, "p1")]) == []
 
 
-def test_phantom_survives_a_snapshot_with_no_rooms(mock_settings):
+def test_phantom_survives_a_snapshot_with_no_rooms(tracker, mock_settings):
     """An empty server is a real observation, not a missing baseline."""
-    update_and_get_phantoms([hosting(1, "p1")])
-    update_and_get_phantoms([])
+    tracker.update_and_get_phantoms([hosting(1, "p1")])
+    tracker.update_and_get_phantoms([])
 
-    assert _phantom_owners(update_and_get_phantoms([])) == {"p1"}
+    assert _phantom_owners(tracker.update_and_get_phantoms([])) == {"p1"}
 
 
 # -- Entering searching --------------------------------------------------------
 
-def test_host_whose_room_disappears_becomes_a_phantom(mock_settings):
-    update_and_get_phantoms([hosting(1, "p1")])
+def test_host_whose_room_disappears_becomes_a_phantom(tracker, mock_settings):
+    tracker.update_and_get_phantoms([hosting(1, "p1")])
 
-    assert _phantom_owners(update_and_get_phantoms([])) == {"p1"}
-
-
-def test_both_players_become_phantoms_when_their_match_room_disappears(mock_settings):
-    update_and_get_phantoms([in_match(1, "p1", "p2")])
-
-    assert _phantom_owners(update_and_get_phantoms([])) == {"p1", "p2"}
+    assert _phantom_owners(tracker.update_and_get_phantoms([])) == {"p1"}
 
 
-def test_player_match_room_disappearing_makes_no_phantom(mock_settings):
-    update_and_get_phantoms([player_match(1, "p1", "p2")])
+def test_both_players_become_phantoms_when_their_match_room_disappears(tracker, mock_settings):
+    tracker.update_and_get_phantoms([in_match(1, "p1", "p2")])
 
-    assert update_and_get_phantoms([]) == []
+    assert _phantom_owners(tracker.update_and_get_phantoms([])) == {"p1", "p2"}
 
 
-def test_phantom_is_a_solo_rank_room_at_the_rank_of_the_room_left(mock_settings):
-    update_and_get_phantoms([hosting(1, "p1", rank_id=5)])
+def test_player_match_room_disappearing_makes_no_phantom(tracker, mock_settings):
+    tracker.update_and_get_phantoms([player_match(1, "p1", "p2")])
 
-    [phantom] = update_and_get_phantoms([])
+    assert tracker.update_and_get_phantoms([]) == []
+
+
+def test_phantom_is_a_solo_rank_room_at_the_rank_of_the_room_left(tracker, mock_settings):
+    tracker.update_and_get_phantoms([hosting(1, "p1", rank_id=5)])
+
+    [phantom] = tracker.update_and_get_phantoms([])
 
     assert (phantom.owner_npid, phantom.owner_online_name) == ("p1", "P1")
     assert (phantom.room_id, phantom.current_members, phantom.max_slots) == (0, 1, 2)
@@ -99,41 +104,41 @@ def test_phantom_is_a_solo_rank_room_at_the_rank_of_the_room_left(mock_settings)
 
 # -- Leaving searching ---------------------------------------------------------
 
-def test_phantom_who_hosts_again_is_no_longer_a_phantom(mock_settings):
-    update_and_get_phantoms([hosting(1, "p1")])
-    update_and_get_phantoms([])
+def test_phantom_who_hosts_again_is_no_longer_a_phantom(tracker, mock_settings):
+    tracker.update_and_get_phantoms([hosting(1, "p1")])
+    tracker.update_and_get_phantoms([])
 
-    assert update_and_get_phantoms([hosting(2, "p1")]) == []
-
-
-def test_phantom_who_joins_a_match_is_no_longer_a_phantom(mock_settings):
-    update_and_get_phantoms([hosting(1, "p1"), hosting(5, "p2")])
-    update_and_get_phantoms([hosting(5, "p2")])
-
-    assert update_and_get_phantoms([in_match(5, "p2", "p1")]) == []
+    assert tracker.update_and_get_phantoms([hosting(2, "p1")]) == []
 
 
-def test_host_who_joins_a_match_within_one_poll_never_shows_as_a_phantom(mock_settings):
+def test_phantom_who_joins_a_match_is_no_longer_a_phantom(tracker, mock_settings):
+    tracker.update_and_get_phantoms([hosting(1, "p1"), hosting(5, "p2")])
+    tracker.update_and_get_phantoms([hosting(5, "p2")])
+
+    assert tracker.update_and_get_phantoms([in_match(5, "p2", "p1")]) == []
+
+
+def test_host_who_joins_a_match_within_one_poll_never_shows_as_a_phantom(tracker, mock_settings):
     """p1's own room vanishing and p1 appearing in p2's room arrive in the same snapshot."""
-    update_and_get_phantoms([hosting(1, "p1"), hosting(5, "p2")])
+    tracker.update_and_get_phantoms([hosting(1, "p1"), hosting(5, "p2")])
 
-    assert update_and_get_phantoms([in_match(5, "p2", "p1")]) == []
+    assert tracker.update_and_get_phantoms([in_match(5, "p2", "p1")]) == []
 
 
-def test_phantom_lasts_until_the_ttl_then_expires(clock):
-    update_and_get_phantoms([hosting(1, "p1")])
-    update_and_get_phantoms([])
+def test_phantom_lasts_until_the_ttl_then_expires(tracker, clock):
+    tracker.update_and_get_phantoms([hosting(1, "p1")])
+    tracker.update_and_get_phantoms([])
 
     clock.value = T0 + 60
-    assert _phantom_owners(update_and_get_phantoms([])) == {"p1"}
+    assert _phantom_owners(tracker.update_and_get_phantoms([])) == {"p1"}
     clock.value = T0 + 61
-    assert update_and_get_phantoms([]) == []
+    assert tracker.update_and_get_phantoms([]) == []
 
 
 # -- Independence --------------------------------------------------------------
 
-def test_players_are_tracked_independently(mock_settings):
-    update_and_get_phantoms([hosting(1, "p1"), hosting(2, "p2")])
+def test_players_are_tracked_independently(tracker, mock_settings):
+    tracker.update_and_get_phantoms([hosting(1, "p1"), hosting(2, "p2")])
 
-    assert _phantom_owners(update_and_get_phantoms([hosting(2, "p2")])) == {"p1"}
-    assert _phantom_owners(update_and_get_phantoms([hosting(3, "p1")])) == {"p2"}
+    assert _phantom_owners(tracker.update_and_get_phantoms([hosting(2, "p2")])) == {"p1"}
+    assert _phantom_owners(tracker.update_and_get_phantoms([hosting(3, "p1")])) == {"p2"}

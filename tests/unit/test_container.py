@@ -8,6 +8,8 @@ import container
 from admin.service import AdminService
 from auth.service import AuthService
 from community.service import CommunityService
+from history.collector import Collector
+from matching.service import MatchingService
 from reservation.service import ReservationService
 from saves.service import SavesService
 from streaming.service import StreamingService
@@ -32,8 +34,6 @@ async def test_every_module_opens_in_order_and_closes_in_reverse(monkeypatch):
     calls = []
     monkeypatch.setattr(container, "_LIFECYCLES", _lifecycles(calls))
     monkeypatch.setattr(container, "get_session_factory", lambda: object())
-    # build_container hands streaming to matching's module; put back what was there.
-    monkeypatch.setattr("matching.service._streaming", None)
 
     async with AsyncExitStack() as stack:
         built = await container.build_container(stack)
@@ -43,6 +43,8 @@ async def test_every_module_opens_in_order_and_closes_in_reverse(monkeypatch):
     assert isinstance(built.auth, AuthService)
     assert isinstance(built.admin, AdminService)
     assert isinstance(built.community, CommunityService)
+    assert isinstance(built.matching, MatchingService)
+    assert isinstance(built.collector, Collector)
     assert isinstance(built.reservations, ReservationService)
     assert isinstance(built.saves, SavesService)
     assert isinstance(built.streaming, StreamingService)
