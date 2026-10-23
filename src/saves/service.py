@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 from itertools import groupby
 
 from auth.models import AuthUser
-from saves.db import get_save_server
+from saves.ports import SaveServer
 from saves.exceptions import SaveNotFoundError
 from saves.models import HOLDER_RANKS, SaveLogRequest, SaveRequest
 from shared.cache import cache_delete, cache_get, cache_set
@@ -44,16 +44,6 @@ def _key(npid: str) -> str:
     return f"saves:player:{npid.casefold()}"
 
 
-async def get_player_save(npid: str) -> dict:
-    key = _key(npid)
-    if (entry := cache_get(key)) is None:
-        entry = {"save": _profile(await get_save_server().read(npid))}
-        cache_set(key, entry, get_settings().cache_ttl_player_save)
-    if entry["save"] is None:
-        raise SaveNotFoundError("이 플레이어의 TTT2 세이브가 없습니다.")
-    return entry["save"]
-
-
 def _profile(save: dict | None) -> dict | None:
     if save is None:
         return None
@@ -71,46 +61,6 @@ _NO_CHAR = {"rank": -1, "points": -1}
 
 def _holders_key(rank: int) -> str:
     return f"saves:current-rank-holders:{rank}"
-
-
-async def get_current_rank_leaderboard(top: int, days: int | None = None) -> dict:
-    # Filtering and ranking 1000 players per request costs about a millisecond,
-    # so `days` needs no key of its own.
-    if (players := cache_get(_CURRENT_RANK_KEY)) is None:
-        players, _ = await _fill_current_rank_cache()
-    board = current_rank_board(_saved_within(_without_excluded(players), days))
-    return {"total": len(board), "entries": board[:top]}
-
-
-async def get_current_rank_holders(rank: int, top: int, days: int) -> dict:
-    """Recent players with a character they play at `rank`, the lowest on the
-    leaderboard first: a strong player's other characters are lifted by rank
-    correction, and this looks for players who belong at that rank."""
-    if (holders := cache_get(_holders_key(rank))) is None:
-        _, by_rank = await _fill_current_rank_cache()
-        holders = by_rank[rank]
-    found = sorted(_saved_within(_without_excluded(holders), days),
-                   key=lambda h: (-h["place"], h["npid"].casefold()))
-    return {"rank": rank, "rank_name": TEKKEN_RANKS[rank]["name"], "total": len(found),
-            "entries": [_holder(h) for h in found[:top]]}
-
-
-async def _fill_current_rank_cache() -> tuple[list[dict], dict[int, list[dict]]]:
-    """Read every save once and cache both views of it, an empty rank included,
-    so a rank no one plays is not asked of save-admin every time."""
-    started = time.perf_counter()
-    players = await get_save_server().read_ranks()
-    board = [{**p, "chars": _top_two(p["chars"])} for p in players]
-    places = {e["username"]: e["rank"] for e in current_rank_board(board)}
-    by_rank = _holders_by_rank(players, places)
-    ttl = get_settings().cache_ttl_current_rank_leaderboard
-    cache_set(_CURRENT_RANK_KEY, board, ttl)
-    for rank, holders in by_rank.items():
-        cache_set(_holders_key(rank), holders, ttl)
-    logger.info("current rank cache filled: %d players, %d holders, largest rank %d, %.0f ms",
-                len(players), sum(map(len, by_rank.values())), max(map(len, by_rank.values())),
-                (time.perf_counter() - started) * 1000)
-    return board, by_rank
 
 
 def _top_two(chars: list[dict]) -> list[dict]:
@@ -182,34 +132,6 @@ def _entry(player: dict) -> dict:
 
 # --- admin ----------------------------------------------------------------------
 
-async def show_save(admin: AuthUser, request: SaveRequest) -> dict:
-    save = await _admin_call("show", admin, request)
-    return {**save, "username": save["npid"], "saved_at": _saved_at(save)}
-
-
-async def list_backups(admin: AuthUser, request: SaveRequest) -> dict:
-    return await _admin_call("backups", admin, request)
-
-
-async def read_save_log(admin: AuthUser, request: SaveLogRequest) -> dict:
-    answer = await _admin_call("log", admin, request)
-    return {"records": [_audit_record(r) for r in answer["records"]]}
-
-
-async def edit_save(action: str, admin: AuthUser, request: SaveRequest) -> dict:
-    """set-rank, set-account-rank, floor or restore: a preview with dry_run, else the write"""
-    answer = await _admin_call(action, admin, request)
-    # Profiles show the save from a cache; a written one shows at once.
-    if answer["applied"]:
-        cache_delete(_key(answer["username"]))
-    return answer
-
-
-async def _admin_call(action: str, admin: AuthUser, request) -> dict:
-    payload = request.model_dump(exclude={"password"}, exclude_none=True)
-    return await get_save_server().call(action, admin.username, request.password, payload)
-
-
 def _audit_record(record: dict) -> dict:
     head = ("ts", "user", "action", "npid")
     details = {k: _label(v) if k in _PATH_FIELDS else v for k, v in record.items() if k not in head}
@@ -224,3 +146,77 @@ def _label(path: str) -> str:
 def _saved_at(save: dict) -> datetime:
     # saved_utc is a naive UTC "YYYY-MM-DD HH:MM:SS[.ffffff]"
     return datetime.fromisoformat(save["saved_utc"]).replace(tzinfo=timezone.utc)
+
+
+class SavesService:
+    def __init__(self, server: SaveServer):
+        self._server = server
+
+    async def get_player_save(self, npid: str) -> dict:
+        key = _key(npid)
+        if (entry := cache_get(key)) is None:
+            entry = {"save": _profile(await self._server.read(npid))}
+            cache_set(key, entry, get_settings().cache_ttl_player_save)
+        if entry["save"] is None:
+            raise SaveNotFoundError("이 플레이어의 TTT2 세이브가 없습니다.")
+        return entry["save"]
+
+    async def get_current_rank_leaderboard(self, top: int, days: int | None = None) -> dict:
+        # Filtering and ranking 1000 players per request costs about a millisecond,
+        # so `days` needs no key of its own.
+        if (players := cache_get(_CURRENT_RANK_KEY)) is None:
+            players, _ = await self._fill_current_rank_cache()
+        board = current_rank_board(_saved_within(_without_excluded(players), days))
+        return {"total": len(board), "entries": board[:top]}
+
+    async def get_current_rank_holders(self, rank: int, top: int, days: int) -> dict:
+        """Recent players with a character they play at `rank`, the lowest on the
+        leaderboard first: a strong player's other characters are lifted by rank
+        correction, and this looks for players who belong at that rank."""
+        if (holders := cache_get(_holders_key(rank))) is None:
+            _, by_rank = await self._fill_current_rank_cache()
+            holders = by_rank[rank]
+        found = sorted(_saved_within(_without_excluded(holders), days),
+                       key=lambda h: (-h["place"], h["npid"].casefold()))
+        return {"rank": rank, "rank_name": TEKKEN_RANKS[rank]["name"], "total": len(found),
+                "entries": [_holder(h) for h in found[:top]]}
+
+    async def _fill_current_rank_cache(self) -> tuple[list[dict], dict[int, list[dict]]]:
+        """Read every save once and cache both views of it, an empty rank included,
+        so a rank no one plays is not asked of save-admin every time."""
+        started = time.perf_counter()
+        players = await self._server.read_ranks()
+        board = [{**p, "chars": _top_two(p["chars"])} for p in players]
+        places = {e["username"]: e["rank"] for e in current_rank_board(board)}
+        by_rank = _holders_by_rank(players, places)
+        ttl = get_settings().cache_ttl_current_rank_leaderboard
+        cache_set(_CURRENT_RANK_KEY, board, ttl)
+        for rank, holders in by_rank.items():
+            cache_set(_holders_key(rank), holders, ttl)
+        logger.info("current rank cache filled: %d players, %d holders, largest rank %d, %.0f ms",
+                    len(players), sum(map(len, by_rank.values())), max(map(len, by_rank.values())),
+                    (time.perf_counter() - started) * 1000)
+        return board, by_rank
+
+    async def show_save(self, admin: AuthUser, request: SaveRequest) -> dict:
+        save = await self._admin_call("show", admin, request)
+        return {**save, "username": save["npid"], "saved_at": _saved_at(save)}
+
+    async def list_backups(self, admin: AuthUser, request: SaveRequest) -> dict:
+        return await self._admin_call("backups", admin, request)
+
+    async def read_save_log(self, admin: AuthUser, request: SaveLogRequest) -> dict:
+        answer = await self._admin_call("log", admin, request)
+        return {"records": [_audit_record(r) for r in answer["records"]]}
+
+    async def edit_save(self, action: str, admin: AuthUser, request: SaveRequest) -> dict:
+        """set-rank, set-account-rank, floor or restore: a preview with dry_run, else the write"""
+        answer = await self._admin_call(action, admin, request)
+        # Profiles show the save from a cache; a written one shows at once.
+        if answer["applied"]:
+            cache_delete(_key(answer["username"]))
+        return answer
+
+    async def _admin_call(self, action: str, admin: AuthUser, request) -> dict:
+        payload = request.model_dump(exclude={"password"}, exclude_none=True)
+        return await self._server.call(action, admin.username, request.password, payload)

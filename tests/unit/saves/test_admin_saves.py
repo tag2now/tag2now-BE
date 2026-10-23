@@ -6,8 +6,8 @@ import httpx
 import pytest
 
 from admin.exceptions import AccountNotFoundError, AdminPasswordError, NotAdminError
-from saves import db
 from saves.adapters.save_admin_server import SaveAdminServer
+from saves.service import SavesService
 from saves.exceptions import (
     BackupNotFoundError, SaveConflictError, SaveNotFoundError, SaveRequestError, SavesUnavailableError,
 )
@@ -56,21 +56,19 @@ async def _adapter(transport, url="http://save-admin:8000", api_key="key") -> Sa
 
 
 @pytest.fixture
-async def use_server():
-    """Install an adapter for the service, and restore whatever was there."""
-    previous = db._server
-    installed = []
+async def use_server(installed):
+    """Give the routes a service over an adapter talking to `transport`."""
+    adapters = []
 
     async def install(transport):
         adapter = await _adapter(transport)
-        installed.append(adapter)
-        db.set_save_server(adapter)
+        adapters.append(adapter)
+        installed["service"] = SavesService(adapter)
         return adapter
 
     yield install
-    for adapter in installed:
+    for adapter in adapters:
         await adapter.close()
-    db.set_save_server(previous)
 
 
 # --- adapter ------------------------------------------------------------------

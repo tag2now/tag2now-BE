@@ -6,10 +6,9 @@ import httpx
 import pytest
 
 from shared.ttt2 import TEKKEN_RANKS, TTT2_CHARACTERS
-from saves import db
 from saves.adapters.save_admin_server import SaveAdminServer
 from saves.exceptions import SavesUnavailableError
-from saves.service import current_rank_board
+from saves.service import SavesService, current_rank_board
 from shared.cache import DictCache
 
 
@@ -40,21 +39,19 @@ async def _adapter(transport) -> SaveAdminServer:
 
 
 @pytest.fixture
-async def use_server():
-    """Install an adapter for the service, and restore whatever was there."""
-    previous = db._server
-    installed = []
+async def use_server(installed):
+    """Give the routes a service over an adapter talking to `transport`."""
+    adapters = []
 
     async def install(transport):
         adapter = await _adapter(transport)
-        installed.append(adapter)
-        db.set_save_server(adapter)
+        adapters.append(adapter)
+        installed["service"] = SavesService(adapter)
         return adapter
 
     yield install
-    for adapter in installed:
+    for adapter in adapters:
         await adapter.close()
-    db.set_save_server(previous)
 
 
 @pytest.fixture(autouse=True)

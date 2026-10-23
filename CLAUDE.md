@@ -304,8 +304,8 @@ or construct the service directly; neither needs a module patched.
 A service that judges time takes a `shared.clock.Clock` (default `SystemClock`),
 so its tests pass a fixed one.
 
-**Migration in progress.** `community/` and `reservation/` are built this way so
-far. The other modules still keep a module-level repository in `db.py`
+**Migration in progress.** `community/`, `reservation/` and `saves/` are built
+this way so far. The other modules still keep a module-level repository in `db.py`
 (`init_*`, `close_*`, `get_*`, test seams `set_*`) and are opened from
 `container._LIFECYCLES`; `chat/` injects its own with `service.configure(...)`.
 Each moves to the pattern above in turn, and its `db.py` is deleted when it does.

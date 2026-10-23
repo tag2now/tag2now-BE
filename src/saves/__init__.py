@@ -5,7 +5,3 @@ Two audiences, one domain: anyone reads a player's ranks for the profile panel
 `/admin/saves/*`, with their password checked by RPCN on every call. The admin
 gate and the account errors come from `admin/`; nothing there depends on this.
 """
-
-from saves.db import close_saves, init_saves
-
-__all__ = ["init_saves", "close_saves"]
