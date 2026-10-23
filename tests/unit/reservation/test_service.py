@@ -4,7 +4,7 @@ import pytest
 
 from reservation.domain import MatchType, Reservation, ReservationStatus
 from reservation.exceptions import ReservationStateError
-from reservation import service
+from reservation.service import ReservationService
 
 
 class FixedClock:
@@ -37,22 +37,18 @@ class FakeRepository:
         return self.existing
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def dependencies():
-    """Swap the module-level ports for fakes, then put the real ones back.
+    return FakeRepository()
 
-    service.configure() writes to module globals, so a fake clock left behind
-    here would still be answering when the integration tests run.
-    """
-    previous = (service._repo, service._clock)
-    repo = FakeRepository()
-    service.configure(repo, FixedClock())
-    yield repo
-    service._repo, service._clock = previous
+
+@pytest.fixture
+def service(dependencies):
+    return ReservationService(dependencies, FixedClock())
 
 
 @pytest.mark.asyncio
-async def test_create_rank_reservation_uses_kst_today_and_records_the_host(dependencies):
+async def test_create_rank_reservation_uses_kst_today_and_records_the_host(service, dependencies):
     reservation = await service.create_reservation(subject="host", display_name="Host", start_time=time(20, 30), ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="hello")
 
     assert reservation.host_display_name == "Host"
@@ -61,31 +57,31 @@ async def test_create_rank_reservation_uses_kst_today_and_records_the_host(depen
 
 
 @pytest.mark.asyncio
-async def test_create_rank_reservation_requires_rank(dependencies):
+async def test_create_rank_reservation_requires_rank(service, dependencies):
     with pytest.raises(ReservationStateError, match="계급을 하나 이상"):
         await service.create_reservation(start_time=time(20, 30), subject="host", display_name="Host", ranks=[], match_type=MatchType.RANK, capacity=1, memo="")
 
 
 @pytest.mark.asyncio
-async def test_create_player_reservation_rejects_ranks(dependencies):
+async def test_create_player_reservation_rejects_ranks(service, dependencies):
     with pytest.raises(ReservationStateError, match="계급을 선택하지 않습니다"):
         await service.create_reservation(start_time=time(20, 30), subject="host", display_name="Host", ranks=["Brawler"], match_type=MatchType.PLAYER, capacity=2, memo="")
 
 
 @pytest.mark.asyncio
-async def test_create_rejects_start_time_less_than_ten_minutes_away(dependencies):
+async def test_create_rejects_start_time_less_than_ten_minutes_away(service, dependencies):
     with pytest.raises(ReservationStateError, match="10분 이후"):
         await service.create_reservation(start_time=time(19, 5), subject="host", display_name="Host", ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="")
 
 
 @pytest.mark.asyncio
-async def test_create_rank_reservation_rejects_capacity_other_than_one(dependencies):
+async def test_create_rank_reservation_rejects_capacity_other_than_one(service, dependencies):
     with pytest.raises(ReservationStateError, match="1명만 모집"):
         await service.create_reservation(start_time=time(20, 30), subject="host", display_name="Host", ranks=["Brawler"], match_type=MatchType.RANK, capacity=2, memo="")
 
 
 @pytest.mark.asyncio
-async def test_join_passes_the_account_to_the_repository(dependencies):
+async def test_join_passes_the_account_to_the_repository(service, dependencies):
     await service.join_reservation(12, subject="joiner", display_name="Joiner", ranks=[])
 
     reservation_id, values = dependencies.joined
@@ -95,7 +91,7 @@ async def test_join_passes_the_account_to_the_repository(dependencies):
 
 
 @pytest.mark.asyncio
-async def test_cancellations_name_the_account_that_asked(dependencies):
+async def test_cancellations_name_the_account_that_asked(service, dependencies):
     await service.cancel_participation(12, "joiner")
     await service.cancel_reservation(12, "host")
 
@@ -104,7 +100,7 @@ async def test_cancellations_name_the_account_that_asked(dependencies):
 
 
 @pytest.mark.asyncio
-async def test_editing_only_the_memo_leaves_the_other_fields_untouched(dependencies):
+async def test_editing_only_the_memo_leaves_the_other_fields_untouched(service, dependencies):
     await service.update_reservation(1, "host", memo="  자리 하나 남음  ")
 
     _, _, changes = dependencies.updated
@@ -114,14 +110,14 @@ async def test_editing_only_the_memo_leaves_the_other_fields_untouched(dependenc
 
 
 @pytest.mark.asyncio
-async def test_switching_to_a_player_match_rejects_the_ranks_left_behind():
+async def test_switching_to_a_player_match_rejects_the_ranks_left_behind(service):
     """The patch is valid field by field; only the merged state reveals the clash."""
     with pytest.raises(ReservationStateError, match="계급을 선택하지 않습니다"):
         await service.update_reservation(1, "host", match_type=MatchType.PLAYER)
 
 
 @pytest.mark.asyncio
-async def test_switching_to_a_player_match_together_with_clearing_ranks_is_allowed(dependencies):
+async def test_switching_to_a_player_match_together_with_clearing_ranks_is_allowed(service, dependencies):
     await service.update_reservation(1, "host", match_type=MatchType.PLAYER, ranks=[], capacity=2)
 
     _, _, changes = dependencies.updated
@@ -130,13 +126,13 @@ async def test_switching_to_a_player_match_together_with_clearing_ranks_is_allow
 
 
 @pytest.mark.asyncio
-async def test_emptying_the_ranks_of_a_rank_match_is_rejected():
+async def test_emptying_the_ranks_of_a_rank_match_is_rejected(service):
     with pytest.raises(ReservationStateError, match="하나 이상"):
         await service.update_reservation(1, "host", ranks=[])
 
 
 @pytest.mark.asyncio
-async def test_a_new_start_time_is_resolved_against_the_clock(dependencies):
+async def test_a_new_start_time_is_resolved_against_the_clock(service, dependencies):
     await service.update_reservation(1, "host", start_time=time(21, 0))
 
     _, _, changes = dependencies.updated
@@ -144,13 +140,13 @@ async def test_a_new_start_time_is_resolved_against_the_clock(dependencies):
 
 
 @pytest.mark.asyncio
-async def test_a_start_time_inside_the_lead_time_is_rejected():
+async def test_a_start_time_inside_the_lead_time_is_rejected(service):
     with pytest.raises(ReservationStateError, match="10분 이후"):
         await service.update_reservation(1, "host", start_time=time(19, 5))
 
 
 @pytest.mark.asyncio
-async def test_the_editor_reaches_the_repository(dependencies):
+async def test_the_editor_reaches_the_repository(service, dependencies):
     await service.update_reservation(1, "host", memo="hi")
 
     _, subject, _ = dependencies.updated

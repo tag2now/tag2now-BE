@@ -8,12 +8,6 @@ from reservation.domain import Comment, MatchType, Participant, Reservation
 
 class ReservationRepository(ABC):
     @abstractmethod
-    async def init(self) -> None: ...
-
-    @abstractmethod
-    async def close(self) -> None: ...
-
-    @abstractmethod
     async def list_upcoming(self) -> list[Reservation]: ...
 
     @abstractmethod
@@ -43,7 +37,3 @@ class ReservationRepository(ABC):
     @abstractmethod
     async def delete_comment(self, reservation_id: int, comment_id: int, author_subject: str, now: datetime) -> None: ...
 
-
-class Clock(ABC):
-    @abstractmethod
-    def now(self) -> datetime: ...

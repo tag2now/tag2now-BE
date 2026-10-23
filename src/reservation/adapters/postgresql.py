@@ -17,7 +17,6 @@ from reservation.entities import ReservationComment as ReservationCommentRow
 from reservation.entities import ReservationParticipant as ReservationParticipantRow
 from reservation.exceptions import ReservationAccessError, ReservationNotFoundError, ReservationStateError
 from reservation.ports import ReservationRepository
-from shared.database import get_session_factory
 
 
 
@@ -43,20 +42,9 @@ def _reservation(row: ReservationRow, participant_count: int, participants: list
 class PostgresReservationRepository(ReservationRepository):
     """Reservation persistence using the application's shared session factory."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession] | None = None):
-        self._session_factory = session_factory
-
-    async def init(self) -> None:
-        self._session_factory = self._session_factory or get_session_factory()
-
-    async def close(self) -> None:
-        """The shared database lifecycle owns the engine."""
-
-    @property
-    def _sessions(self) -> async_sessionmaker[AsyncSession]:
-        if self._session_factory is None:
-            raise RuntimeError("Reservation repository not initialized")
-        return self._session_factory
+    def __init__(self, sessions: async_sessionmaker[AsyncSession]):
+        # The shared database lifecycle owns the engine; this only borrows sessions.
+        self._sessions = sessions
 
     @staticmethod
     def _with_participant_count():

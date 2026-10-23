@@ -6,6 +6,7 @@ import pytest
 
 import container
 from community.service import CommunityService
+from reservation.service import ReservationService
 
 
 def _lifecycles(calls, fail_at=None):
@@ -34,6 +35,7 @@ async def test_every_module_opens_in_order_and_closes_in_reverse(monkeypatch):
 
     assert calls[4:] == ["close3", "close2", "close1", "close0"]
     assert isinstance(built.community, CommunityService)
+    assert isinstance(built.reservations, ReservationService)
 
 
 async def test_a_failing_module_closes_only_those_opened_before_it(monkeypatch):

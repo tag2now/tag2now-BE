@@ -301,11 +301,14 @@ Tests swap a service with FastAPI's own seam,
 `app.dependency_overrides[community_service] = lambda: CommunityService(fake_repo)`,
 or construct the service directly; neither needs a module patched.
 
-**Migration in progress.** Only `community/` is built this way so far. The other
-modules still keep a module-level repository in `db.py` (`init_*`, `close_*`,
-`get_*`, test seams `set_*`) and are opened from `container._LIFECYCLES`;
-`reservation/` and `chat/` inject theirs with `service.configure(...)`. Each moves
-to the pattern above in turn, and its `db.py` is deleted when it does.
+A service that judges time takes a `shared.clock.Clock` (default `SystemClock`),
+so its tests pass a fixed one.
+
+**Migration in progress.** `community/` and `reservation/` are built this way so
+far. The other modules still keep a module-level repository in `db.py`
+(`init_*`, `close_*`, `get_*`, test seams `set_*`) and are opened from
+`container._LIFECYCLES`; `chat/` injects its own with `service.configure(...)`.
+Each moves to the pattern above in turn, and its `db.py` is deleted when it does.
 
 ### Caching
 

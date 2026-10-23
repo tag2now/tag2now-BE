@@ -15,7 +15,8 @@ from community.adapters.postgresql import PostgresCommunityRepository
 from community.service import CommunityService
 from history.db import close_history_repo, init_history_repo
 from matching.db import close_game_repo, init_game_repo
-from reservation.db import close_db as close_reservation_db, init_db as init_reservation_db
+from reservation.adapters.postgresql import PostgresReservationRepository
+from reservation.service import ReservationService
 from saves.db import close_saves, init_saves
 from shared.database import close_database, get_session_factory, init_database
 from shared.rpcn_api import close_rpcn_api, init_rpcn_api
@@ -33,7 +34,6 @@ _LIFECYCLES = (
     (init_admin, close_admin),
     (init_saves, close_saves),
     (init_database, close_database),
-    (init_reservation_db, close_reservation_db),
     (init_history_repo, close_history_repo),
     (init_game_repo, close_game_repo),
     (init_chat, _no_close),
@@ -44,6 +44,7 @@ _LIFECYCLES = (
 @dataclass
 class Container:
     community: CommunityService
+    reservations: ReservationService
 
 
 async def build_container(stack: AsyncExitStack) -> Container:
@@ -52,6 +53,8 @@ async def build_container(stack: AsyncExitStack) -> Container:
     for init, close in _LIFECYCLES:
         await init()
         stack.push_async_callback(close)
+    sessions = get_session_factory()
     return Container(
-        community=CommunityService(PostgresCommunityRepository(get_session_factory())),
+        community=CommunityService(PostgresCommunityRepository(sessions)),
+        reservations=ReservationService(PostgresReservationRepository(sessions)),
     )

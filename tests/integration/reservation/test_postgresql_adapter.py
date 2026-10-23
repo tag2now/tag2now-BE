@@ -21,14 +21,12 @@ async def repository():
     from reservation.adapters.postgresql import PostgresReservationRepository
 
     await init_database()
-    repo = PostgresReservationRepository()
-    await repo.init()
+    repo = PostgresReservationRepository(get_session_factory())
     async with get_session_factory()() as session, session.begin():
         await session.execute(delete(ReservationCommentRow))
         await session.execute(delete(ReservationParticipantRow))
         await session.execute(delete(ReservationRow))
     yield repo
-    await repo.close()
     await close_database()
 
 
