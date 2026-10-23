@@ -17,6 +17,7 @@ from chat.db import init_chat
 from community.adapters.postgresql import PostgresCommunityRepository
 from community.service import CommunityService
 from history.db import close_history_repo, init_history_repo
+from matching import service as matching_service
 from matching.db import close_game_repo, init_game_repo
 from reservation.adapters.postgresql import PostgresReservationRepository
 from reservation.service import ReservationService
@@ -25,7 +26,9 @@ from saves.service import SavesService
 from shared.database import close_database, get_session_factory, init_database
 from shared.rpcn_api import RpcnApiClient
 from shared.settings import get_settings
-from streaming.db import close_streaming, init_streaming
+from streaming.adapters.chzzk import ChzzkPlatform
+from streaming.adapters.postgresql import PostgresStreamChannelRepository
+from streaming.service import StreamingService
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +43,6 @@ _LIFECYCLES = (
     (init_history_repo, close_history_repo),
     (init_game_repo, close_game_repo),
     (init_chat, _no_close),
-    (init_streaming, close_streaming),
 )
 
 
@@ -51,6 +53,7 @@ class Container:
     community: CommunityService
     reservations: ReservationService
     saves: SavesService
+    streaming: StreamingService
 
 
 async def build_container(stack: AsyncExitStack) -> Container:
@@ -80,11 +83,18 @@ async def build_container(stack: AsyncExitStack) -> Container:
     await save_server.init()
     stack.push_async_callback(save_server.close)
 
+    chzzk = ChzzkPlatform(settings.chzzk_api_url, settings.chzzk_timeout_seconds)
+    await chzzk.init()
+    stack.push_async_callback(chzzk.close)
+
     sessions = get_session_factory()
+    streaming = StreamingService(PostgresStreamChannelRepository(), chzzk, sessions)
+    matching_service.use_streaming(streaming)
     return Container(
         auth=AuthService(RpcnApiServerAccountVerifier(rpcn_api)),
         admin=AdminService(RpcnApiServerAccountAdmin(rpcn_api)),
         community=CommunityService(PostgresCommunityRepository(sessions)),
         reservations=ReservationService(PostgresReservationRepository(sessions)),
         saves=SavesService(save_server),
+        streaming=streaming,
     )

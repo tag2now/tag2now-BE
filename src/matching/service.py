@@ -15,9 +15,19 @@ from matching.models import (
     ActivityObservation,
     RoomType,
 )
-from streaming import service as streaming_service
+from streaming.service import StreamingService
 
 logger = logging.getLogger(__name__)
+
+# Handed over by container.build_container until matching becomes a service
+# class of its own, which will take it through its constructor instead.
+_streaming: StreamingService | None = None
+
+
+def use_streaming(streaming: StreamingService) -> None:
+    global _streaming
+    _streaming = streaming
+
 
 # The leaderboard is fetched once at this size and cached; every request slices from it.
 LEADERBOARD_CACHE_SIZE = 500
@@ -120,7 +130,7 @@ async def _attach_streams(groups: dict) -> None:
     """Set each room user's `stream` to their live broadcast, or None."""
     users = [user for rooms in groups.values() for room in rooms for user in room["users"]]
     try:
-        live = await streaming_service.live_for({user["npid"] for user in users if user.get("npid")})
+        live = await _streaming.live_for({user["npid"] for user in users if user.get("npid")})
     except Exception:
         # Streams are an extra: the room list still goes out without them.
         logger.warning("Live streams unavailable; rooms served without them", exc_info=True)

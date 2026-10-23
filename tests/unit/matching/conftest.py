@@ -17,9 +17,10 @@ def reset_matchmaking_state():
 @pytest.fixture(autouse=True)
 def nobody_live(monkeypatch):
     # The room list asks streaming who is live; these tests have no database behind it.
-    live_for = AsyncMock(return_value={})
-    monkeypatch.setattr("streaming.service.live_for", live_for)
-    return live_for
+    streaming = AsyncMock()
+    streaming.live_for.return_value = {}
+    monkeypatch.setattr("matching.service._streaming", streaming)
+    return streaming.live_for
 
 
 @pytest.fixture

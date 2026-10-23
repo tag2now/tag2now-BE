@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from shared.cache import DictCache
-from streaming import db, service
+from streaming.service import StreamingService
 from streaming.exceptions import ChannelTakenError, StreamingUnavailableError
 from streaming.models import LiveBroadcast, PlatformChannel, StreamChannel
 from streaming.ports import StreamChannelRepository, StreamPlatform
@@ -64,8 +64,9 @@ class FakePlatform(StreamPlatform):
         return self.on_air.get(channel_id)
 
 
-@pytest.fixture(autouse=True)
-def session_factory(monkeypatch):
+@pytest.fixture
+def sessions():
+    """A session factory whose sessions the in-memory repository ignores."""
     session = AsyncMock()
 
     @asynccontextmanager
@@ -78,7 +79,7 @@ def session_factory(monkeypatch):
     async def open_session():
         yield session
 
-    monkeypatch.setattr("shared.database.get_session_factory", lambda: open_session)
+    return open_session
 
 
 @pytest.fixture(autouse=True)
@@ -92,23 +93,18 @@ def cache(monkeypatch):
 
 @pytest.fixture
 def repo():
-    previous = db._repo
-    memory = MemoryRepository()
-    db.set_channel_repo(memory)
-    yield memory
-    db.set_channel_repo(previous)
+    return MemoryRepository()
 
 
 @pytest.fixture
-def use_platform():
-    previous = db._platform
+def use_platform(installed, repo, sessions):
+    """Give the routes, and `installed["service"]`, a service over `repo` and this platform."""
 
     def install(platform: StreamPlatform) -> StreamPlatform:
-        db.set_stream_platform(platform)
+        installed["service"] = StreamingService(repo, platform, sessions)
         return platform
 
-    yield install
-    db.set_stream_platform(previous)
+    return install
 
 
 @pytest.fixture
@@ -124,13 +120,13 @@ async def _register(repo, username, channel_id):
 
 # --- live -----------------------------------------------------------------------
 
-async def test_answers_only_the_registered_players_asked_about_who_are_on_air(repo, use_platform):
+async def test_answers_only_the_registered_players_asked_about_who_are_on_air(repo, use_platform, installed):
     for username, channel in (("Alice", ALICE_CH), ("bob", BOB_CH), ("carol", CAROL_CH)):
         await _register(repo, username, channel)
     platform = use_platform(FakePlatform(live={ALICE_CH: LiveBroadcast("TTT2 랭크전", 42, "TTT2"),
                                                CAROL_CH: LiveBroadcast("밖에서 방송", 9, "talk")}))
 
-    live = await service.live_for({"alice", "bob", "dave"})
+    live = await installed["service"].live_for({"alice", "bob", "dave"})
 
     assert live == {"alice": {"platform": "chzzk", "channel_name": "Alice 채널",
                               "url": f"https://chzzk.naver.com/live/{ALICE_CH}",
@@ -139,31 +135,31 @@ async def test_answers_only_the_registered_players_asked_about_who_are_on_air(re
     assert sorted(platform.checked) == [ALICE_CH, BOB_CH]
 
 
-async def test_one_failing_channel_does_not_hide_the_others(repo, use_platform):
+async def test_one_failing_channel_does_not_hide_the_others(repo, use_platform, installed):
     await _register(repo, "alice", ALICE_CH)
     await _register(repo, "bob", BOB_CH)
     use_platform(FakePlatform(live={BOB_CH: LiveBroadcast("방송", 1, "")}, failing={ALICE_CH}))
 
-    assert list(await service.live_for({"alice", "bob"})) == ["bob"]
+    assert list(await installed["service"].live_for({"alice", "bob"})) == ["bob"]
 
 
 @pytest.mark.parametrize("live, failing", [({ALICE_CH: LiveBroadcast("방송", 1, "")}, ()), ({}, ()), ({}, {ALICE_CH})])
-async def test_asks_about_a_channel_once_until_its_cache_expires(repo, use_platform, live, failing):
+async def test_asks_about_a_channel_once_until_its_cache_expires(repo, use_platform, live, failing, installed):
     await _register(repo, "alice", ALICE_CH)
     platform = use_platform(FakePlatform(live=live, failing=failing))
 
     for _ in range(3):
-        await service.live_for({"alice"})
+        await installed["service"].live_for({"alice"})
 
     assert platform.checked == [ALICE_CH]
     assert repo.listed == 1
 
 
-async def test_nobody_asked_reads_nothing(repo, use_platform):
+async def test_nobody_asked_reads_nothing(repo, use_platform, installed):
     await _register(repo, "alice", ALICE_CH)
     platform = use_platform(FakePlatform())
 
-    assert await service.live_for(set()) == {}
+    assert await installed["service"].live_for(set()) == {}
     assert (platform.checked, repo.listed) == ([], 0)
 
 
@@ -208,13 +204,13 @@ async def test_a_channel_belongs_to_one_account(client, repo, use_platform, auth
     assert repo.rows[("alice", "chzzk")].channel_id == ALICE_CH
 
 
-async def test_a_new_registration_shows_without_waiting_for_the_cache(client, repo, use_platform, auth_headers):
+async def test_a_new_registration_shows_without_waiting_for_the_cache(client, repo, use_platform, auth_headers, installed):
     use_platform(FakePlatform(channels=[ALICE_CH], live={ALICE_CH: LiveBroadcast("방송", 1, "")}))
-    assert await service.live_for({"alice"}) == {}
+    assert await installed["service"].live_for({"alice"}) == {}
 
     client.put("/streams/me", json={"channel": ALICE_CH}, headers=auth_headers("alice"))
 
-    assert list(await service.live_for({"alice"})) == ["alice"]
+    assert list(await installed["service"].live_for({"alice"})) == ["alice"]
 
 
 async def test_disconnecting_succeeds_with_or_without_a_channel(client, repo, use_platform, auth_headers):
