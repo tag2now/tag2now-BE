@@ -30,20 +30,14 @@ from reservation.adapters.postgresql import PostgresReservationRepository
 from reservation.service import ReservationService
 from saves.adapters.save_admin_server import SaveAdminServer
 from saves.service import SavesService
-from shared.database import close_database, get_session_factory, init_database
+from shared.database import open_database
 from shared.rpcn_api import RpcnApiClient
-from shared.settings import get_settings
+from shared.settings import Settings, get_settings
 from streaming.adapters.chzzk import ChzzkPlatform
 from streaming.adapters.postgresql import PostgresStreamChannelRepository
 from streaming.service import StreamingService
 
 logger = logging.getLogger(__name__)
-
-
-# Modules still initialised through module-level state, in dependency order.
-_LIFECYCLES = (
-    (init_database, close_database),
-)
 
 
 @dataclass
@@ -61,48 +55,19 @@ class Container:
 
 
 async def build_container(stack: AsyncExitStack) -> Container:
-    """Open everything in order, registering each close on `stack`, so a failure
+    """Open everything in order, each entered on `stack` as it opens, so a failure
     part-way closes exactly what was opened before it."""
-    for init, close in _LIFECYCLES:
-        await init()
-        stack.push_async_callback(close)
     settings = get_settings()
+    _warn_if_login_unconfigured(settings)
 
-    # rpcn-narco's API server answers both login and moderation, with one key.
-    # Unconfigured, it still starts: login and every signed-in route answer 502.
-    if not (settings.rpcn_api_server_url and settings.rpcn_api_server_key.get_secret_value()
-            and settings.jwt_secret.get_secret_value()):
-        logger.warning("Login is not configured: set RPCN_API_SERVER_URL, RPCN_API_SERVER_KEY and JWT_SECRET")
-    rpcn_api = RpcnApiClient(
-        settings.rpcn_api_server_url, settings.rpcn_api_server_key.get_secret_value(),
-        settings.rpcn_api_server_timeout_seconds,
-    )
-    await rpcn_api.init()
-    stack.push_async_callback(rpcn_api.close)
+    sessions = await stack.enter_async_context(open_database())
+    rpcn_api = await stack.enter_async_context(_rpcn_api(settings))
+    save_server = await stack.enter_async_context(_save_server(settings))
+    chzzk = await stack.enter_async_context(_chzzk(settings))
+    game_server = await stack.enter_async_context(RpcnGameServerAdapter(_rpcn(settings)))
 
-    # Unconfigured, it still starts; the save routes answer 502 and log why.
-    save_server = SaveAdminServer(
-        settings.save_admin_url, settings.save_admin_key.get_secret_value(), settings.save_admin_timeout_seconds,
-    )
-    await save_server.init()
-    stack.push_async_callback(save_server.close)
-
-    chzzk = ChzzkPlatform(settings.chzzk_api_url, settings.chzzk_timeout_seconds)
-    await chzzk.init()
-    stack.push_async_callback(chzzk.close)
-
-    # Connects to RPCN on first use; closing disconnects it.
-    rpcn = SharedRpcnClient(partial(
-        create_client, settings.rpcn_host, settings.rpcn_port, settings.rpcn_user,
-        settings.rpcn_password, settings.rpcn_token, settings.rpcn_metric_enable,
-    ))
-    game_server = RpcnGameServerAdapter(rpcn)
-    stack.push_async_callback(game_server.close)
     matching = MatchingService(game_server)
-
-    sessions = get_session_factory()
     history = HistoryService(PostgresHistoryAdapter(), sessions)
-    streaming = StreamingService(PostgresStreamChannelRepository(), chzzk, sessions)
     return Container(
         collector=Collector(matching, history),
         auth=AuthService(RpcnApiServerAccountVerifier(rpcn_api)),
@@ -114,5 +79,40 @@ async def build_container(stack: AsyncExitStack) -> Container:
         matching=matching,
         reservations=ReservationService(PostgresReservationRepository(sessions)),
         saves=SavesService(save_server),
-        streaming=streaming,
+        streaming=StreamingService(PostgresStreamChannelRepository(), chzzk, sessions),
     )
+
+
+def _warn_if_login_unconfigured(settings: Settings) -> None:
+    """Unconfigured, the server still starts: login and every signed-in route answer 502."""
+    configured = (settings.rpcn_api_server_url and settings.rpcn_api_server_key.get_secret_value()
+                  and settings.jwt_secret.get_secret_value())
+    if not configured:
+        logger.warning("Login is not configured: set RPCN_API_SERVER_URL, RPCN_API_SERVER_KEY and JWT_SECRET")
+
+
+def _rpcn_api(settings: Settings) -> RpcnApiClient:
+    """rpcn-narco's API server, which answers both login and moderation with one key."""
+    return RpcnApiClient(
+        settings.rpcn_api_server_url, settings.rpcn_api_server_key.get_secret_value(),
+        settings.rpcn_api_server_timeout_seconds,
+    )
+
+
+def _save_server(settings: Settings) -> SaveAdminServer:
+    """Unconfigured, the server still starts; the save routes answer 502 and log why."""
+    return SaveAdminServer(
+        settings.save_admin_url, settings.save_admin_key.get_secret_value(), settings.save_admin_timeout_seconds,
+    )
+
+
+def _chzzk(settings: Settings) -> ChzzkPlatform:
+    return ChzzkPlatform(settings.chzzk_api_url, settings.chzzk_timeout_seconds)
+
+
+def _rpcn(settings: Settings) -> SharedRpcnClient:
+    """Connects to RPCN on first use; closing the game server disconnects it."""
+    return SharedRpcnClient(partial(
+        create_client, settings.rpcn_host, settings.rpcn_port, settings.rpcn_user,
+        settings.rpcn_password, settings.rpcn_token, settings.rpcn_metric_enable,
+    ))

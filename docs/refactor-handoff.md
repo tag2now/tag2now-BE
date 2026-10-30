@@ -8,7 +8,7 @@
 
 ## 0. 지금 상태 (가장 먼저 확인)
 
-- **E8까지 모두 커밋됨.** 다음은 **E9 계획을 보여주는 것**부터.
+- **E9까지 모두 커밋됨.** 다음은 **`ruff format`의 diff 규모를 측정해 보여주는 것**부터. 그 뒤 이 문서를 지우는 커밋으로 끝.
   워크스페이스 루트 `CLAUDE.md`도 이번 작업 중 한 줄 바뀌었다(git 밖).
 - origin에는 `de5750b`(이 문서)까지 올라가 있고, 그 뒤 커밋은 **push하지 않았다.** push는 사용자가 따로 요청할 때만.
 - (이 PC) Docker Desktop은 하루 지나면 꺼져 있을 수 있다. Git Bash에서 띄우면 셸과 함께 죽으니
@@ -59,7 +59,8 @@
 | 609ffee | E6b: RPCN 연결을 `SharedRpcnClient(client_factory)` 인스턴스로, container가 생성. 재접속·쿨다운 단위 테스트 |
 | c2ed546 | 문서: rpcn 테스트를 로컬에서 dev 서버를 끄고 돌린다(`.env.local`은 운영과 다른 계정) |
 | c1a739f | E7: `HistoryService(repo, sessions)` + router Depends + `Collector(matching, history)`. `history/db.py`, `transactional`/`read_only` 삭제 |
-| (E8 커밋) | E8: `ChatService(repo, bus, clock)` + router Depends(SSE 포함). `chat/db.py`, `configure()`, chat 전용 `Clock` 삭제. `MAX_LISTED_MESSAGES`는 `chat/domain.py`로 |
+| 3df5524 | E8: `ChatService(repo, bus, clock)` + router Depends(SSE 포함). `chat/db.py`, `configure()`, chat 전용 `Clock` 삭제. `MAX_LISTED_MESSAGES`는 `chat/domain.py`로 |
+| (E9 커밋) | E9: `_LIFECYCLES` 제거. 자원은 `shared.resource.AsyncResource`(init/close + async context manager)를 따르고 `build_container`가 `stack.enter_async_context`로 한 줄씩 연다. database는 `open_database()`, 설정값을 인자로 푸는 일은 `_rpcn_api(settings)` 같은 생성 함수로. `test_container`는 실제 자원의 닫힘 순서 검증. CLAUDE.md·README 구조 갱신 |
 
 ## 3. E 단계의 목표 구조 (확정된 설계)
 
@@ -78,16 +79,8 @@
 - 남기는 전역: `shared.database`의 engine/session factory, `get_settings()`(lru_cache), cache 백엔드.
 - 트랜잭션: 서비스가 받은 `sessions`(session factory)로 직접 연다 —
   읽기 `async with self._sessions() as s`, 쓰기 `async with self._sessions() as s, s.begin()`.
-- 현재 `container._LIFECYCLES`에 남은 옛 방식 모듈: `init_database`뿐.
 
 ## 4. 남은 작업
-
-### E9 — 마무리
-
-- `_LIFECYCLES`에 `init_database`만 남으면 튜플을 없애고 `build_container`에서 직접 열고 close 등록. `test_container` 갱신.
-- BE CLAUDE.md "Hexagonal layering" 절에서 "Migration in progress" 문단 제거, 최종 구조로 정리.
-- BE README 구조 설명(모듈 목록·`db.py` 언급) 갱신 여부 확인.
-- 메모리 `tag2now-be-refactor-backlog.md` 갱신.
 
 ### 리팩터링 맨 마지막 — `ruff format`
 

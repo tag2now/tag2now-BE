@@ -1,15 +1,11 @@
 """Replaceable contract for the server that holds TTT2 saves."""
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
+
+from shared.resource import AsyncResource
 
 
-class SaveServer(ABC):
-    @abstractmethod
-    async def init(self) -> None: ...
-
-    @abstractmethod
-    async def close(self) -> None: ...
-
+class SaveServer(AsyncResource):
     @abstractmethod
     async def read(self, npid: str) -> dict | None:
         """The save's ranks and records as anyone may see them, or None when

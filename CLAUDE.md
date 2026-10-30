@@ -288,21 +288,28 @@ a concrete store.
 
 **`src/container.py` is the composition root.** `build_container(stack)` is the
 one place adapters and services are constructed, called from `lifespan` with an
-`AsyncExitStack`: each module that needs closing registers its close as it
-opens, so shutdown runs in reverse and a failure part-way closes exactly what
-was already open. Code outside a request (the collector) is handed its services
-by the lifespan rather than reaching for them.
+`AsyncExitStack`: each resource is opened with `stack.enter_async_context(...)`,
+which registers its close in the same line, so shutdown runs in reverse and a
+failure part-way closes exactly what was already open. Code outside a request
+(the collector) is handed its services by the lifespan rather than reaching for
+them.
+
+A resource is a `shared.resource.AsyncResource`: `init` (optional) and `close`,
+and the async context manager built on them. The ports of outbound clients
+(`GameServerPort`, `SaveServer`, `StreamPlatform`) extend it, as does
+`RpcnApiClient`, so a new adapter is closed at shutdown by being entered.
+
+The database opens first and closes last, through `shared.database.open_database()`.
+Its engine and session factory are the one module-level resource left; the
+container takes `sessions` from it once and passes it to whatever needs one.
 
 Tests swap a service with FastAPI's own seam,
 `app.dependency_overrides[community_service] = lambda: CommunityService(fake_repo)`,
 or construct the service directly; neither needs a module patched.
+`current_user` and `admin_user` read only the token, so they need no service.
 
 A service that judges time takes a `shared.clock.Clock` (default `SystemClock`),
 so its tests pass a fixed one.
-
-**Migration in progress.** Every module is built this way now; only the database
-is still opened from `container._LIFECYCLES`.
-`current_user` and `admin_user` read only the token, so they need no service.
 
 ### Caching
 

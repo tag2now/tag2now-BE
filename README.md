@@ -9,13 +9,19 @@ Implements the RPCN binary protocol over TLS to query server/world lists, active
 ```
 src/
   app.py               # FastAPI app — mounts all routers, exception handlers, lifespan
+  container.py         # Composition root — builds every adapter and service at startup
   __main__.py          # `python -m src` entry point (uvicorn launcher)
   rpcn_client/         # Core library — RPCN TLS transport and protocol
   matching/            # Live RPCN data: servers, rooms, leaderboard
-  history/             # Player activity statistics and match history
+  history/             # Player activity statistics, match history, the collector
   community/           # Community board
   reservation/         # Match reservations
-  shared/              # Settings, Redis cache, SQLAlchemy engine, events, exceptions
+  chat/                # Lobby chat over Server-Sent Events
+  auth/                # RPCN account login, bearer tokens
+  admin/               # RPCN account moderation
+  saves/               # TTT2 saves through tag2now-save-admin
+  streaming/           # Players' Chzzk channels and who is live
+  shared/              # Settings, cache (Redis or in-process), SQLAlchemy engine, clock, exceptions
 alembic/               # PostgreSQL migrations
 docs/spec/             # Feature specifications (Korean) — what each feature does and why
 env/                   # Per-profile .env files (see Configuration)
@@ -26,6 +32,8 @@ tests/
 
 Each domain package follows the same hexagonal layout: `router.py` (HTTP) →
 `service.py` (logic) → `ports.py` (interfaces) → `adapters/` (implementations).
+`container.py` constructs them all once, and a route receives its service
+through `Depends` (each package's `dependencies.py`).
 
 ## Setup
 

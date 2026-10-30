@@ -1,6 +1,8 @@
 """Shared SQLAlchemy async engine and session factory."""
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from urllib.parse import quote
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -54,6 +56,16 @@ async def close_database() -> None:
         _engine = None
         _session_factory = None
         logger.info("Database engine disposed")
+
+
+@asynccontextmanager
+async def open_database() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
+    """The session factory, for as long as the block runs; the engine is disposed after."""
+    await init_database()
+    try:
+        yield get_session_factory()
+    finally:
+        await close_database()
 
 
 def get_session_factory() -> async_sessionmaker[AsyncSession]:

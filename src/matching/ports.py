@@ -1,16 +1,13 @@
 """Port interfaces for the matching domain."""
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
 from matching.models import RoomInfoDTO, TTT2LeaderboardResult
+from shared.resource import AsyncResource
 
 
-class GameServerPort(ABC):
+class GameServerPort(AsyncResource):
     """Outbound port for game server operations."""
-
-    @abstractmethod
-    async def close(self) -> None:
-        """Release resources held by the game server connection."""
 
     @abstractmethod
     def get_server_world_tree(self, com_id: str) -> dict[int, list[int]]:

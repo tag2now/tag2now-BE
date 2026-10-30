@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.resource import AsyncResource
 from streaming.models import LiveBroadcast, PlatformChannel, StreamChannel
 
 
@@ -24,13 +25,7 @@ class StreamChannelRepository(ABC):
         """Remove the account's channel, matching the username regardless of case."""
 
 
-class StreamPlatform(ABC):
-    @abstractmethod
-    async def init(self) -> None: ...
-
-    @abstractmethod
-    async def close(self) -> None: ...
-
+class StreamPlatform(AsyncResource):
     @abstractmethod
     async def channel(self, channel_id: str) -> PlatformChannel | None:
         """The channel, or None when it does not exist. StreamingUnavailableError on failure."""
