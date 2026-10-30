@@ -20,6 +20,8 @@ from chat.domain import MAX_LISTED_MESSAGES
 from chat.service import ChatService
 from community.adapters.postgresql import PostgresCommunityRepository
 from community.service import CommunityService
+from event.baseline import load_baselines
+from event.service import EventService
 from history.adapters.postgresql import PostgresHistoryAdapter
 from history.collector import Collector
 from history.service import HistoryService
@@ -47,6 +49,7 @@ class Container:
     admin: AdminService
     chat: ChatService
     community: CommunityService
+    event: EventService
     history: HistoryService
     matching: MatchingService
     reservations: ReservationService
@@ -75,6 +78,7 @@ async def build_container(stack: AsyncExitStack) -> Container:
         # The bus is memory and goes with the process; nothing to close.
         chat=ChatService(PostgresChatRepository(sessions, MAX_LISTED_MESSAGES), MemoryChatEventBus()),
         community=CommunityService(PostgresCommunityRepository(sessions)),
+        event=EventService(load_baselines(settings.event_baseline_path), save_server),
         history=history,
         matching=matching,
         reservations=ReservationService(PostgresReservationRepository(sessions)),

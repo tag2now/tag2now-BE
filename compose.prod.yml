@@ -18,11 +18,15 @@ services:
     environment:
       FAST_API_PROFILE: prod
       SAVE_ADMIN_URL: http://save-admin:8000
+      EVENT_BASELINE_PATH: /event/baseline.json
     env_file:
       - ./.env
     # rpcn runs with network_mode: host
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # A folder of its own: ~/backup/event also holds RPCN's database.
+    volumes:
+      - /home/ec2-user/backup/event-baseline:/event:ro
     depends_on:
       postgres:
         condition: service_healthy

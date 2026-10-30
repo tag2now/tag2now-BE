@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
@@ -33,6 +34,8 @@ class Settings(BaseSettings):
     cache_ttl_live_streams: int = 30
     # Every registered channel; a registration change clears it sooner.
     cache_ttl_stream_channels: int = 300
+    # Rank event standings; each refresh reads every save, like the current-rank board.
+    cache_ttl_event: int = 300
     matchmaking_ttl: int = 60
     match_history_collection_interval_seconds: int = 30
     # RPCN usernames (= npid) kept off every ranking, e.g. test accounts.
@@ -65,6 +68,11 @@ class Settings(BaseSettings):
     # Chzzk's web API, not the official Open API, which cannot look up one channel.
     chzzk_api_url: str = "https://api.chzzk.naver.com"
     chzzk_timeout_seconds: float = 3.0
+
+    # The rank event's deadline, with its offset; unset, the event keeps running.
+    event_end_at: datetime | None = None
+    # The saves as the event began, mounted from the host; unset, the event is closed.
+    event_baseline_path: str = ""
 
     cors_origins: list[str] = ["*"]
 
