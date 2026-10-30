@@ -82,6 +82,6 @@ volumes:
   postgres-data:
     driver: local
     driver_opts:
-      device: /home/$USER/postgres-data
+      device: /home/$USER/tag2now-web/postgres-data
       o: bind
       type: none
