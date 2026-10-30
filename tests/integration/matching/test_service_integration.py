@@ -37,13 +37,22 @@ BOARD_ID = TTT2_RANK_BOARD_ID
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def rpcn():
     """One RPCN connection for the module, disconnected after it."""
     s = get_settings()
-    shared = SharedRpcnClient(partial(
-        create_client, s.rpcn_host, s.rpcn_port, s.rpcn_user, s.rpcn_password, s.rpcn_token, s.rpcn_metric_enable,
-    ))
+    shared = SharedRpcnClient(
+        partial(
+            create_client,
+            s.rpcn_host,
+            s.rpcn_port,
+            s.rpcn_user,
+            s.rpcn_password,
+            s.rpcn_token,
+            s.rpcn_metric_enable,
+        )
+    )
     yield shared
     shared.shutdown()
 
@@ -56,6 +65,7 @@ def service(rpcn):
 # ---------------------------------------------------------------------------
 # Service integration tests
 # ---------------------------------------------------------------------------
+
 
 def test_get_server_world_tree(service):
     """get_server_world_tree returns dict[str, list[int]]."""

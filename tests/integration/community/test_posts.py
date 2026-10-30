@@ -70,11 +70,17 @@ def test_post_body_too_long(client):
 
 
 def test_video_attachment_survives_create_detail_and_list(client):
-    response = client.post('/community/posts', json={
-        'title': 'video', 'body': 'combo guide', 'youtube_video_id': 'dQw4w9WgXcQ',
-    }, headers=HEADERS)
+    response = client.post(
+        "/community/posts",
+        json={
+            "title": "video",
+            "body": "combo guide",
+            "youtube_video_id": "dQw4w9WgXcQ",
+        },
+        headers=HEADERS,
+    )
     assert response.status_code == 201
-    post_id = response.json()['id']
-    assert client.get(f'/community/posts/{post_id}').json()['youtube_video_id'] == 'dQw4w9WgXcQ'
-    posts = client.get('/community/posts').json()['posts']
-    assert next(post for post in posts if post['id'] == post_id)['youtube_video_id'] == 'dQw4w9WgXcQ'
+    post_id = response.json()["id"]
+    assert client.get(f"/community/posts/{post_id}").json()["youtube_video_id"] == "dQw4w9WgXcQ"
+    posts = client.get("/community/posts").json()["posts"]
+    assert next(post for post in posts if post["id"] == post_id)["youtube_video_id"] == "dQw4w9WgXcQ"

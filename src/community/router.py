@@ -15,6 +15,7 @@ router = APIRouter()
 # Posts
 # ---------------------------------------------------------------------------
 
+
 @router.get("/posts", response_model=models.PostListResponse)
 async def list_posts(
     page: int = Query(1, ge=1),
@@ -47,7 +48,9 @@ async def update_post(
     user: AuthUser = Depends(current_user),
     service: CommunityService = Depends(community_service),
 ):
-    return await service.update_post(post_id, user, req.title, req.body, req.post_type, req.characters, req.youtube_video_id)
+    return await service.update_post(
+        post_id, user, req.title, req.body, req.post_type, req.characters, req.youtube_video_id
+    )
 
 
 @router.delete("/posts/{post_id}", status_code=204)
@@ -63,6 +66,7 @@ async def delete_post(
 # Comments
 # ---------------------------------------------------------------------------
 
+
 @router.post("/posts/{post_id}/comments", status_code=201)
 async def create_comment(
     post_id: int,
@@ -76,6 +80,7 @@ async def create_comment(
 # ---------------------------------------------------------------------------
 # Thumbs (posts only)
 # ---------------------------------------------------------------------------
+
 
 @router.post("/posts/{post_id}/thumb")
 async def thumb_post(

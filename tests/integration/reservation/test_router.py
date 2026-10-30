@@ -120,7 +120,9 @@ def test_one_rule_is_answered_even_when_several_fields_fail(client, as_user):
     point is that neither falls back to naming its field, which used to let the
     vaguer of the two mask the other.
     """
-    response = client.post("/reservations", json=_payload(ranks=["Brawler", "Brawler"], memo="A" * 141), headers=as_user("host"))
+    response = client.post(
+        "/reservations", json=_payload(ranks=["Brawler", "Brawler"], memo="A" * 141), headers=as_user("host")
+    )
 
     assert response.status_code == 422
     assert response.json()["detail"] == "같은 계급을 중복해서 선택할 수 없습니다."
@@ -146,15 +148,18 @@ def test_both_failure_kinds_share_one_response_shape(client, as_user):
 # --- Signing in --------------------------------------------------------------
 
 
-@pytest.mark.parametrize("method, path, body", [
-    ("post", "/reservations", {"start_time": "20:00", "match_type": "any"}),
-    ("patch", "/reservations/1", {"memo": "x"}),
-    ("delete", "/reservations/1", None),
-    ("post", "/reservations/1/participants", {"ranks": []}),
-    ("delete", "/reservations/1/participants/me", None),
-    ("post", "/reservations/1/comments", {"body": "x"}),
-    ("delete", "/reservations/1/comments/1", None),
-])
+@pytest.mark.parametrize(
+    "method, path, body",
+    [
+        ("post", "/reservations", {"start_time": "20:00", "match_type": "any"}),
+        ("patch", "/reservations/1", {"memo": "x"}),
+        ("delete", "/reservations/1", None),
+        ("post", "/reservations/1/participants", {"ranks": []}),
+        ("delete", "/reservations/1/participants/me", None),
+        ("post", "/reservations/1/comments", {"body": "x"}),
+        ("delete", "/reservations/1/comments/1", None),
+    ],
+)
 def test_every_write_needs_a_signed_in_user(client, method, path, body):
     response = client.request(method.upper(), path, json=body)
 
@@ -222,7 +227,9 @@ def test_a_new_reservation_is_listed_without_asking_for_a_date(client, as_user):
 
 def test_a_time_of_day_past_dawn_is_refused(client, as_user):
     """The window ends at 06:00 KST, so nothing can be booked into the day after."""
-    response = client.post("/reservations", json=_payload(start_time=_unbookable_time_of_day()), headers=as_user("host"))
+    response = client.post(
+        "/reservations", json=_payload(start_time=_unbookable_time_of_day()), headers=as_user("host")
+    )
 
     assert response.status_code == 400
     assert "오전 6시" in response.json()["detail"]
@@ -367,7 +374,9 @@ def test_a_participant_cannot_cancel_the_whole_reservation(client, as_user):
 def test_editing_a_reservation_answers_the_updated_row(client, as_user):
     reservation = _create(client, as_user("host"))
 
-    response = client.patch(f"/reservations/{reservation['id']}", json={"memo": "자리 하나 남음"}, headers=as_user("host"))
+    response = client.patch(
+        f"/reservations/{reservation['id']}", json={"memo": "자리 하나 남음"}, headers=as_user("host")
+    )
 
     assert response.status_code == 200
     assert response.json()["memo"] == "자리 하나 남음"
@@ -385,7 +394,9 @@ def test_editing_someone_elses_reservation_is_forbidden(client, as_user):
 def test_an_edit_that_breaks_a_domain_rule_answers_400(client, as_user):
     reservation = _create(client, as_user("host"))
 
-    response = client.patch(f"/reservations/{reservation['id']}", json={"match_type": "player_match"}, headers=as_user("host"))
+    response = client.patch(
+        f"/reservations/{reservation['id']}", json={"match_type": "player_match"}, headers=as_user("host")
+    )
 
     assert response.status_code == 400
     assert response.json() == {"detail": "플레이어 매치는 계급을 선택하지 않습니다."}
@@ -394,7 +405,9 @@ def test_an_edit_that_breaks_a_domain_rule_answers_400(client, as_user):
 def test_an_edit_with_a_bad_field_answers_422_stating_the_rule(client, as_user):
     reservation = _create(client, as_user("host"))
 
-    response = client.patch(f"/reservations/{reservation['id']}", json={"ranks": ["Brawler", "Brawler"]}, headers=as_user("host"))
+    response = client.patch(
+        f"/reservations/{reservation['id']}", json={"ranks": ["Brawler", "Brawler"]}, headers=as_user("host")
+    )
 
     assert response.status_code == 422
     assert response.json() == {"detail": "같은 계급을 중복해서 선택할 수 없습니다."}
@@ -442,7 +455,9 @@ def test_an_author_can_delete_their_own_comment(client, as_user):
     reservation = _create(client, as_user("host"))
     comment = _comment(client, reservation["id"], as_user("commenter"))
 
-    response = client.delete(f"/reservations/{reservation['id']}/comments/{comment['id']}", headers=as_user("commenter"))
+    response = client.delete(
+        f"/reservations/{reservation['id']}/comments/{comment['id']}", headers=as_user("commenter")
+    )
 
     assert response.status_code == 204
     assert client.get(f"/reservations/{reservation['id']}/comments").json() == []
@@ -463,7 +478,9 @@ def test_a_deleted_comment_cannot_be_deleted_twice(client, as_user):
     comment = _comment(client, reservation["id"], as_user("commenter"))
     client.delete(f"/reservations/{reservation['id']}/comments/{comment['id']}", headers=as_user("commenter"))
 
-    response = client.delete(f"/reservations/{reservation['id']}/comments/{comment['id']}", headers=as_user("commenter"))
+    response = client.delete(
+        f"/reservations/{reservation['id']}/comments/{comment['id']}", headers=as_user("commenter")
+    )
 
     assert response.status_code == 404
 
@@ -479,7 +496,9 @@ def test_a_cancelled_reservation_stops_taking_comments(client, as_user):
     reservation = _create(client, as_user("host"))
     client.delete(f"/reservations/{reservation['id']}", headers=as_user("host"))
 
-    response = client.post(f"/reservations/{reservation['id']}/comments", json={"body": "아쉽네요"}, headers=as_user("commenter"))
+    response = client.post(
+        f"/reservations/{reservation['id']}/comments", json={"body": "아쉽네요"}, headers=as_user("commenter")
+    )
 
     assert response.status_code == 400
     assert response.json() == {"detail": "취소된 예약에는 댓글을 쓸 수 없습니다."}
@@ -488,6 +507,8 @@ def test_a_cancelled_reservation_stops_taking_comments(client, as_user):
 def test_an_empty_comment_is_refused_before_it_reaches_the_domain(client, as_user):
     reservation = _create(client, as_user("host"))
 
-    response = client.post(f"/reservations/{reservation['id']}/comments", json={"body": "   "}, headers=as_user("commenter"))
+    response = client.post(
+        f"/reservations/{reservation['id']}/comments", json={"body": "   "}, headers=as_user("commenter")
+    )
 
     assert response.status_code == 422

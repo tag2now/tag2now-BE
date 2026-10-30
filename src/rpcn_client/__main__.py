@@ -4,11 +4,11 @@ from .client import RpcnClient
 
 def main():
     parser = argparse.ArgumentParser(description="RPCN client smoke test")
-    parser.add_argument("--host",     default="rpcn.mynarco.xyz")
-    parser.add_argument("--port",     type=int, default=31313)
-    parser.add_argument("--user",     required=True, help="RPCN username")
+    parser.add_argument("--host", default="rpcn.mynarco.xyz")
+    parser.add_argument("--port", type=int, default=31313)
+    parser.add_argument("--user", required=True, help="RPCN username")
     parser.add_argument("--password", required=True, help="RPCN password")
-    parser.add_argument("--token",    default="", help="RPCN token (leave blank if not required)")
+    parser.add_argument("--token", default="", help="RPCN token (leave blank if not required)")
     args = parser.parse_args()
 
     client = RpcnClient(host=args.host, port=args.port)

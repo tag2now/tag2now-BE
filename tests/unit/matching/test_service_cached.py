@@ -43,6 +43,7 @@ def test_get_server_world_tree_cache_hit(service, mock_game_repo, monkeypatch):
 @pytest.mark.asyncio
 async def test_get_rooms_all_groups_rooms_and_merges_matchmaking_phantoms(mock_cache, mock_game_repo, monkeypatch):
     from matching.models import Rank, RoomInfoDTO
+
     ranked = RoomInfoDTO.phantom("ranked", "Ranked", RoomType.RANK_MATCH, Rank(id=5))
     casual = RoomInfoDTO.phantom("casual", "Casual", RoomType.PLAYER_MATCH, None)
     searching = RoomInfoDTO.phantom("searching", "Searching", RoomType.RANK_MATCH, Rank(id=2))
@@ -86,8 +87,11 @@ async def test_collect_activity_observation_bypasses_http_cache(service, mock_ga
 
 def test_get_leaderboard_cache_miss(service, mock_cache, mock_game_repo):
     from matching.models import TTT2LeaderboardResult
+
     mock_game_repo.get_leaderboard.return_value = TTT2LeaderboardResult(
-        total_records=1, last_sort_date=0, entries=[],
+        total_records=1,
+        last_sort_date=0,
+        entries=[],
     )
     result = service.get_leaderboard("NPWR02973_00", 4, 10)
     assert result["total_records"] == 1
@@ -100,13 +104,22 @@ def test_get_leaderboard_fetches_full_size_and_slices(service, mock_cache, mock_
 
     entries = [
         TTT2LeaderboardEntry(
-            rank=i, np_id=f"p{i}", online_name=f"P{i}", score=1000 - i,
-            pc_id=0, record_date=0, has_game_data=False, comment="", player_info=None,
+            rank=i,
+            np_id=f"p{i}",
+            online_name=f"P{i}",
+            score=1000 - i,
+            pc_id=0,
+            record_date=0,
+            has_game_data=False,
+            comment="",
+            player_info=None,
         )
         for i in range(1, 21)
     ]
     mock_game_repo.get_leaderboard.return_value = TTT2LeaderboardResult(
-        total_records=20, last_sort_date=0, entries=entries,
+        total_records=20,
+        last_sort_date=0,
+        entries=entries,
     )
 
     result = service.get_leaderboard("NPWR02973_00", 4, 5)
@@ -134,8 +147,9 @@ def test_get_leaderboard_slices_from_cache_without_refetching(service, mock_game
     mock_game_repo.get_leaderboard.assert_not_called()
 
 
-
-def test_get_leaderboard_drops_excluded_accounts_and_closes_their_gaps(service, mock_cache, mock_game_repo, monkeypatch):
+def test_get_leaderboard_drops_excluded_accounts_and_closes_their_gaps(
+    service, mock_cache, mock_game_repo, monkeypatch
+):
     """Excluded accounts leave no gap: everyone below moves up, and a tie stays a tie."""
     from matching.models import TTT2LeaderboardResult, TTT2LeaderboardEntry
     from shared.settings import get_settings
@@ -143,10 +157,19 @@ def test_get_leaderboard_drops_excluded_accounts_and_closes_their_gaps(service, 
     monkeypatch.setattr(get_settings(), "ranking_excluded_npids", ["TESTER", "other_tester"])
     board = [(1, "a"), (2, "tester"), (3, "b"), (3, "c"), (5, "Other_Tester"), (6, "d")]
     mock_game_repo.get_leaderboard.return_value = TTT2LeaderboardResult(
-        total_records=100, last_sort_date=0, entries=[
+        total_records=100,
+        last_sort_date=0,
+        entries=[
             TTT2LeaderboardEntry(
-                rank=rank, np_id=npid, online_name=npid, score=0,
-                pc_id=0, record_date=0, has_game_data=False, comment="", player_info=None,
+                rank=rank,
+                np_id=npid,
+                online_name=npid,
+                score=0,
+                pc_id=0,
+                record_date=0,
+                has_game_data=False,
+                comment="",
+                player_info=None,
             )
             for rank, npid in board
         ],
@@ -164,9 +187,14 @@ def _listed_room(room_id, *npids, rank_id):
     from matching.models import RoomInfoDTO
     from rpcn_client.models import UserInfo
 
-    return RoomInfoDTO(SimpleNamespace(
-        room_id=room_id, owner_npid=npids[0], owner_online_name=npids[0],
-        current_members=len(npids), max_slots=2,
-        int_attrs={4: SimpleNamespace(value=rank_id)},
-        users=[UserInfo(npid=npid, online_name=npid, avatar_url="") for npid in npids],
-    ))
+    return RoomInfoDTO(
+        SimpleNamespace(
+            room_id=room_id,
+            owner_npid=npids[0],
+            owner_online_name=npids[0],
+            current_members=len(npids),
+            max_slots=2,
+            int_attrs={4: SimpleNamespace(value=rank_id)},
+            users=[UserInfo(npid=npid, online_name=npid, avatar_url="") for npid in npids],
+        )
+    )

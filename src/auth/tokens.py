@@ -50,7 +50,10 @@ def read_token(token: str) -> AuthUser:
     secret = _secret()
     try:
         claims = jwt.decode(
-            token, secret, algorithms=[_ALGORITHM], issuer=_ISSUER,
+            token,
+            secret,
+            algorithms=[_ALGORITHM],
+            issuer=_ISSUER,
             options={"require": ["exp", "iat", "iss", "sub"]},
         )
         return AuthUser(

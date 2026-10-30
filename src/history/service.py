@@ -7,7 +7,14 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from history.models import ActivitySnapshot, DailySummary, HourlyActivity, PlayerStats, RankMatchSnapshotRecord, TopPlayer
+from history.models import (
+    ActivitySnapshot,
+    DailySummary,
+    HourlyActivity,
+    PlayerStats,
+    RankMatchSnapshotRecord,
+    TopPlayer,
+)
 from history.ports import HistoryPort
 from shared.cache import cache_delete_pattern, cache_get, cache_set
 from shared.settings import get_settings

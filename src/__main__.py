@@ -4,6 +4,7 @@ Usage:
     python -m src
     python -m src --host 0.0.0.0 --port 8000 --reload
 """
+
 import argparse
 
 import uvicorn

@@ -39,8 +39,18 @@ async def test_an_appended_message_is_listed_as_written(database):
     message = await repo.append("alice", "Alice", "한 판 하실 분", NOON, author_admin=True)
 
     assert await repo.list_since(NOON) == [message]
-    assert (message.author_username, message.author_online_name, message.body, message.created_at, message.author_admin) == (
-        "alice", "Alice", "한 판 하실 분", NOON, True,
+    assert (
+        message.author_username,
+        message.author_online_name,
+        message.body,
+        message.created_at,
+        message.author_admin,
+    ) == (
+        "alice",
+        "Alice",
+        "한 판 하실 분",
+        NOON,
+        True,
     )
 
 

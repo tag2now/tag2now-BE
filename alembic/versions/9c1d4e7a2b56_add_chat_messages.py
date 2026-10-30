@@ -1,4 +1,5 @@
 """Add chat_messages: lobby chat that survives a restart."""
+
 from alembic import op
 import sqlalchemy as sa
 

@@ -30,18 +30,27 @@ def _live_key(channel_id: str) -> str:
 
 
 def _channel_out(channel: StreamChannel) -> dict:
-    return {"platform": channel.platform, "channel_id": channel.channel_id, "channel_name": channel.channel_name,
-            "channel_url": _LIVE_URL[channel.platform](channel.channel_id), "registered_at": channel.registered_at}
+    return {
+        "platform": channel.platform,
+        "channel_id": channel.channel_id,
+        "channel_name": channel.channel_name,
+        "channel_url": _LIVE_URL[channel.platform](channel.channel_id),
+        "registered_at": channel.registered_at,
+    }
 
 
 def _stream_head(channel: dict) -> dict:
-    return {"platform": channel["platform"], "channel_name": channel["channel_name"],
-            "url": _LIVE_URL[channel["platform"]](channel["channel_id"])}
+    return {
+        "platform": channel["platform"],
+        "channel_name": channel["channel_name"],
+        "url": _LIVE_URL[channel["platform"]](channel["channel_id"]),
+    }
 
 
 class StreamingService:
-    def __init__(self, repo: StreamChannelRepository, platform: StreamPlatform,
-                 sessions: async_sessionmaker[AsyncSession]):
+    def __init__(
+        self, repo: StreamChannelRepository, platform: StreamPlatform, sessions: async_sessionmaker[AsyncSession]
+    ):
         self._repo = repo
         self._platform = platform
         self._sessions = sessions
@@ -61,8 +70,11 @@ class StreamingService:
                 return username, await self._live(registered[username]["channel_id"])
 
         results = await asyncio.gather(*(check(username) for username in wanted))
-        return {username: {**_stream_head(registered[username]), **broadcast}
-                for username, broadcast in results if broadcast}
+        return {
+            username: {**_stream_head(registered[username]), **broadcast}
+            for username, broadcast in results
+            if broadcast
+        }
 
     async def live_or_empty(self, npids: Collection[str]) -> dict[str, dict]:
         """live_for, or nobody when it fails: callers show streams as an extra."""
@@ -75,8 +87,10 @@ class StreamingService:
     async def _registered_channels(self) -> dict[str, dict]:
         if (cached := cache_get(CHANNELS_KEY)) is not None:
             return cached
-        channels = {c.username.lower(): {"platform": c.platform, "channel_id": c.channel_id, "channel_name": c.channel_name}
-                    for c in await self._list_all()}
+        channels = {
+            c.username.lower(): {"platform": c.platform, "channel_id": c.channel_id, "channel_name": c.channel_name}
+            for c in await self._list_all()
+        }
         cache_set(CHANNELS_KEY, channels, get_settings().cache_ttl_stream_channels)
         return channels
 

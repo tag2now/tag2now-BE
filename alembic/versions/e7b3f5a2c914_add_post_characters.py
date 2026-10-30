@@ -1,4 +1,5 @@
 """Split character tags out of post_type into a two-slot characters array."""
+
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
@@ -12,11 +13,15 @@ BOARD_TYPES = "('자유', '건의', '공략')"
 
 
 def upgrade() -> None:
-    op.add_column("posts", sa.Column("characters", postgresql.ARRAY(sa.Text()), nullable=False, server_default=sa.text("'{}'")))
+    op.add_column(
+        "posts", sa.Column("characters", postgresql.ARRAY(sa.Text()), nullable=False, server_default=sa.text("'{}'"))
+    )
     op.create_check_constraint("posts_characters_check", "posts", "cardinality(characters) <= 2")
     op.create_index("idx_posts_characters", "posts", ["characters"], postgresql_using="gin")
     # A character post_type was a character guide; it keeps that meaning as 공략.
-    op.execute(f"UPDATE posts SET characters = ARRAY[post_type], post_type = '공략' WHERE post_type NOT IN {BOARD_TYPES}")
+    op.execute(
+        f"UPDATE posts SET characters = ARRAY[post_type], post_type = '공략' WHERE post_type NOT IN {BOARD_TYPES}"
+    )
 
 
 def downgrade() -> None:

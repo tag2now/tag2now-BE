@@ -21,13 +21,19 @@ async def my_channel(user: AuthUser = Depends(current_user), service: StreamingS
 
 
 @router.put("/me", response_model=models.MyStreamChannelOut)
-async def register_channel(request: models.ChannelRequest, user: AuthUser = Depends(current_user), service: StreamingService = Depends(streaming_service)):
+async def register_channel(
+    request: models.ChannelRequest,
+    user: AuthUser = Depends(current_user),
+    service: StreamingService = Depends(streaming_service),
+):
     """Connect a Chzzk channel to the signed-in account, replacing any before it."""
     return await service.register_channel(user, request.channel)
 
 
 @router.delete("/me", status_code=204)
-async def unregister_channel(user: AuthUser = Depends(current_user), service: StreamingService = Depends(streaming_service)):
+async def unregister_channel(
+    user: AuthUser = Depends(current_user), service: StreamingService = Depends(streaming_service)
+):
     """Disconnect the signed-in account's channel. Succeeds when there is none."""
     await service.unregister_channel(user)
     return Response(status_code=204)
@@ -36,6 +42,7 @@ async def unregister_channel(user: AuthUser = Depends(current_user), service: St
 # --- admin ----------------------------------------------------------------------
 # The token's admin claim is enough: these touch only this service's own table.
 
+
 @admin_router.get("", response_model=models.AdminStreamChannelsOut)
 async def list_channels(admin: AuthUser = Depends(admin_user), service: StreamingService = Depends(streaming_service)):
     """Every registered channel, most recently registered first."""
@@ -43,7 +50,11 @@ async def list_channels(admin: AuthUser = Depends(admin_user), service: Streamin
 
 
 @admin_router.delete("/{username}", status_code=204)
-async def remove_channel(username: str = Path(min_length=1, max_length=64), admin: AuthUser = Depends(admin_user), service: StreamingService = Depends(streaming_service)):
+async def remove_channel(
+    username: str = Path(min_length=1, max_length=64),
+    admin: AuthUser = Depends(admin_user),
+    service: StreamingService = Depends(streaming_service),
+):
     """Disconnect an account's channel, e.g. one registered by someone else."""
     await service.remove_channel(username)
     return Response(status_code=204)

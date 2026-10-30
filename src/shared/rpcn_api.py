@@ -57,6 +57,11 @@ class RpcnApiClient(AsyncResource):
             # The address and the kind of failure, not just the message: a bare
             # "[Errno -2] Name does not resolve" says a lookup failed without
             # saying which host, or that the host came from this setting.
-            logger.warning("RPCN API server unreachable at %s%s (%s: %s); check RPCN_API_SERVER_URL",
-                           self._base_url, path, type(exc).__name__, exc)
+            logger.warning(
+                "RPCN API server unreachable at %s%s (%s: %s); check RPCN_API_SERVER_URL",
+                self._base_url,
+                path,
+                type(exc).__name__,
+                exc,
+            )
             raise RpcnApiUnreachable(path) from exc

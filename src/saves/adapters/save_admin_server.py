@@ -13,7 +13,11 @@ import httpx
 
 from admin.exceptions import AccountNotFoundError, AdminPasswordError, NotAdminError
 from saves.exceptions import (
-    BackupNotFoundError, SaveConflictError, SaveNotFoundError, SaveRequestError, SavesUnavailableError,
+    BackupNotFoundError,
+    SaveConflictError,
+    SaveNotFoundError,
+    SaveRequestError,
+    SavesUnavailableError,
 )
 from saves.ports import SaveServer
 from shared.rpcn_password import derive_rpcn_password_in_thread
@@ -36,8 +40,14 @@ _REFUSALS = {
     "backup_not_found": (BackupNotFoundError, "해당 백업이 없습니다."),
     "online": (SaveConflictError, "게임에 접속 중인 계정은 수정할 수 없습니다. 접속을 끊은 뒤 다시 시도해 주세요."),
     "save_changed": (SaveConflictError, "미리보기 뒤에 세이브가 바뀌었습니다. 다시 미리보기 해 주세요."),
-    "likely_demoted": (SaveConflictError, "이전 floor 뒤에 강등된 캐릭터로 보입니다. 그래도 올리려면 강등 캐릭터 재적용을 선택해 주세요."),
-    "online_unknown": (SavesUnavailableError, "접속 여부를 확인할 수 없어 수정하지 않았습니다. 잠시 후 다시 시도해 주세요."),
+    "likely_demoted": (
+        SaveConflictError,
+        "이전 floor 뒤에 강등된 캐릭터로 보입니다. 그래도 올리려면 강등 캐릭터 재적용을 선택해 주세요.",
+    ),
+    "online_unknown": (
+        SavesUnavailableError,
+        "접속 여부를 확인할 수 없어 수정하지 않았습니다. 잠시 후 다시 시도해 주세요.",
+    ),
     "rpcn_unavailable": (SavesUnavailableError, "RPCN 관리 서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."),
 }
 
@@ -77,7 +87,11 @@ class SaveAdminServer(SaveServer):
         raise _fault(response, path)
 
     async def call(self, action: str, admin_username: str, admin_password: str, payload: dict) -> dict:
-        body = {**payload, "admin_username": admin_username, "admin_password": await derive_rpcn_password_in_thread(admin_password)}
+        body = {
+            **payload,
+            "admin_username": admin_username,
+            "admin_password": await derive_rpcn_password_in_thread(admin_password),
+        }
         path = f"/saves/{action}"
         response = await self._send("POST", path, json=body)
         answer = _json(response)
@@ -94,8 +108,13 @@ class SaveAdminServer(SaveServer):
         try:
             return await self._client.request(method, path, headers={"X-API-Key": self._api_key}, **kwargs)
         except httpx.HTTPError as exc:
-            logger.warning("Save server unreachable at %s%s (%s: %s); check SAVE_ADMIN_URL",
-                           self._base_url, path, type(exc).__name__, exc)
+            logger.warning(
+                "Save server unreachable at %s%s (%s: %s); check SAVE_ADMIN_URL",
+                self._base_url,
+                path,
+                type(exc).__name__,
+                exc,
+            )
             raise SavesUnavailableError(_UNAVAILABLE) from exc
 
 

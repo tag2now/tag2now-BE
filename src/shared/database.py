@@ -16,6 +16,7 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 class Base(DeclarativeBase):
     """Shared declarative base for all ORM models."""
+
     pass
 
 
@@ -73,4 +74,3 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
     if _session_factory is None:
         raise RuntimeError("Database not initialized — call init_database() first")
     return _session_factory
-

@@ -3,6 +3,7 @@
 Revision ID: a7f4c21b9e83
 Revises: c3b18e6d9f20
 """
+
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
@@ -27,8 +28,7 @@ def upgrade() -> None:
     op.execute("UPDATE rank_match_snapshots SET match_date = (created_dt AT TIME ZONE 'Asia/Seoul')::date")
     op.alter_column("rank_match_snapshots", "match_date", nullable=False)
 
-    op.create_unique_constraint(_UQ, "rank_match_snapshots",
-        ["room_id", "user1_npid", "user2_npid", "match_date"])
+    op.create_unique_constraint(_UQ, "rank_match_snapshots", ["room_id", "user1_npid", "user2_npid", "match_date"])
 
 
 def downgrade() -> None:

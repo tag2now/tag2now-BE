@@ -44,8 +44,10 @@ markers = [
 
 [tool.ruff]
 target-version = "py312"
+# The width the code was already written to; 88 would rewrap most of it.
+line-length = 120
 
 [tool.ruff.lint]
-# Pyflakes only: unused imports and variables, undefined names. Formatting
-# rules come later, with `ruff format`.
+# Pyflakes only: unused imports and variables, undefined names. Layout is
+# `ruff format`'s, checked in CI.
 select = ["F"]

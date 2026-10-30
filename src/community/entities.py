@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 from shared.database import Base
 
+
 class Post(Base):
     __tablename__ = "posts"
     id: Mapped[int] = mapped_column(Integer, Identity(always=True), primary_key=True)
@@ -26,6 +27,7 @@ class Post(Base):
     thumbs_down: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
+
 class Comment(Base):
     __tablename__ = "comments"
     id: Mapped[int] = mapped_column(Integer, Identity(always=True), primary_key=True)
@@ -39,6 +41,7 @@ class Comment(Base):
     author: Mapped[str] = mapped_column(Text, nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
 
 class Thumb(Base):
     __tablename__ = "thumbs"

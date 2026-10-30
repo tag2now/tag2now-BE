@@ -91,7 +91,9 @@ async def test_participant_cancellation_does_not_revive_a_cancelled_reservation(
 async def _active_participant_count(reservation_id: int) -> int:
     async with get_session_factory()() as session:
         return await session.scalar(
-            select(func.count()).select_from(ReservationParticipantRow).where(
+            select(func.count())
+            .select_from(ReservationParticipantRow)
+            .where(
                 ReservationParticipantRow.reservation_id == reservation_id,
                 ReservationParticipantRow.cancelled_at.is_(None),
             )
@@ -113,10 +115,17 @@ async def test_cancelling_a_reservation_also_releases_its_participants(repositor
 async def test_expiring_a_reservation_also_releases_its_participants(repository):
     past = datetime.now(timezone.utc) - timedelta(hours=3)
     reservation = await repository.create(
-        start_at=past, host_display_name="Host", host_ranks=["Brawler"],
-        match_type=MatchType.RANK, capacity=1, memo="", host_subject="owner",
+        start_at=past,
+        host_display_name="Host",
+        host_ranks=["Brawler"],
+        match_type=MatchType.RANK,
+        capacity=1,
+        memo="",
+        host_subject="owner",
     )
-    await repository.join(reservation.id, subject="participant", display_name="Joiner", ranks=[], now=past - timedelta(minutes=1))
+    await repository.join(
+        reservation.id, subject="participant", display_name="Joiner", ranks=[], now=past - timedelta(minutes=1)
+    )
 
     await repository.list_upcoming()
 
@@ -127,16 +136,24 @@ async def test_expiring_a_reservation_also_releases_its_participants(repository)
 async def _expired_reservation(repo, host: str):
     past = datetime.now(timezone.utc) - timedelta(hours=3)
     reservation = await repo.create(
-        start_at=past, host_display_name="Host", host_ranks=["Brawler"],
-        match_type=MatchType.RANK, capacity=1, memo="", host_subject=host,
+        start_at=past,
+        host_display_name="Host",
+        host_ranks=["Brawler"],
+        match_type=MatchType.RANK,
+        capacity=1,
+        memo="",
+        host_subject=host,
     )
-    await repo.join(reservation.id, subject=f"{host}-joiner", display_name="Joiner", ranks=[], now=past - timedelta(minutes=1))
+    await repo.join(
+        reservation.id, subject=f"{host}-joiner", display_name="Joiner", ranks=[], now=past - timedelta(minutes=1)
+    )
     return reservation
 
 
 @pytest.mark.asyncio
 async def test_the_expiry_sweep_costs_the_same_no_matter_how_many_expired(repository):
     """Cost must not grow with the table: the sweep is two statements, always."""
+
     def updates_during_listing():
         statements = []
 
@@ -183,16 +200,31 @@ async def test_the_listing_covers_the_grace_hour_until_the_next_dawn(repository)
     now = datetime.now(timezone.utc)
     upcoming = await _create_open_reservation(repository)
     running = await repository.create(
-        start_at=now - timedelta(minutes=5), host_display_name="Host",
-        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_subject="running",
+        start_at=now - timedelta(minutes=5),
+        host_display_name="Host",
+        host_ranks=["Brawler"],
+        match_type=MatchType.RANK,
+        capacity=1,
+        memo="",
+        host_subject="running",
     )
     long_over = await repository.create(
-        start_at=now - LISTING_GRACE - timedelta(minutes=1), host_display_name="Host",
-        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_subject="over",
+        start_at=now - LISTING_GRACE - timedelta(minutes=1),
+        host_display_name="Host",
+        host_ranks=["Brawler"],
+        match_type=MatchType.RANK,
+        capacity=1,
+        memo="",
+        host_subject="over",
     )
     beyond = await repository.create(
-        start_at=window_end(now) + timedelta(minutes=1), host_display_name="Host",
-        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_subject="beyond",
+        start_at=window_end(now) + timedelta(minutes=1),
+        host_display_name="Host",
+        host_ranks=["Brawler"],
+        match_type=MatchType.RANK,
+        capacity=1,
+        memo="",
+        host_subject="beyond",
     )
 
     listed = [item.id for item in await repository.list_upcoming()]
@@ -208,8 +240,13 @@ async def test_a_reservation_is_retired_once_its_grace_hour_runs_out(repository)
     """Expiry and the listing floor are the same instant, so nothing lingers."""
     now = datetime.now(timezone.utc)
     stale = await repository.create(
-        start_at=now - LISTING_GRACE - timedelta(minutes=1), host_display_name="Host",
-        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_subject="stale",
+        start_at=now - LISTING_GRACE - timedelta(minutes=1),
+        host_display_name="Host",
+        host_ranks=["Brawler"],
+        match_type=MatchType.RANK,
+        capacity=1,
+        memo="",
+        host_subject="stale",
     )
 
     await repository.list_upcoming()
@@ -286,7 +323,10 @@ async def test_a_deleted_comment_is_kept_but_stops_being_listed(repository):
     """Soft delete: the listing is ordered by creation and people quote each other."""
     reservation = await _create_open_reservation(repository)
     comment = await repository.add_comment(
-        reservation.id, author="Author", body="곧 갑니다", author_subject="author",
+        reservation.id,
+        author="Author",
+        body="곧 갑니다",
+        author_subject="author",
     )
 
     await repository.delete_comment(reservation.id, comment.id, "author", datetime.now(timezone.utc))
@@ -301,11 +341,19 @@ async def test_a_comment_id_from_another_reservation_is_not_found(repository):
     """The path names both, so a mismatched pair must not delete anything."""
     mine = await _create_open_reservation(repository)
     theirs = await repository.create(
-        start_at=datetime.now(timezone.utc) + timedelta(hours=2), host_display_name="Other",
-        host_ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="", host_subject="other",
+        start_at=datetime.now(timezone.utc) + timedelta(hours=2),
+        host_display_name="Other",
+        host_ranks=["Brawler"],
+        match_type=MatchType.RANK,
+        capacity=1,
+        memo="",
+        host_subject="other",
     )
     comment = await repository.add_comment(
-        theirs.id, author="Author", body="여기요", author_subject="author",
+        theirs.id,
+        author="Author",
+        body="여기요",
+        author_subject="author",
     )
 
     with pytest.raises(ReservationNotFoundError):
@@ -319,7 +367,10 @@ async def test_cancelling_a_reservation_takes_its_comments_with_it(repository):
     """The rows go with the parent row --- the FK is ON DELETE CASCADE."""
     reservation = await _create_open_reservation(repository)
     await repository.add_comment(
-        reservation.id, author="Author", body="갑니다", author_subject="author",
+        reservation.id,
+        author="Author",
+        body="갑니다",
+        author_subject="author",
     )
 
     async with get_session_factory()() as session, session.begin():
@@ -333,7 +384,9 @@ async def test_the_host_cannot_take_a_seat_in_their_own_reservation(repository):
     reservation = await _create_open_reservation(repository, capacity=2)
 
     with pytest.raises(ReservationStateError, match="내가 만든 예약"):
-        await repository.join(reservation.id, subject="owner", display_name="Host", ranks=[], now=datetime.now(timezone.utc))
+        await repository.join(
+            reservation.id, subject="owner", display_name="Host", ranks=[], now=datetime.now(timezone.utc)
+        )
 
 
 @pytest.mark.asyncio

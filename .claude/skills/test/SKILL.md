@@ -124,7 +124,10 @@ instead: it has no RPCN account, so the marked tests are checked here or nowhere
 
 ```bash
 .venv/Scripts/ruff.exe check . > test-results/lint.log 2>&1; echo "exit=$?"
+.venv/Scripts/ruff.exe format --check . > test-results/format.log 2>&1; echo "exit=$?"
 ```
+
+A format failure names the files; `.venv/Scripts/ruff.exe format .` fixes them.
 
 CI runs this as its own job. ruff is not in `requirements.txt` (the production
 image installs that file), so install it once into the venv at the version CI

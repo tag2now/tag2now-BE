@@ -27,16 +27,21 @@ async def db_session():
 @pytest_asyncio.fixture
 def adapter():
     from history.adapters.postgresql import PostgresHistoryAdapter
+
     return PostgresHistoryAdapter()
 
 
 def _make_record(**overrides):
     from datetime import datetime, timedelta, timezone
+
     KST = timezone(timedelta(hours=9))
     defaults = dict(
-        room_id=100, rank_id=10,
-        user1_npid="p1", user1_online_name="P1",
-        user2_npid="p2", user2_online_name="P2",
+        room_id=100,
+        rank_id=10,
+        user1_npid="p1",
+        user1_online_name="P1",
+        user2_npid="p2",
+        user2_online_name="P2",
         created_dt=datetime.now(KST),
     )
     defaults.update(overrides)
@@ -55,9 +60,16 @@ async def test_record_snapshot_inserts_rows(adapter, db_session):
     # match can share one with this test.
     from history.entities import RankMatchSnapshotRow
     from sqlalchemy import select
-    rows = (await db_session.execute(
-        select(RankMatchSnapshotRow).where(RankMatchSnapshotRow.user1_npid.in_(["insert1", "insert3"]))
-    )).scalars().all()
+
+    rows = (
+        (
+            await db_session.execute(
+                select(RankMatchSnapshotRow).where(RankMatchSnapshotRow.user1_npid.in_(["insert1", "insert3"]))
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert {r.room_id for r in rows} == {100, 101}
 
 
@@ -69,9 +81,16 @@ async def test_record_snapshot_keeps_rooms_after_rpcn_counter_reset(adapter, db_
 
     from history.entities import RankMatchSnapshotRow
     from sqlalchemy import select
-    rows = (await db_session.execute(
-        select(RankMatchSnapshotRow).where(RankMatchSnapshotRow.user1_npid.in_(["reset1", "reset3"]))
-    )).scalars().all()
+
+    rows = (
+        (
+            await db_session.execute(
+                select(RankMatchSnapshotRow).where(RankMatchSnapshotRow.user1_npid.in_(["reset1", "reset3"]))
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert {r.room_id for r in rows} == {1, 5000}
 
 
@@ -84,9 +103,12 @@ async def test_record_snapshot_deduplicates_reobserved_room(adapter, db_session)
 
     from history.entities import RankMatchSnapshotRow
     from sqlalchemy import func, select
-    count = (await db_session.execute(
-        select(func.count()).select_from(RankMatchSnapshotRow).where(RankMatchSnapshotRow.user1_npid == "dedup1")
-    )).scalar_one()
+
+    count = (
+        await db_session.execute(
+            select(func.count()).select_from(RankMatchSnapshotRow).where(RankMatchSnapshotRow.user1_npid == "dedup1")
+        )
+    ).scalar_one()
     assert count == 1
 
 
@@ -102,12 +124,18 @@ async def test_record_daily_matched_players_deduplicates_per_stat_day(adapter, d
     await adapter.record_daily_matched_players(db_session, {"p1"}, observed_at)
 
     observed_date = stat_day(observed_at)
-    rows = (await db_session.execute(
-        select(DailyMatchedPlayerRow).where(
-            DailyMatchedPlayerRow.date == observed_date,
-            DailyMatchedPlayerRow.npid.in_(["p1", "p2"]),
+    rows = (
+        (
+            await db_session.execute(
+                select(DailyMatchedPlayerRow).where(
+                    DailyMatchedPlayerRow.date == observed_date,
+                    DailyMatchedPlayerRow.npid.in_(["p1", "p2"]),
+                )
+            )
         )
-    )).scalars().all()
+        .scalars()
+        .all()
+    )
     assert {(row.date, row.npid) for row in rows} == {
         (observed_date, "p1"),
         (observed_date, "p2"),
@@ -129,9 +157,15 @@ async def test_daily_matched_players_roll_over_at_six_kst(adapter, db_session):
         db_session, {"stat-day-boundary"}, datetime(2026, 1, 1, 21, 0, tzinfo=timezone.utc)
     )
 
-    rows = (await db_session.execute(
-        select(DailyMatchedPlayerRow.date).where(DailyMatchedPlayerRow.npid == "stat-day-boundary")
-    )).scalars().all()
+    rows = (
+        (
+            await db_session.execute(
+                select(DailyMatchedPlayerRow.date).where(DailyMatchedPlayerRow.npid == "stat-day-boundary")
+            )
+        )
+        .scalars()
+        .all()
+    )
     assert set(rows) == {datetime(2026, 1, 1).date(), datetime(2026, 1, 2).date()}
 
 
@@ -157,13 +191,17 @@ async def test_daily_summary_counts_unique_players_in_requested_stat_days(adapte
     # their peak would outrank the one this test records.
     yesterday_start = stat_day_start(today - timedelta(days=1))
     tomorrow_start = stat_day_start(today + timedelta(days=1))
-    await db_session.execute(delete(ActivitySnapshotRow).where(
-        ActivitySnapshotRow.sampled_at >= yesterday_start,
-        ActivitySnapshotRow.sampled_at < tomorrow_start,
-    ))
-    await db_session.execute(delete(DailyMatchedPlayerRow).where(
-        DailyMatchedPlayerRow.date.in_([today, today - timedelta(days=1)]),
-    ))
+    await db_session.execute(
+        delete(ActivitySnapshotRow).where(
+            ActivitySnapshotRow.sampled_at >= yesterday_start,
+            ActivitySnapshotRow.sampled_at < tomorrow_start,
+        )
+    )
+    await db_session.execute(
+        delete(DailyMatchedPlayerRow).where(
+            DailyMatchedPlayerRow.date.in_([today, today - timedelta(days=1)]),
+        )
+    )
     await adapter.record_daily_matched_players(db_session, today_players, today_at)
     await adapter.record_daily_matched_players(db_session, yesterday_players, yesterday_at)
     await adapter.record_daily_matched_players(db_session, {"summary-today-a"}, today_at)
@@ -196,16 +234,32 @@ async def test_daily_peak_snapshots_split_at_the_stat_day_start(adapter, db_sess
     today_start = stat_day_start(today)
     yesterday = today - timedelta(days=1)
 
-    await db_session.execute(delete(ActivitySnapshotRow).where(
-        ActivitySnapshotRow.sampled_at >= today_start - timedelta(days=1),
-        ActivitySnapshotRow.sampled_at < today_start + timedelta(days=1),
-    ))
-    await adapter.record_activity_snapshot(db_session, ActivitySnapshot(
-        today_start - timedelta(minutes=1), 11, 3, 2, 1,
-    ))
-    await adapter.record_activity_snapshot(db_session, ActivitySnapshot(
-        today_start, 29, 8, 4, 2,
-    ))
+    await db_session.execute(
+        delete(ActivitySnapshotRow).where(
+            ActivitySnapshotRow.sampled_at >= today_start - timedelta(days=1),
+            ActivitySnapshotRow.sampled_at < today_start + timedelta(days=1),
+        )
+    )
+    await adapter.record_activity_snapshot(
+        db_session,
+        ActivitySnapshot(
+            today_start - timedelta(minutes=1),
+            11,
+            3,
+            2,
+            1,
+        ),
+    )
+    await adapter.record_activity_snapshot(
+        db_session,
+        ActivitySnapshot(
+            today_start,
+            29,
+            8,
+            4,
+            2,
+        ),
+    )
 
     by_date = {row.date: row for row in await adapter.get_daily_summary(db_session, days=2)}
 
@@ -231,14 +285,17 @@ async def test_get_hourly_activity_averages_every_sample_in_the_kst_hour(adapter
     from sqlalchemy import delete
     from history.entities import ActivitySnapshotRow
     from history.models import ActivitySnapshot
+
     KST = timezone(timedelta(hours=9))
 
     # 03:00 KST two days ago --- well inside a 7-day window whatever the time now.
     three_am = (datetime.now(KST) - timedelta(days=2)).replace(hour=3, minute=0, second=0, microsecond=0)
     day_before = three_am - timedelta(days=1)
-    await db_session.execute(delete(ActivitySnapshotRow).where(
-        ActivitySnapshotRow.sampled_at >= three_am - timedelta(days=9),
-    ))
+    await db_session.execute(
+        delete(ActivitySnapshotRow).where(
+            ActivitySnapshotRow.sampled_at >= three_am - timedelta(days=9),
+        )
+    )
     for sampled_at, players in [
         (day_before + timedelta(minutes=10), 0),
         (day_before + timedelta(minutes=40), 4),
@@ -267,12 +324,16 @@ async def test_hourly_peak_matches_the_daily_peak_over_the_same_samples(adapter,
     today = stat_day(datetime.now(timezone.utc))
     # A retained participant row with no snapshot beside it would add a day
     # whose peak is None to the daily summary.
-    await db_session.execute(delete(ActivitySnapshotRow).where(
-        ActivitySnapshotRow.sampled_at >= stat_day_start(today - timedelta(days=7)),
-    ))
-    await db_session.execute(delete(DailyMatchedPlayerRow).where(
-        DailyMatchedPlayerRow.date >= today - timedelta(days=7),
-    ))
+    await db_session.execute(
+        delete(ActivitySnapshotRow).where(
+            ActivitySnapshotRow.sampled_at >= stat_day_start(today - timedelta(days=7)),
+        )
+    )
+    await db_session.execute(
+        delete(DailyMatchedPlayerRow).where(
+            DailyMatchedPlayerRow.date >= today - timedelta(days=7),
+        )
+    )
     two_days_ago = stat_day_start(today - timedelta(days=2))
     for sampled_at, players in [
         (two_days_ago + timedelta(hours=6), 17),
@@ -302,13 +363,17 @@ async def test_get_player_stats_and_hours(adapter, db_session):
 async def test_days_active_counts_kst_days_not_matches(adapter, db_session):
     """Three matches spread over two KST days are two active days, not three."""
     from datetime import datetime, timedelta, timezone
+
     KST = timezone(timedelta(hours=9))
     today = datetime.now(KST).replace(hour=21, minute=0, second=0, microsecond=0)
-    await adapter.record_snapshot(db_session, [
-        _make_record(room_id=9001, user1_npid="daycount", created_dt=today),
-        _make_record(room_id=9002, user1_npid="daycount", created_dt=today + timedelta(minutes=20)),
-        _make_record(room_id=9003, user1_npid="daycount", created_dt=today - timedelta(days=1)),
-    ])
+    await adapter.record_snapshot(
+        db_session,
+        [
+            _make_record(room_id=9001, user1_npid="daycount", created_dt=today),
+            _make_record(room_id=9002, user1_npid="daycount", created_dt=today + timedelta(minutes=20)),
+            _make_record(room_id=9003, user1_npid="daycount", created_dt=today - timedelta(days=1)),
+        ],
+    )
 
     stats = await adapter.get_player_stats(db_session, "daycount", days=7)
     assert stats.times_seen == 3
@@ -319,12 +384,16 @@ async def test_days_active_counts_kst_days_not_matches(adapter, db_session):
 async def test_days_active_keeps_one_late_night_session_on_one_day(adapter, db_session):
     """22:00 and 02:00 KST are one sitting, so they count as a single active day."""
     from datetime import datetime, timedelta, timezone
+
     KST = timezone(timedelta(hours=9))
     evening = (datetime.now(KST) - timedelta(days=2)).replace(hour=22, minute=0, second=0, microsecond=0)
-    await adapter.record_snapshot(db_session, [
-        _make_record(room_id=9101, user1_npid="statday", created_dt=evening),
-        _make_record(room_id=9102, user1_npid="statday", created_dt=evening + timedelta(hours=4)),
-    ])
+    await adapter.record_snapshot(
+        db_session,
+        [
+            _make_record(room_id=9101, user1_npid="statday", created_dt=evening),
+            _make_record(room_id=9102, user1_npid="statday", created_dt=evening + timedelta(hours=4)),
+        ],
+    )
 
     stats = await adapter.get_player_stats(db_session, "statday", days=7)
     assert stats.times_seen == 2
@@ -335,12 +404,16 @@ async def test_days_active_keeps_one_late_night_session_on_one_day(adapter, db_s
 async def test_days_active_separates_sittings_across_the_six_kst_boundary(adapter, db_session):
     """05:59 and 06:00 KST fall on different statistics days."""
     from datetime import datetime, timedelta, timezone
+
     KST = timezone(timedelta(hours=9))
     dawn = (datetime.now(KST) - timedelta(days=2)).replace(hour=5, minute=59, second=0, microsecond=0)
-    await adapter.record_snapshot(db_session, [
-        _make_record(room_id=9111, user1_npid="statboundary", created_dt=dawn),
-        _make_record(room_id=9112, user1_npid="statboundary", created_dt=dawn + timedelta(minutes=1)),
-    ])
+    await adapter.record_snapshot(
+        db_session,
+        [
+            _make_record(room_id=9111, user1_npid="statboundary", created_dt=dawn),
+            _make_record(room_id=9112, user1_npid="statboundary", created_dt=dawn + timedelta(minutes=1)),
+        ],
+    )
 
     stats = await adapter.get_player_stats(db_session, "statboundary", days=7)
     assert stats.times_seen == 2
@@ -351,16 +424,20 @@ async def test_days_active_separates_sittings_across_the_six_kst_boundary(adapte
 async def test_active_hours_requires_two_distinct_days(adapter, db_session):
     """A one-off session must not register as a habitual hour; two days at 21:00 must."""
     from datetime import datetime, timedelta, timezone
+
     KST = timezone(timedelta(hours=9))
     base = (datetime.now(KST) - timedelta(days=1)).replace(hour=21, minute=0, second=0, microsecond=0)
-    await adapter.record_snapshot(db_session, [
-        # 15:00 twice in one sitting --- one day only
-        _make_record(room_id=9201, user1_npid="hours", created_dt=base.replace(hour=15)),
-        _make_record(room_id=9202, user1_npid="hours", created_dt=base.replace(hour=15) + timedelta(minutes=10)),
-        # 21:00 on two separate days
-        _make_record(room_id=9203, user1_npid="hours", created_dt=base),
-        _make_record(room_id=9204, user1_npid="hours", created_dt=base - timedelta(days=1)),
-    ])
+    await adapter.record_snapshot(
+        db_session,
+        [
+            # 15:00 twice in one sitting --- one day only
+            _make_record(room_id=9201, user1_npid="hours", created_dt=base.replace(hour=15)),
+            _make_record(room_id=9202, user1_npid="hours", created_dt=base.replace(hour=15) + timedelta(minutes=10)),
+            # 21:00 on two separate days
+            _make_record(room_id=9203, user1_npid="hours", created_dt=base),
+            _make_record(room_id=9204, user1_npid="hours", created_dt=base - timedelta(days=1)),
+        ],
+    )
 
     stats = await adapter.get_player_stats(db_session, "hours", days=7)
     assert 21 in stats.active_hours
@@ -370,13 +447,18 @@ async def test_active_hours_requires_two_distinct_days(adapter, db_session):
 async def _record_weekly_matches(adapter, db_session):
     """Two test accounts sparring 100 times, and a regular with 90 matches."""
     from datetime import datetime, timedelta, timezone
+
     now = datetime.now(timezone(timedelta(hours=9)))
     spar = [
-        _make_record(room_id=9300 + i, user1_npid="tester_a", user2_npid="tester_b", created_dt=now - timedelta(minutes=i))
+        _make_record(
+            room_id=9300 + i, user1_npid="tester_a", user2_npid="tester_b", created_dt=now - timedelta(minutes=i)
+        )
         for i in range(100)
     ]
     regular = [
-        _make_record(room_id=9500 + i, user1_npid="regular", user2_npid=f"guest{i}", created_dt=now - timedelta(minutes=i))
+        _make_record(
+            room_id=9500 + i, user1_npid="regular", user2_npid=f"guest{i}", created_dt=now - timedelta(minutes=i)
+        )
         for i in range(90)
     ]
     await adapter.record_snapshot(db_session, spar + regular)

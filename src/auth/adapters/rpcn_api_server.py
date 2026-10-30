@@ -24,7 +24,9 @@ class RpcnApiServerAccountVerifier(AccountVerifier):
 
     async def verify(self, username: str, password: str) -> VerifiedAccount:
         try:
-            response = await self._api.post(_VERIFY_PATH, {"username": username, "password": await derive_rpcn_password_in_thread(password)})
+            response = await self._api.post(
+                _VERIFY_PATH, {"username": username, "password": await derive_rpcn_password_in_thread(password)}
+            )
         except RpcnApiNotConfigured as exc:
             raise AuthUnavailableError("로그인이 설정되지 않았습니다.") from exc
         except RpcnApiUnreachable as exc:

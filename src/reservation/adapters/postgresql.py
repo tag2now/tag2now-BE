@@ -8,9 +8,20 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from reservation.domain import (
-    LISTING_GRACE, LIVE_STATUSES, Comment, MatchType, Participant, ParticipantSummary, Reservation, ReservationStatus,
-    ensure_commentable, ensure_editable, ensure_joinable, ensure_participation_cancellable,
-    status_for, window_end,
+    LISTING_GRACE,
+    LIVE_STATUSES,
+    Comment,
+    MatchType,
+    Participant,
+    ParticipantSummary,
+    Reservation,
+    ReservationStatus,
+    ensure_commentable,
+    ensure_editable,
+    ensure_joinable,
+    ensure_participation_cancellable,
+    status_for,
+    window_end,
 )
 from reservation.entities import Reservation as ReservationRow
 from reservation.entities import ReservationComment as ReservationCommentRow
@@ -19,20 +30,28 @@ from reservation.exceptions import ReservationAccessError, ReservationNotFoundEr
 from reservation.ports import ReservationRepository
 
 
-
 def _comment(row: ReservationCommentRow) -> Comment:
     return Comment(
-        id=row.id, reservation_id=row.reservation_id, author=row.author,
-        body=row.body, created_at=row.created_at, author_username=row.author_subject,
+        id=row.id,
+        reservation_id=row.reservation_id,
+        author=row.author,
+        body=row.body,
+        created_at=row.created_at,
+        author_username=row.author_subject,
     )
 
 
 def _reservation(row: ReservationRow, participant_count: int, participants: list[dict] | None = None) -> Reservation:
     return Reservation(
-        id=row.id, start_at=row.start_at,
-        host_display_name=row.host_display_name, host_ranks=list(row.host_ranks),
-        match_type=MatchType(row.match_type), capacity=row.capacity, memo=row.memo,
-        status=ReservationStatus(row.status), participant_count=participant_count,
+        id=row.id,
+        start_at=row.start_at,
+        host_display_name=row.host_display_name,
+        host_ranks=list(row.host_ranks),
+        match_type=MatchType(row.match_type),
+        capacity=row.capacity,
+        memo=row.memo,
+        status=ReservationStatus(row.status),
+        participant_count=participant_count,
         created_at=row.created_at,
         participants=[ParticipantSummary(**item) for item in (participants or [])],
         host_username=row.host_subject,
@@ -49,14 +68,24 @@ class PostgresReservationRepository(ReservationRepository):
     @staticmethod
     def _with_participant_count():
         count = func.count(ReservationParticipantRow.id).label("participant_count")
-        participants = func.json_agg(aggregate_order_by(
-            func.json_build_object(
-                "id", ReservationParticipantRow.id,
-                "display_name", ReservationParticipantRow.display_name,
-                "username", ReservationParticipantRow.subject,
-            ),
-            ReservationParticipantRow.joined_at, ReservationParticipantRow.id,
-        )).filter(ReservationParticipantRow.id.is_not(None)).label("participants")
+        participants = (
+            func.json_agg(
+                aggregate_order_by(
+                    func.json_build_object(
+                        "id",
+                        ReservationParticipantRow.id,
+                        "display_name",
+                        ReservationParticipantRow.display_name,
+                        "username",
+                        ReservationParticipantRow.subject,
+                    ),
+                    ReservationParticipantRow.joined_at,
+                    ReservationParticipantRow.id,
+                )
+            )
+            .filter(ReservationParticipantRow.id.is_not(None))
+            .label("participants")
+        )
         return (
             select(ReservationRow, count, participants)
             .outerjoin(
@@ -85,9 +114,7 @@ class PostgresReservationRepository(ReservationRepository):
             update(ReservationParticipantRow)
             .where(
                 ReservationParticipantRow.cancelled_at.is_(None),
-                ReservationParticipantRow.reservation_id.in_(
-                    select(ReservationRow.id).where(*finished)
-                ),
+                ReservationParticipantRow.reservation_id.in_(select(ReservationRow.id).where(*finished)),
             )
             .values(cancelled_at=now)
         )
@@ -99,15 +126,22 @@ class PostgresReservationRepository(ReservationRepository):
 
     @staticmethod
     async def _active_participant_count(session: AsyncSession, reservation_id: int) -> int:
-        return await session.scalar(
-            select(func.count()).select_from(ReservationParticipantRow).where(
-                ReservationParticipantRow.reservation_id == reservation_id,
-                ReservationParticipantRow.cancelled_at.is_(None),
+        return (
+            await session.scalar(
+                select(func.count())
+                .select_from(ReservationParticipantRow)
+                .where(
+                    ReservationParticipantRow.reservation_id == reservation_id,
+                    ReservationParticipantRow.cancelled_at.is_(None),
+                )
             )
-        ) or 0
+            or 0
+        )
 
     @staticmethod
-    async def _active_participation(session: AsyncSession, reservation_id: int, subject: str) -> ReservationParticipantRow | None:
+    async def _active_participation(
+        session: AsyncSession, reservation_id: int, subject: str
+    ) -> ReservationParticipantRow | None:
         return await session.scalar(
             select(ReservationParticipantRow).where(
                 ReservationParticipantRow.reservation_id == reservation_id,
@@ -161,10 +195,13 @@ class PostgresReservationRepository(ReservationRepository):
     async def create(self, **values) -> Reservation:
         async with self._sessions() as session, session.begin():
             row = ReservationRow(
-                start_at=values["start_at"], host_subject=values["host_subject"],
-                host_display_name=values["host_display_name"], host_ranks=values["host_ranks"],
+                start_at=values["start_at"],
+                host_subject=values["host_subject"],
+                host_display_name=values["host_display_name"],
+                host_ranks=values["host_ranks"],
                 match_type=values["match_type"].value,
-                capacity=values["capacity"], memo=values["memo"],
+                capacity=values["capacity"],
+                memo=values["memo"],
             )
             session.add(row)
             await session.flush()
@@ -173,7 +210,9 @@ class PostgresReservationRepository(ReservationRepository):
 
     async def update(self, reservation_id: int, host_subject: str, now: datetime, **changes) -> Reservation:
         async with self._sessions() as session, session.begin():
-            row = await session.scalar(select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update())
+            row = await session.scalar(
+                select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update()
+            )
             if row is None:
                 raise ReservationNotFoundError("Reservation not found")
             if row.host_subject is None or row.host_subject != host_subject:
@@ -193,7 +232,9 @@ class PostgresReservationRepository(ReservationRepository):
             await session.refresh(row)
             return _reservation(row, count)
 
-    async def join(self, reservation_id: int, *, subject: str, display_name: str, ranks: list[str], now: datetime) -> tuple[Reservation, Participant]:
+    async def join(
+        self, reservation_id: int, *, subject: str, display_name: str, ranks: list[str], now: datetime
+    ) -> tuple[Reservation, Participant]:
         try:
             return await self._join(reservation_id, subject=subject, display_name=display_name, ranks=ranks, now=now)
         except IntegrityError as exc:
@@ -201,13 +242,19 @@ class PostgresReservationRepository(ReservationRepository):
             # below normally answers first; the unique index is the backstop.
             raise ReservationStateError("이미 참가한 예약입니다.") from exc
 
-    async def _join(self, reservation_id: int, *, subject: str, display_name: str, ranks: list[str], now: datetime) -> tuple[Reservation, Participant]:
+    async def _join(
+        self, reservation_id: int, *, subject: str, display_name: str, ranks: list[str], now: datetime
+    ) -> tuple[Reservation, Participant]:
         async with self._sessions() as session, session.begin():
-            row = await session.scalar(select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update())
+            row = await session.scalar(
+                select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update()
+            )
             if row is None:
                 raise ReservationNotFoundError("Reservation not found")
             count = await session.scalar(
-                select(func.count()).select_from(ReservationParticipantRow).where(
+                select(func.count())
+                .select_from(ReservationParticipantRow)
+                .where(
                     ReservationParticipantRow.reservation_id == reservation_id,
                     ReservationParticipantRow.cancelled_at.is_(None),
                 )
@@ -218,7 +265,10 @@ class PostgresReservationRepository(ReservationRepository):
                 raise ReservationStateError("이미 참가한 예약입니다.")
             ensure_joinable(ReservationStatus(row.status), row.start_at, count, row.capacity, now)
             participant = ReservationParticipantRow(
-                reservation_id=reservation_id, subject=subject, display_name=display_name, ranks=ranks,
+                reservation_id=reservation_id,
+                subject=subject,
+                display_name=display_name,
+                ranks=ranks,
             )
             session.add(participant)
             count += 1
@@ -228,14 +278,18 @@ class PostgresReservationRepository(ReservationRepository):
             await session.refresh(participant)
             result = await session.execute(self._with_participant_count().where(ReservationRow.id == reservation_id))
             return _reservation(*result.one()), Participant(
-                id=participant.id, reservation_id=reservation_id,
-                display_name=participant.display_name, ranks=list(participant.ranks),
+                id=participant.id,
+                reservation_id=reservation_id,
+                display_name=participant.display_name,
+                ranks=list(participant.ranks),
                 joined_at=participant.joined_at,
             )
 
     async def cancel_participation(self, reservation_id: int, subject: str, now: datetime) -> Reservation:
         async with self._sessions() as session, session.begin():
-            row = await session.scalar(select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update())
+            row = await session.scalar(
+                select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update()
+            )
             if row is None:
                 raise ReservationNotFoundError("Reservation not found")
             ensure_participation_cancellable(ReservationStatus(row.status), row.start_at, now)
@@ -245,7 +299,9 @@ class PostgresReservationRepository(ReservationRepository):
             participant.cancelled_at = now
             await session.flush()
             count = await session.scalar(
-                select(func.count()).select_from(ReservationParticipantRow).where(
+                select(func.count())
+                .select_from(ReservationParticipantRow)
+                .where(
                     ReservationParticipantRow.reservation_id == reservation_id,
                     ReservationParticipantRow.cancelled_at.is_(None),
                 )
@@ -274,7 +330,10 @@ class PostgresReservationRepository(ReservationRepository):
                 raise ReservationNotFoundError("Reservation not found")
             ensure_commentable(ReservationStatus(reservation.status))
             row = ReservationCommentRow(
-                reservation_id=reservation_id, author_subject=author_subject, author=author, body=body,
+                reservation_id=reservation_id,
+                author_subject=author_subject,
+                author=author,
+                body=body,
             )
             session.add(row)
             await session.flush()
@@ -298,7 +357,9 @@ class PostgresReservationRepository(ReservationRepository):
 
     async def cancel(self, reservation_id: int, host_subject: str, now: datetime) -> None:
         async with self._sessions() as session, session.begin():
-            row = await session.scalar(select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update())
+            row = await session.scalar(
+                select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update()
+            )
             if row is None:
                 raise ReservationNotFoundError("Reservation not found")
             if row.host_subject is None or row.host_subject != host_subject:

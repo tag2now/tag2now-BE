@@ -32,8 +32,9 @@ class MemoryRepository(StreamChannelRepository):
     async def upsert(self, session, username, platform, channel):
         if any(c.channel_id == channel.channel_id and c.username != username for c in self.rows.values()):
             raise ChannelTakenError("이미 다른 계정에 연결된 채널입니다.")
-        row = StreamChannel(username, platform, channel.channel_id, channel.channel_name,
-                            datetime(2026, 10, 3, tzinfo=timezone.utc))
+        row = StreamChannel(
+            username, platform, channel.channel_id, channel.channel_name, datetime(2026, 10, 3, tzinfo=timezone.utc)
+        )
         self.rows[(username, platform)] = row
         return row
 
@@ -111,6 +112,7 @@ def use_platform(installed, repo, sessions):
 def client():
     from fastapi.testclient import TestClient
     from app import app
+
     return TestClient(app)  # no `with`: lifespan stays off, the adapters are ours
 
 
@@ -120,17 +122,27 @@ async def _register(repo, username, channel_id):
 
 # --- live -----------------------------------------------------------------------
 
+
 async def test_answers_only_the_registered_players_asked_about_who_are_on_air(repo, use_platform, installed):
     for username, channel in (("Alice", ALICE_CH), ("bob", BOB_CH), ("carol", CAROL_CH)):
         await _register(repo, username, channel)
-    platform = use_platform(FakePlatform(live={ALICE_CH: LiveBroadcast("TTT2 랭크전", 42, "TTT2"),
-                                               CAROL_CH: LiveBroadcast("밖에서 방송", 9, "talk")}))
+    platform = use_platform(
+        FakePlatform(
+            live={ALICE_CH: LiveBroadcast("TTT2 랭크전", 42, "TTT2"), CAROL_CH: LiveBroadcast("밖에서 방송", 9, "talk")}
+        )
+    )
 
     live = await installed["service"].live_for({"alice", "bob", "dave"})
 
-    assert live == {"alice": {"platform": "chzzk", "channel_name": "Alice 채널",
-                              "url": f"https://chzzk.naver.com/live/{ALICE_CH}",
-                              "title": "TTT2 랭크전", "viewer_count": 42}}
+    assert live == {
+        "alice": {
+            "platform": "chzzk",
+            "channel_name": "Alice 채널",
+            "url": f"https://chzzk.naver.com/live/{ALICE_CH}",
+            "title": "TTT2 랭크전",
+            "viewer_count": 42,
+        }
+    }
     # carol is on air but was not asked about, so her channel is never checked.
     assert sorted(platform.checked) == [ALICE_CH, BOB_CH]
 
@@ -175,6 +187,7 @@ async def test_when_channels_cannot_be_read_nobody_is_live(sessions):
 
 # --- own channel ----------------------------------------------------------------
 
+
 async def test_registers_a_pasted_url_under_the_signed_in_account(client, repo, use_platform, auth_headers):
     use_platform(FakePlatform(channels=[ALICE_CH]))
     headers = auth_headers("alice")
@@ -193,10 +206,13 @@ async def test_no_channel_reads_as_null(client, repo, use_platform, auth_headers
     assert client.get("/streams/me", headers=auth_headers("alice")).json() == {"channel": None}
 
 
-@pytest.mark.parametrize("text, detail", [
-    ("내 방송", "치지직 채널 주소를 확인해 주세요. 예: https://chzzk.naver.com/채널ID"),
-    (BOB_CH, "치지직에서 찾을 수 없는 채널입니다."),
-])
+@pytest.mark.parametrize(
+    "text, detail",
+    [
+        ("내 방송", "치지직 채널 주소를 확인해 주세요. 예: https://chzzk.naver.com/채널ID"),
+        (BOB_CH, "치지직에서 찾을 수 없는 채널입니다."),
+    ],
+)
 async def test_refuses_what_names_no_real_channel(client, repo, use_platform, auth_headers, text, detail):
     use_platform(FakePlatform(channels=[ALICE_CH]))
     response = client.put("/streams/me", json={"channel": text}, headers=auth_headers("alice"))
@@ -214,7 +230,9 @@ async def test_a_channel_belongs_to_one_account(client, repo, use_platform, auth
     assert repo.rows[("alice", "chzzk")].channel_id == ALICE_CH
 
 
-async def test_a_new_registration_shows_without_waiting_for_the_cache(client, repo, use_platform, auth_headers, installed):
+async def test_a_new_registration_shows_without_waiting_for_the_cache(
+    client, repo, use_platform, auth_headers, installed
+):
     use_platform(FakePlatform(channels=[ALICE_CH], live={ALICE_CH: LiveBroadcast("방송", 1, "")}))
     assert await installed["service"].live_for({"alice"}) == {}
 
@@ -239,6 +257,7 @@ def test_own_channel_routes_need_a_login(client, method, path):
 
 
 # --- admin ----------------------------------------------------------------------
+
 
 async def test_an_admin_lists_and_removes_whatever_the_case(client, repo, use_platform, auth_headers):
     use_platform(FakePlatform())

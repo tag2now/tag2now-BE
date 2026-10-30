@@ -23,6 +23,7 @@ LEADERBOARD_CACHE_SIZE = 500
 # Pure domain functions
 # ---------------------------------------------------------------------------
 
+
 def _group_rooms_by_type(rooms: list[RoomInfoDTO]) -> dict[str, list[RoomInfoDTO]]:
     grouped: dict[str, list[RoomInfoDTO]] = {RoomType.PLAYER_MATCH.value: [], RoomType.RANK_MATCH.value: []}
     for room in rooms:
@@ -48,11 +49,14 @@ def with_streams(groups: dict, live: dict[str, dict]) -> dict:
 
     `live` is keyed by lower-cased npid, as StreamingService.live_for answers it.
     """
+
     def user_with_stream(user: dict) -> dict:
         return {**user, "stream": live.get((user.get("npid") or "").lower())}
 
-    return {group: [{**room, "users": [user_with_stream(u) for u in room["users"]]} for room in rooms]
-            for group, rooms in groups.items()}
+    return {
+        group: [{**room, "users": [user_with_stream(u) for u in room["users"]]} for room in rooms]
+        for group, rooms in groups.items()
+    }
 
 
 def _leaderboard_cache_key(com_id: str, board_id: int) -> str:
@@ -65,7 +69,8 @@ def _without_excluded(lb: dict) -> dict:
     excluded_ranks = [e["rank"] for e in lb["entries"] if settings.is_ranking_excluded(e["np_id"])]
     entries = [
         {**e, "rank": e["rank"] - sum(r < e["rank"] for r in excluded_ranks)}
-        for e in lb["entries"] if not settings.is_ranking_excluded(e["np_id"])
+        for e in lb["entries"]
+        if not settings.is_ranking_excluded(e["np_id"])
     ]
     return {**lb, "total_records": lb["total_records"] - len(excluded_ranks), "entries": entries}
 
@@ -73,6 +78,7 @@ def _without_excluded(lb: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Cached application service
 # ---------------------------------------------------------------------------
+
 
 class MatchingService:
     def __init__(self, game_server: GameServerPort, tracker: MatchmakingTracker | None = None):
@@ -114,8 +120,10 @@ class MatchingService:
         rank_rooms = [room for room in rooms if room.room_type == RoomType.RANK_MATCH and room.current_members >= 1]
         return ActivityObservation(
             rank_player_npids={user.npid for room in rank_rooms for user in room.users if user.npid},
-            total_players=sum(len(room.users) for room in rooms), total_rooms=len(rooms),
-            rank_players=sum(len(room.users) for room in rank_rooms), rank_rooms=len(rank_rooms),
+            total_players=sum(len(room.users) for room in rooms),
+            total_rooms=len(rooms),
+            rank_players=sum(len(room.users) for room in rank_rooms),
+            rank_rooms=len(rank_rooms),
             rank_matches=[room for room in rank_rooms if room.current_members == 2],
         )
 

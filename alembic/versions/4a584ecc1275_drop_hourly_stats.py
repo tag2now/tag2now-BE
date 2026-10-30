@@ -1,4 +1,5 @@
 """Drop hourly_stats; hourly activity is read from activity_snapshots."""
+
 from alembic import op
 import sqlalchemy as sa
 

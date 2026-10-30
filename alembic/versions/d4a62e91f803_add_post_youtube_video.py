@@ -1,4 +1,5 @@
 """Add optional YouTube video to community posts."""
+
 from alembic import op
 import sqlalchemy as sa
 

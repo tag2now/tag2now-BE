@@ -12,6 +12,7 @@ from shared.ttt2 import TEKKEN_RANKS, TTT2_CHARACTERS
 # Dataclasses
 # ---------------------------------------------------------------------------
 
+
 class RoomType(str, Enum):
     PLAYER_MATCH = "player_match"
     RANK_MATCH = "rank_match"
@@ -20,6 +21,7 @@ class RoomType(str, Enum):
 @dataclass
 class Rank:
     """A Tekken rank resolved from a numeric ID."""
+
     id: int
     name: str = field(init=False)
     tier: str = field(init=False)
@@ -36,6 +38,7 @@ class Rank:
 @dataclass
 class CharInfo:
     """A single character's stats from a TTT2 leaderboard entry."""
+
     char_id: int
     rank_info: Rank
     wins: int
@@ -52,6 +55,7 @@ class CharInfo:
 @dataclass
 class TTT2GameInfo:
     """Parsed TTT2 game_info from a 64-byte leaderboard blob."""
+
     main_char_info: CharInfo
     sub_char_info: CharInfo
 
@@ -62,6 +66,7 @@ class TTT2GameInfo:
 @dataclass
 class TTT2LeaderboardEntry:
     """A leaderboard entry with game_info already parsed into TTT2GameInfo."""
+
     rank: int
     np_id: str
     online_name: str
@@ -82,9 +87,11 @@ class TTT2LeaderboardEntry:
 @dataclass
 class TTT2LeaderboardResult:
     """Leaderboard result with parsed TTT2-specific entries."""
+
     total_records: int
     last_sort_date: int
     entries: list[TTT2LeaderboardEntry]
+
 
 @dataclass
 class ActivityObservation:
@@ -134,9 +141,11 @@ class RoomInfoDTO:
         obj.users = [UserInfo(npid=owner_npid, online_name=owner_online_name, avatar_url="")]
         return obj
 
+
 # ---------------------------------------------------------------------------
 # Game data (the one table every other service reads)
 # ---------------------------------------------------------------------------
+
 
 class CharacterOut(BaseModel):
     id: int

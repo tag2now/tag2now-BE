@@ -1,10 +1,11 @@
 """baseline schema
 
 Revision ID: 3d058284bcba
-Revises: 
+Revises:
 Create Date: 2026-08-24 14:29:40.896604
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -12,7 +13,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '3d058284bcba'
+revision: str = "3d058284bcba"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -29,7 +30,9 @@ def upgrade() -> None:
         sa.Column("post_type", sa.Text(), nullable=False, server_default=sa.text("'자유'")),
         sa.Column("thumbs_up", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("thumbs_down", sa.Integer(), nullable=False, server_default=sa.text("0")),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")
+        ),
         sa.CheckConstraint("length(title) <= 100", name="posts_title_check"),
         sa.CheckConstraint("length(body) <= 1000", name="posts_body_check"),
     )
@@ -40,7 +43,9 @@ def upgrade() -> None:
         sa.Column("parent_id", sa.Integer(), sa.ForeignKey("comments.id", ondelete="CASCADE")),
         sa.Column("author", sa.Text(), nullable=False),
         sa.Column("body", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")
+        ),
         sa.CheckConstraint("length(body) <= 1000", name="comments_body_check"),
     )
     op.create_index("idx_comments_post", "comments", ["post_id"])
@@ -51,7 +56,9 @@ def upgrade() -> None:
         sa.Column("post_id", sa.Integer(), sa.ForeignKey("posts.id", ondelete="CASCADE"), nullable=False),
         sa.Column("voter", sa.Text(), nullable=False),
         sa.Column("direction", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")
+        ),
         sa.CheckConstraint("direction IN (1, -1)", name="thumbs_direction_check"),
         sa.UniqueConstraint("post_id", "voter"),
     )
@@ -68,8 +75,12 @@ def upgrade() -> None:
         sa.Column("capacity", sa.Integer(), nullable=False),
         sa.Column("memo", sa.Text(), nullable=False, server_default=sa.text("''")),
         sa.Column("status", sa.Text(), nullable=False, server_default=sa.text("'open'")),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")
+        ),
         sa.Column("cancelled_at", sa.DateTime(timezone=True)),
         sa.Column("ended_at", sa.DateTime(timezone=True)),
     )
@@ -86,7 +97,12 @@ def upgrade() -> None:
         sa.Column("cancelled_at", sa.DateTime(timezone=True)),
         sa.UniqueConstraint("reservation_id", "participant_token_hash"),
     )
-    op.create_index("idx_reservation_participants_active", "reservation_participants", ["reservation_id"], postgresql_where=sa.text("cancelled_at IS NULL"))
+    op.create_index(
+        "idx_reservation_participants_active",
+        "reservation_participants",
+        ["reservation_id"],
+        postgresql_where=sa.text("cancelled_at IS NULL"),
+    )
     op.create_table(
         "rank_match_snapshots",
         sa.Column("room_id", sa.Integer(), primary_key=True),

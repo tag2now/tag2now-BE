@@ -24,6 +24,7 @@ def _validate_characters(names: list[str]) -> list[str]:
 
 # --- Requests ---
 
+
 class CreatePostRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=100)
     body: str = Field(..., min_length=1, max_length=1000)
@@ -46,6 +47,7 @@ class CreatePostRequest(BaseModel):
 
 class UpdatePostRequest(CreatePostRequest):
     """The edit form submits all editable fields, including an explicit video removal."""
+
     post_type: str
     characters: list[str] = Field(..., max_length=MAX_POST_CHARACTERS)
     youtube_video_id: str | None = Field(..., min_length=11, max_length=11, pattern=r"^[A-Za-z0-9_-]{11}$")
@@ -82,6 +84,7 @@ class ThumbRequest(BaseModel):
 
 
 # --- Responses ---
+
 
 class PostSummary(BaseModel):
     id: int

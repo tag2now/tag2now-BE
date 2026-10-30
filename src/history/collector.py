@@ -54,10 +54,15 @@ class Collector:
         observed_at = datetime.now(timezone.utc)
         observation = await self._matching.collect_activity_observation(TTT2_COM_ID)
         await self._history.record_daily_matched_players(observation.rank_player_npids, observed_at)
-        await self._history.record_activity_snapshot(ActivitySnapshot(
-            observed_at=observed_at, total_players=observation.total_players, total_rooms=observation.total_rooms,
-            rank_players=observation.rank_players, rank_rooms=observation.rank_rooms,
-        ))
+        await self._history.record_activity_snapshot(
+            ActivitySnapshot(
+                observed_at=observed_at,
+                total_players=observation.total_players,
+                total_rooms=observation.total_rooms,
+                rank_players=observation.rank_players,
+                rank_rooms=observation.rank_rooms,
+            )
+        )
         await self._record_new_rank_matches(observation.rank_matches, observed_at)
 
     async def run(self) -> None:

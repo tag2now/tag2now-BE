@@ -10,7 +10,10 @@ from reservation.models import CreateReservationRequest
 def _request(**overrides):
     values = {
         "start_time": time(20, 0),
-        "ranks": ["Brawler"], "match_type": MatchType.RANK, "capacity": 1, "memo": "",
+        "ranks": ["Brawler"],
+        "match_type": MatchType.RANK,
+        "capacity": 1,
+        "memo": "",
     }
     values.update(overrides)
     return CreateReservationRequest(**values)
@@ -26,7 +29,12 @@ def test_participant_response_exposes_the_name_and_username_only():
     it is how the client recognises its own seat. Ranks stay private."""
     from reservation.models import ParticipantSummaryOut
 
-    response = ParticipantSummaryOut.model_validate({
-        "id": 7, "display_name": "Joiner", "username": "joiner", "ranks": ["Brawler"],
-    })
+    response = ParticipantSummaryOut.model_validate(
+        {
+            "id": 7,
+            "display_name": "Joiner",
+            "username": "joiner",
+            "ranks": ["Brawler"],
+        }
+    )
     assert response.model_dump() == {"id": 7, "display_name": "Joiner", "username": "joiner"}

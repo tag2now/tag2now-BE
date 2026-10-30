@@ -34,6 +34,7 @@ def test_a_rewritten_key_keeps_only_the_later_value(cache):
 # Expiry
 # ---------------------------------------------------------------------------
 
+
 def test_an_expired_entry_reads_as_a_miss(cache):
     cache.set("k", "v", 0)
     time.sleep(0.01)
@@ -57,6 +58,7 @@ def test_expiry_is_per_entry(cache):
 # ---------------------------------------------------------------------------
 # Pattern deletion
 # ---------------------------------------------------------------------------
+
 
 def test_pattern_deletion_removes_every_match(cache):
     cache.set("community:post:1", "a", 60)
@@ -83,6 +85,7 @@ def test_pattern_deletion_without_matches_is_harmless(cache):
 # Single-key deletion
 # ---------------------------------------------------------------------------
 
+
 def test_deleting_a_key_removes_it(cache):
     cache.set("saves:player:alice", "a", 60)
     cache.delete("saves:player:alice")
@@ -107,6 +110,7 @@ def test_deleting_an_unknown_key_is_harmless(cache):
 # ---------------------------------------------------------------------------
 # Serialisation — the dict cache stores JSON, like Redis does
 # ---------------------------------------------------------------------------
+
 
 @dataclasses.dataclass
 class _Room:
@@ -135,6 +139,7 @@ def test_a_cached_value_does_not_alias_the_caller_object(cache):
 # ---------------------------------------------------------------------------
 # Backend selection
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def clear_settings_cache():

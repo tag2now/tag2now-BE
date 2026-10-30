@@ -6,7 +6,8 @@ from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _ENV_DIR = Path(__file__).resolve().parent.parent.parent.joinpath("env")
-profile = os.getenv('FAST_API_PROFILE', 'local')
+profile = os.getenv("FAST_API_PROFILE", "local")
+
 
 class Settings(BaseSettings):
     profile: str = profile

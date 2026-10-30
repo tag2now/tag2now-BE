@@ -10,6 +10,7 @@ from shared.database import Base
 
 class StreamChannelRow(Base):
     """An RPCN account's channel on a streaming platform."""
+
     __tablename__ = "stream_channels"
     # One channel belongs to one account, so a LIVE mark never sits beside two players.
     __table_args__ = (UniqueConstraint("platform", "channel_id", name="uq_stream_channels_channel"),)

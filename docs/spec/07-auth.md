@@ -67,8 +67,9 @@ FE ──Authorization: Bearer <access_token>──▶ 쓰기 API
 라우터는 `auth.dependencies`의 의존성만 쓴다. 토큰을 직접 해석하지 않는다.
 
 ```python
-from auth.dependencies import current_user      # 없으면 401
+from auth.dependencies import current_user  # 없으면 401
 from auth.models import AuthUser
+
 
 @router.post("/things")
 async def create(req: Req, user: AuthUser = Depends(current_user)): ...

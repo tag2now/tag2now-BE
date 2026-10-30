@@ -69,23 +69,23 @@ def _sessions_for(npid: str, hours: list[int], today: datetime, slot: int) -> li
         day_start = datetime.combine(today - timedelta(days=day_offset), time(6), tzinfo=KST)
         for hour in hours:
             moment = day_start + timedelta(hours=(hour - 6) % 24)
-            rows.append(dict(
-                room_id=SEED_ROOM_ID + slot * 1000 + day_offset * 100 + hour,
-                created_dt=moment.astimezone(timezone.utc),
-                match_date=stat_day(moment),
-                rank_id=10,
-                user1_npid=npid,
-                user1_online_name=npid,
-                user2_npid=OPPONENT,
-                user2_online_name=OPPONENT,
-            ))
+            rows.append(
+                dict(
+                    room_id=SEED_ROOM_ID + slot * 1000 + day_offset * 100 + hour,
+                    created_dt=moment.astimezone(timezone.utc),
+                    match_date=stat_day(moment),
+                    rank_id=10,
+                    user1_npid=npid,
+                    user1_online_name=npid,
+                    user2_npid=OPPONENT,
+                    user2_online_name=OPPONENT,
+                )
+            )
     return rows
 
 
 async def _clean(session) -> int:
-    result = await session.execute(delete(RankMatchSnapshotRow).where(
-        RankMatchSnapshotRow.room_id >= SEED_ROOM_ID
-    ))
+    result = await session.execute(delete(RankMatchSnapshotRow).where(RankMatchSnapshotRow.room_id >= SEED_ROOM_ID))
     return result.rowcount or 0
 
 
@@ -109,10 +109,18 @@ async def main(clean_only: bool) -> None:
 
         async with session.begin():
             for npid, hours in SESSIONS.items():
-                seeded = len((await session.execute(select(RankMatchSnapshotRow).where(
-                    RankMatchSnapshotRow.user1_npid == npid,
-                    RankMatchSnapshotRow.room_id >= SEED_ROOM_ID,
-                ))).scalars().all())
+                seeded = len(
+                    (
+                        await session.execute(
+                            select(RankMatchSnapshotRow).where(
+                                RankMatchSnapshotRow.user1_npid == npid,
+                                RankMatchSnapshotRow.room_id >= SEED_ROOM_ID,
+                            )
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
                 print(f"{npid:18} hours {hours} over {DAYS} days -> {seeded} seeded rows")
     await close_database()
 

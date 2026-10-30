@@ -65,7 +65,7 @@ TTT2_CHARACTERS = {
     0x37: "Violet",
     0x38: "Dr.",
     0x39: "Michelle",
-    0x3A: "Tiger"
+    0x3A: "Tiger",
 }
 
 TEKKEN_RANKS = {
@@ -111,5 +111,5 @@ TEKKEN_RANKS = {
     39: {"name": "Tekken Lord", "tier": "보라단"},
     40: {"name": "Tekken Emperor", "tier": "보라단"},
     41: {"name": "Tekken God", "tier": "God"},
-    42: {"name": "True Tekken God", "tier": "God"}
+    42: {"name": "True Tekken God", "tier": "God"},
 }

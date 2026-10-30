@@ -8,7 +8,8 @@ from reservation.service import ReservationService
 
 
 class FixedClock:
-    def now(self): return datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)
+    def now(self):
+        return datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)
 
 
 class FakeRepository:
@@ -18,20 +19,59 @@ class FakeRepository:
         self.cancelled_participation = None
         self.cancelled = None
         self.updated = None
-        self.existing = Reservation(1, datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc), "Host", ["Yaksa"], MatchType.RANK, 1, "", ReservationStatus.OPEN, 0, datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc))
+        self.existing = Reservation(
+            1,
+            datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc),
+            "Host",
+            ["Yaksa"],
+            MatchType.RANK,
+            1,
+            "",
+            ReservationStatus.OPEN,
+            0,
+            datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc),
+        )
+
     async def create(self, **values):
         self.created = values
-        return Reservation(1, values["start_at"], values["host_display_name"], values["host_ranks"], values["match_type"], values["capacity"], values["memo"], ReservationStatus.OPEN, 0, values["start_at"])
+        return Reservation(
+            1,
+            values["start_at"],
+            values["host_display_name"],
+            values["host_ranks"],
+            values["match_type"],
+            values["capacity"],
+            values["memo"],
+            ReservationStatus.OPEN,
+            0,
+            values["start_at"],
+        )
+
     async def join(self, reservation_id, **values):
         self.joined = (reservation_id, values)
-        return Reservation(reservation_id, datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc), "Host", [], MatchType.PLAYER, 2, "", ReservationStatus.OPEN, 1, datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)), None
+        return Reservation(
+            reservation_id,
+            datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc),
+            "Host",
+            [],
+            MatchType.PLAYER,
+            2,
+            "",
+            ReservationStatus.OPEN,
+            1,
+            datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc),
+        ), None
+
     async def cancel_participation(self, reservation_id, subject, now):
         self.cancelled_participation = (reservation_id, subject, now)
         return Reservation(reservation_id, now, "Host", [], MatchType.RANK, 1, "", ReservationStatus.OPEN, 0, now)
+
     async def cancel(self, reservation_id, subject, now):
         self.cancelled = (reservation_id, subject, now)
+
     async def get(self, reservation_id):
         return self.existing
+
     async def update(self, reservation_id, subject, now, **changes):
         self.updated = (reservation_id, subject, changes)
         return self.existing
@@ -49,7 +89,15 @@ def service(dependencies):
 
 @pytest.mark.asyncio
 async def test_create_rank_reservation_uses_kst_today_and_records_the_host(service, dependencies):
-    reservation = await service.create_reservation(subject="host", display_name="Host", start_time=time(20, 30), ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="hello")
+    reservation = await service.create_reservation(
+        subject="host",
+        display_name="Host",
+        start_time=time(20, 30),
+        ranks=["Brawler"],
+        match_type=MatchType.RANK,
+        capacity=1,
+        memo="hello",
+    )
 
     assert reservation.host_display_name == "Host"
     assert dependencies.created["host_subject"] == "host"
@@ -59,25 +107,57 @@ async def test_create_rank_reservation_uses_kst_today_and_records_the_host(servi
 @pytest.mark.asyncio
 async def test_create_rank_reservation_requires_rank(service, dependencies):
     with pytest.raises(ReservationStateError, match="계급을 하나 이상"):
-        await service.create_reservation(start_time=time(20, 30), subject="host", display_name="Host", ranks=[], match_type=MatchType.RANK, capacity=1, memo="")
+        await service.create_reservation(
+            start_time=time(20, 30),
+            subject="host",
+            display_name="Host",
+            ranks=[],
+            match_type=MatchType.RANK,
+            capacity=1,
+            memo="",
+        )
 
 
 @pytest.mark.asyncio
 async def test_create_player_reservation_rejects_ranks(service, dependencies):
     with pytest.raises(ReservationStateError, match="계급을 선택하지 않습니다"):
-        await service.create_reservation(start_time=time(20, 30), subject="host", display_name="Host", ranks=["Brawler"], match_type=MatchType.PLAYER, capacity=2, memo="")
+        await service.create_reservation(
+            start_time=time(20, 30),
+            subject="host",
+            display_name="Host",
+            ranks=["Brawler"],
+            match_type=MatchType.PLAYER,
+            capacity=2,
+            memo="",
+        )
 
 
 @pytest.mark.asyncio
 async def test_create_rejects_start_time_less_than_ten_minutes_away(service, dependencies):
     with pytest.raises(ReservationStateError, match="10분 이후"):
-        await service.create_reservation(start_time=time(19, 5), subject="host", display_name="Host", ranks=["Brawler"], match_type=MatchType.RANK, capacity=1, memo="")
+        await service.create_reservation(
+            start_time=time(19, 5),
+            subject="host",
+            display_name="Host",
+            ranks=["Brawler"],
+            match_type=MatchType.RANK,
+            capacity=1,
+            memo="",
+        )
 
 
 @pytest.mark.asyncio
 async def test_create_rank_reservation_rejects_capacity_other_than_one(service, dependencies):
     with pytest.raises(ReservationStateError, match="1명만 모집"):
-        await service.create_reservation(start_time=time(20, 30), subject="host", display_name="Host", ranks=["Brawler"], match_type=MatchType.RANK, capacity=2, memo="")
+        await service.create_reservation(
+            start_time=time(20, 30),
+            subject="host",
+            display_name="Host",
+            ranks=["Brawler"],
+            match_type=MatchType.RANK,
+            capacity=2,
+            memo="",
+        )
 
 
 @pytest.mark.asyncio

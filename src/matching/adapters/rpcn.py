@@ -52,15 +52,23 @@ class RpcnGameServerAdapter(GameServerPort):
     def get_leaderboard(self, com_id: str, board_id: int, num_ranks: int) -> TTT2LeaderboardResult:
         with self._rpcn.api_client() as client:
             result = client.get_score_range(
-                com_id, board_id,
-                start_rank=1, num_ranks=num_ranks,
-                with_comment=True, with_game_info=True,
+                com_id,
+                board_id,
+                start_rank=1,
+                num_ranks=num_ranks,
+                with_comment=True,
+                with_game_info=True,
             )
         entries = [
             TTT2LeaderboardEntry(
-                rank=e.rank, np_id=e.np_id, online_name=e.online_name,
-                score=e.score, pc_id=e.pc_id, record_date=e.record_date,
-                has_game_data=e.has_game_data, comment=e.comment,
+                rank=e.rank,
+                np_id=e.np_id,
+                online_name=e.online_name,
+                score=e.score,
+                pc_id=e.pc_id,
+                record_date=e.record_date,
+                has_game_data=e.has_game_data,
+                comment=e.comment,
                 player_info=_parse_game_info(e.game_info) if e.game_info else None,
             )
             for e in result.entries
@@ -76,9 +84,7 @@ def _parse_game_info(data: bytes) -> TTT2GameInfo | None:
     """Parse a TTT2 game_info blob. Returns None if data is too short."""
     if len(data) < _GAME_INFO_SIZE:
         return None
-    c1_id, c2_id, c1_rank, c2_rank, c1_w, c2_w, c1_l, c2_l = struct.unpack(
-        _GAME_INFO_FMT, data[:_GAME_INFO_SIZE]
-    )
+    c1_id, c2_id, c1_rank, c2_rank, c1_w, c2_w, c1_l, c2_l = struct.unpack(_GAME_INFO_FMT, data[:_GAME_INFO_SIZE])
     return TTT2GameInfo(
         main_char_info=CharInfo(char_id=c1_id, rank_info=Rank(id=c1_rank), wins=c1_w, losses=c1_l),
         sub_char_info=CharInfo(char_id=c2_id, rank_info=Rank(id=c2_rank), wins=c2_w, losses=c2_l),

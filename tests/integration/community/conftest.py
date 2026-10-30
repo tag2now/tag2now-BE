@@ -12,9 +12,7 @@ def _truncate_postgresql():
     async def _run():
         conn = await asyncpg.connect(build_dsn(driver=""))
         try:
-            await conn.execute(
-                "TRUNCATE posts, comments, thumbs RESTART IDENTITY CASCADE"
-            )
+            await conn.execute("TRUNCATE posts, comments, thumbs RESTART IDENTITY CASCADE")
         finally:
             await conn.close()
 

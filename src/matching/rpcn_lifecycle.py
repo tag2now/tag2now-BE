@@ -1,4 +1,5 @@
 """One RPCN connection shared by every caller, replaced after a failure."""
+
 import logging
 import threading
 import time

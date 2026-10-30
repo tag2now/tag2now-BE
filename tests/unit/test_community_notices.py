@@ -1,4 +1,5 @@
 """Notices: only an admin may write one, and every admin may manage one."""
+
 from unittest.mock import AsyncMock
 
 import pytest
@@ -10,9 +11,17 @@ EDIT = {**NOTICE, "characters": [], "youtube_video_id": None}
 
 def stored(author: str, post_type: str) -> dict:
     return {
-        "id": 1, "author": author, "title": "t", "body": "b", "post_type": post_type,
-        "characters": [], "youtube_video_id": None, "thumbs_up": 0, "thumbs_down": 0,
-        "created_at": "2026-10-01T00:00:00Z", "comment_count": 0,
+        "id": 1,
+        "author": author,
+        "title": "t",
+        "body": "b",
+        "post_type": post_type,
+        "characters": [],
+        "youtube_video_id": None,
+        "thumbs_up": 0,
+        "thumbs_down": 0,
+        "created_at": "2026-10-01T00:00:00Z",
+        "comment_count": 0,
     }
 
 
@@ -74,6 +83,7 @@ def test_non_admin_still_posts_other_types(board, auth_headers):
 
 
 # -- Managing a notice: every admin's, not only its author's ------------------
+
 
 def test_admin_edits_another_admins_notice(board, auth_headers):
     client, repo = board

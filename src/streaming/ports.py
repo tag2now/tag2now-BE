@@ -16,8 +16,9 @@ class StreamChannelRepository(ABC):
     async def list_all(self, session: AsyncSession) -> list[StreamChannel]: ...
 
     @abstractmethod
-    async def upsert(self, session: AsyncSession, username: str, platform: str,
-                     channel: PlatformChannel) -> StreamChannel:
+    async def upsert(
+        self, session: AsyncSession, username: str, platform: str, channel: PlatformChannel
+    ) -> StreamChannel:
         """Set the account's channel; ChannelTakenError when another account holds it."""
 
     @abstractmethod

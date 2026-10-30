@@ -12,8 +12,12 @@ from chat.ports import ChatRepository
 
 def _message(row: ChatMessageRow) -> Message:
     return Message(
-        id=row.id, author_username=row.author_username, author_online_name=row.author_online_name,
-        body=row.body, created_at=row.created_at, author_admin=row.author_admin,
+        id=row.id,
+        author_username=row.author_username,
+        author_online_name=row.author_online_name,
+        body=row.body,
+        created_at=row.created_at,
+        author_admin=row.author_admin,
     )
 
 
@@ -27,11 +31,20 @@ class PostgresChatRepository(ChatRepository):
         self._max_listed = max_listed
 
     async def append(
-        self, author_username: str, author_online_name: str, body: str, created_at: datetime, *, author_admin: bool = False
+        self,
+        author_username: str,
+        author_online_name: str,
+        body: str,
+        created_at: datetime,
+        *,
+        author_admin: bool = False,
     ) -> Message:
         row = ChatMessageRow(
-            author_username=author_username, author_online_name=author_online_name,
-            body=body, created_at=created_at, author_admin=author_admin,
+            author_username=author_username,
+            author_online_name=author_online_name,
+            body=body,
+            created_at=created_at,
+            author_admin=author_admin,
         )
         async with self._sessions() as session, session.begin():
             session.add(row)

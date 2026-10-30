@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 from shared.database import Base
 
+
 class Reservation(Base):
     __tablename__ = "reservations"
     id: Mapped[int] = mapped_column(Integer, Identity(always=True), primary_key=True)
@@ -24,6 +25,7 @@ class Reservation(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
 
 class ReservationComment(Base):
     __tablename__ = "reservation_comments"
@@ -46,7 +48,10 @@ class ReservationParticipant(Base):
         Index("idx_reservation_participants_active", "reservation_id", postgresql_where="cancelled_at IS NULL"),
         # One live seat per account; a cancelled seat does not block rejoining.
         Index(
-            "uq_reservation_participants_active_subject", "reservation_id", "subject", unique=True,
+            "uq_reservation_participants_active_subject",
+            "reservation_id",
+            "subject",
+            unique=True,
             postgresql_where="cancelled_at IS NULL AND subject IS NOT NULL",
         ),
     )

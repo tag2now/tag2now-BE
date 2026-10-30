@@ -52,4 +52,3 @@ class AdminStreamChannelOut(StreamChannelOut):
 
 class AdminStreamChannelsOut(BaseModel):
     channels: list[AdminStreamChannelOut]
-

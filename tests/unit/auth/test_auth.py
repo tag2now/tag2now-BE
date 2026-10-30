@@ -14,7 +14,14 @@ from auth.models import AuthUser
 from shared.rpcn_api import RpcnApiClient
 from shared.settings import get_settings
 
-ACCOUNT = {"user_id": 7, "username": "Alice", "online_name": "앨리스", "avatar_url": "https://a/x.png", "admin": False, "banned": False}
+ACCOUNT = {
+    "user_id": 7,
+    "username": "Alice",
+    "online_name": "앨리스",
+    "avatar_url": "https://a/x.png",
+    "admin": False,
+    "banned": False,
+}
 
 
 def _rpcn(status: int = 200, body: dict | None = None, seen: list | None = None):
@@ -22,6 +29,7 @@ def _rpcn(status: int = 200, body: dict | None = None, seen: list | None = None)
         if seen is not None:
             seen.append(request)
         return httpx.Response(status, json=body if body is not None else ACCOUNT)
+
     return httpx.MockTransport(handler)
 
 
@@ -59,6 +67,7 @@ async def use_verifier(installed):
 
 
 # --- RPCN adapter -----------------------------------------------------------
+
 
 async def test_verify_derives_the_typed_password_before_posting_with_the_api_key():
     seen = []
@@ -116,6 +125,7 @@ def logging_enabled():
 
 async def test_verify_logs_where_it_could_not_reach(caplog, logging_enabled):
     """The log has to say which address failed, and how, to be acted on."""
+
     def unresolvable(request):
         raise httpx.ConnectError("[Errno -2] Name does not resolve", request=request)
 
@@ -138,6 +148,7 @@ async def test_verify_refuses_to_run_unconfigured():
 
 
 # --- Tokens -----------------------------------------------------------------
+
 
 def test_a_token_round_trips_the_user():
     user = AuthUser(username="Alice", online_name="앨리스", avatar_url="u", admin=True)
@@ -167,8 +178,11 @@ def test_a_tampered_token_is_refused():
 
 def test_a_token_signed_with_another_key_is_refused():
     import jwt
+
     now = datetime.now(timezone.utc)
-    foreign = jwt.encode({"iss": "tag2now", "sub": "alice", "iat": now, "exp": now + timedelta(hours=1)}, "x" * 32, algorithm="HS256")
+    foreign = jwt.encode(
+        {"iss": "tag2now", "sub": "alice", "iat": now, "exp": now + timedelta(hours=1)}, "x" * 32, algorithm="HS256"
+    )
 
     with pytest.raises(InvalidTokenError):
         tokens.read_token(foreign)
@@ -176,8 +190,11 @@ def test_a_token_signed_with_another_key_is_refused():
 
 def test_an_unsigned_token_is_refused():
     import jwt
+
     now = datetime.now(timezone.utc)
-    unsigned = jwt.encode({"iss": "tag2now", "sub": "alice", "iat": now, "exp": now + timedelta(hours=1)}, None, algorithm="none")
+    unsigned = jwt.encode(
+        {"iss": "tag2now", "sub": "alice", "iat": now, "exp": now + timedelta(hours=1)}, None, algorithm="none"
+    )
 
     with pytest.raises(InvalidTokenError):
         tokens.read_token(unsigned)
@@ -185,6 +202,7 @@ def test_an_unsigned_token_is_refused():
 
 def test_a_short_secret_disables_signing(monkeypatch):
     from pydantic import SecretStr
+
     monkeypatch.setattr(get_settings(), "jwt_secret", SecretStr("short"))
 
     with pytest.raises(AuthUnavailableError):
@@ -192,6 +210,7 @@ def test_a_short_secret_disables_signing(monkeypatch):
 
 
 # --- Service ----------------------------------------------------------------
+
 
 async def test_login_issues_a_token_for_the_canonical_username(use_verifier):
     auth = await use_verifier(_rpcn())
@@ -220,10 +239,12 @@ async def test_login_falls_back_to_the_username_when_there_is_no_online_name(use
 
 # --- HTTP -------------------------------------------------------------------
 
+
 @pytest.fixture
 def client():
     from fastapi.testclient import TestClient
     from app import app
+
     return TestClient(app)  # no `with`: lifespan stays off, the verifier is ours
 
 
@@ -236,18 +257,26 @@ async def test_login_route_returns_a_bearer_token_that_me_accepts(client, use_ve
     body = login.json()
     assert body["token_type"] == "bearer"
     assert body["expires_in"] == get_settings().jwt_ttl_seconds
-    assert body["user"] == {"username": "Alice", "online_name": "앨리스", "avatar_url": "https://a/x.png", "admin": False}
+    assert body["user"] == {
+        "username": "Alice",
+        "online_name": "앨리스",
+        "avatar_url": "https://a/x.png",
+        "admin": False,
+    }
 
     me = client.get("/auth/me", headers={"Authorization": f"Bearer {body['access_token']}"})
     assert me.status_code == 200
     assert me.json()["username"] == "Alice"
 
 
-@pytest.mark.parametrize("status, body, expected", [
-    (401, {"error": "invalid_credentials"}, 401),
-    (200, {**ACCOUNT, "banned": True}, 403),
-    (403, {"error": "forbidden"}, 502),
-])
+@pytest.mark.parametrize(
+    "status, body, expected",
+    [
+        (401, {"error": "invalid_credentials"}, 401),
+        (200, {**ACCOUNT, "banned": True}, 403),
+        (403, {"error": "forbidden"}, 502),
+    ],
+)
 async def test_login_route_maps_each_rpcn_answer(client, use_verifier, status, body, expected):
     await use_verifier(_rpcn(status, body))
 

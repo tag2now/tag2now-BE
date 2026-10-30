@@ -28,6 +28,7 @@ class _DataclassEncoder(json.JSONEncoder):
 # Abstract interface
 # ---------------------------------------------------------------------------
 
+
 class CacheBackend(ABC):
     @abstractmethod
     def get(self, key: str):
@@ -49,6 +50,7 @@ class CacheBackend(ABC):
 # ---------------------------------------------------------------------------
 # Dict (in-process) implementation
 # ---------------------------------------------------------------------------
+
 
 class DictCache(CacheBackend):
     """Thread-safe in-process cache with per-entry TTL."""
@@ -95,9 +97,11 @@ class DictCache(CacheBackend):
 # Redis implementation
 # ---------------------------------------------------------------------------
 
+
 class RedisCache(CacheBackend):
     def __init__(self):
         import redis
+
         self._client = redis.from_url(
             get_settings().redis_url,
             decode_responses=True,
@@ -145,6 +149,7 @@ class RedisCache(CacheBackend):
 # Factory
 # ---------------------------------------------------------------------------
 
+
 def _make_cache() -> CacheBackend:
     if get_settings().redis_url:
         return RedisCache()
@@ -158,6 +163,7 @@ _cache: CacheBackend = _make_cache()
 # ---------------------------------------------------------------------------
 # Module-level public API (backwards-compatible shims)
 # ---------------------------------------------------------------------------
+
 
 def cache_get(key: str):
     return _cache.get(key)

@@ -162,7 +162,9 @@ async def test_someone_who_joins_later_gets_all_of_the_recent_chat_then_the_same
     first = router.stream(service)
     assert (await _next(first)).data == []
 
-    lines = [await service.post_message(subject=f"user{i}", display_name=f"User{i}", body=f"line {i}") for i in range(3)]
+    lines = [
+        await service.post_message(subject=f"user{i}", display_name=f"User{i}", body=f"line {i}") for i in range(3)
+    ]
     await service.delete_message(lines[1].id, subject="user1", admin=False)
     for _ in range(4):  # three messages and a delete, as they happened
         await _next(first)

@@ -9,6 +9,7 @@ from shared.ttt2 import TEKKEN_RANKS, TTT2_CHARACTERS
 def client():
     from fastapi.testclient import TestClient
     from app import app
+
     return TestClient(app)  # no `with`: lifespan stays off, nothing here needs it
 
 

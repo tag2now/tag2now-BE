@@ -21,13 +21,14 @@ from .conftest import HOST, PORT, USER
 # successfully -- connecting at all needs RPCN to be reachable.
 pytestmark = pytest.mark.rpcn
 
-COM_ID   = "NPWR02973_00"
+COM_ID = "NPWR02973_00"
 BOARD_ID = 0
 
 
 # ---------------------------------------------------------------------------
 # Connection / auth tests
 # ---------------------------------------------------------------------------
+
 
 def test_connect_returns_protocol_version():
     c = RpcnClient(HOST, PORT)
@@ -39,17 +40,15 @@ def test_connect_returns_protocol_version():
 def test_login_info(session):
     info = session["login_info"]
     assert isinstance(info, UserInfo)
-    assert isinstance(info.online_name, str) and info.online_name, \
-        "online_name should be a non-empty string"
-    assert isinstance(info.avatar_url, str), \
-        "avatar_url should be a string"
-    assert isinstance(info.npid, int), \
-        "user_id should be an int"
+    assert isinstance(info.online_name, str) and info.online_name, "online_name should be a non-empty string"
+    assert isinstance(info.avatar_url, str), "avatar_url should be a string"
+    assert isinstance(info.npid, int), "user_id should be an int"
 
 
 # ---------------------------------------------------------------------------
 # Server / world list tests
 # ---------------------------------------------------------------------------
+
 
 def test_get_server_list(session):
     client = session["client"]
@@ -71,6 +70,7 @@ def test_get_world_list(session):
 # Room search test (requires generated protobuf module)
 # ---------------------------------------------------------------------------
 
+
 def test_search_rooms(session):
     pytest.importorskip("rpcn_client.np2_structs_pb2")
     client = session["client"]
@@ -86,6 +86,7 @@ def test_search_rooms(session):
     assert isinstance(resp, SearchRoomsResult)
     assert isinstance(resp.total, int) and resp.total >= 0
     assert isinstance(resp.rooms, list)
+
 
 def test_search_rooms_all(session):
     pytest.importorskip("rpcn_client.np2_structs_pb2")
@@ -108,11 +109,14 @@ def test_search_rooms_all(session):
 # Leaderboard tests (require generated protobuf module)
 # ---------------------------------------------------------------------------
 
+
 def test_get_score_range(session):
     pytest.importorskip("rpcn_client.np2_structs_pb2")
     client = session["client"]
 
-    resp = client.get_score_range(COM_ID, BOARD_ID, start_rank=101, num_ranks=100, with_game_info=True, with_comment=True)
+    resp = client.get_score_range(
+        COM_ID, BOARD_ID, start_rank=101, num_ranks=100, with_game_info=True, with_comment=True
+    )
 
     assert isinstance(resp, ScoreResult)
     assert isinstance(resp.total_records, int) and resp.total_records >= 0
@@ -121,10 +125,8 @@ def test_get_score_range(session):
     assert len(resp.entries) <= 100
 
     for entry in resp.entries:
-        assert isinstance(entry.np_id, str) and entry.np_id, \
-            "entry.np_id should be a non-empty string"
-        assert entry.rank >= 1, \
-            "entry.rank should be >= 1"
+        assert isinstance(entry.np_id, str) and entry.np_id, "entry.np_id should be a non-empty string"
+        assert entry.rank >= 1, "entry.rank should be >= 1"
 
 
 def test_get_score_npid(session):
@@ -142,6 +144,7 @@ def test_get_score_npid(session):
 # ---------------------------------------------------------------------------
 # Error / validation tests
 # ---------------------------------------------------------------------------
+
 
 def test_invalid_com_id_raises(session):
     client = session["client"]

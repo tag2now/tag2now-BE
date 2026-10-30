@@ -307,9 +307,9 @@ with RpcnClient(host="rpcn.mynarco.xyz", port=31313) as client:
     client.login("username", "password")
 
     servers = client.get_server_list("NPWR02973_00")
-    worlds  = client.get_world_list("NPWR02973_00", servers[0])
-    rooms   = client.search_rooms("NPWR02973_00", world_id=worlds[0])
-    scores  = client.get_score_range("NPWR02973_00", board_id=0, num_ranks=10)
+    worlds = client.get_world_list("NPWR02973_00", servers[0])
+    rooms = client.search_rooms("NPWR02973_00", world_id=worlds[0])
+    scores = client.get_score_range("NPWR02973_00", board_id=0, num_ranks=10)
 ```
 
 A standalone smoke test against a live server:

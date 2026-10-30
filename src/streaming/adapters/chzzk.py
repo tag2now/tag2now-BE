@@ -20,7 +20,7 @@ _UNAVAILABLE = "치지직에 연결할 수 없습니다. 잠시 후 다시 시�
 # /service/v1/channels never answers httpx's default User-Agent; a browser's gets through.
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
 }
 
 
@@ -32,8 +32,9 @@ class ChzzkPlatform(StreamPlatform):
         self._client: httpx.AsyncClient | None = None
 
     async def init(self) -> None:
-        self._client = httpx.AsyncClient(base_url=self._base_url, timeout=self._timeout,
-                                         headers=_HEADERS, transport=self._transport)
+        self._client = httpx.AsyncClient(
+            base_url=self._base_url, timeout=self._timeout, headers=_HEADERS, transport=self._transport
+        )
 
     async def close(self) -> None:
         if self._client is not None:

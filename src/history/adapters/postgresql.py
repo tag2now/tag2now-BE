@@ -9,7 +9,15 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from history.entities import ActivitySnapshotRow, DailyMatchedPlayerRow, RankMatchSnapshotRow
-from history.models import ActivitySnapshot, CoPlayer, DailySummary, HourlyActivity, PlayerStats, RankMatchSnapshotRecord, TopPlayer
+from history.models import (
+    ActivitySnapshot,
+    CoPlayer,
+    DailySummary,
+    HourlyActivity,
+    PlayerStats,
+    RankMatchSnapshotRecord,
+    TopPlayer,
+)
 from history.ports import HistoryPort
 
 logger = logging.getLogger(__name__)
@@ -28,6 +36,7 @@ STAT_DAY_TZ = timezone(timedelta(hours=9 - STAT_DAY_START_HOUR))
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def stat_day(moment: datetime) -> date:
     """The 06:00-KST statistics day a moment belongs to."""
@@ -48,57 +57,64 @@ def stat_day_start(day: date) -> datetime:
 # Adapter
 # ---------------------------------------------------------------------------
 
-class PostgresHistoryAdapter(HistoryPort):
 
+class PostgresHistoryAdapter(HistoryPort):
     # -- Write ---------------------------------------------------------------
 
     async def record_snapshot(self, session: AsyncSession, rooms: list[RankMatchSnapshotRecord]) -> None:
         if not rooms:
             return
 
-        stmt = pg_insert(RankMatchSnapshotRow).values([
-            dict(
-                room_id=room.room_id,
-                created_dt=room.created_dt,
-                match_date=stat_day(room.created_dt),
-                rank_id=room.rank_id,
-                user1_npid=room.user1_npid,
-                user1_online_name=room.user1_online_name,
-                user2_npid=room.user2_npid,
-                user2_online_name=room.user2_online_name,
+        stmt = (
+            pg_insert(RankMatchSnapshotRow)
+            .values(
+                [
+                    dict(
+                        room_id=room.room_id,
+                        created_dt=room.created_dt,
+                        match_date=stat_day(room.created_dt),
+                        rank_id=room.rank_id,
+                        user1_npid=room.user1_npid,
+                        user1_online_name=room.user1_online_name,
+                        user2_npid=room.user2_npid,
+                        user2_online_name=room.user2_online_name,
+                    )
+                    for room in rooms
+                ]
             )
-            for room in rooms
-        ]).on_conflict_do_nothing(
-            index_elements=["room_id", "user1_npid", "user2_npid", "match_date"]
+            .on_conflict_do_nothing(index_elements=["room_id", "user1_npid", "user2_npid", "match_date"])
         )
         await session.execute(stmt)
         await session.flush()
 
-    async def record_daily_matched_players(
-        self, session: AsyncSession, npids: set[str], observed_at: datetime
-    ) -> None:
+    async def record_daily_matched_players(self, session: AsyncSession, npids: set[str], observed_at: datetime) -> None:
         """Use the database unique key as the durable per-day participant set."""
         valid_npids = {npid for npid in npids if npid}
         if not valid_npids:
             return
 
-        stmt = pg_insert(DailyMatchedPlayerRow).values([
-            dict(date=stat_day(observed_at), npid=npid, first_seen_at=observed_at)
-            for npid in valid_npids
-        ]).on_conflict_do_nothing(index_elements=["date", "npid"])
+        stmt = (
+            pg_insert(DailyMatchedPlayerRow)
+            .values([dict(date=stat_day(observed_at), npid=npid, first_seen_at=observed_at) for npid in valid_npids])
+            .on_conflict_do_nothing(index_elements=["date", "npid"])
+        )
         await session.execute(stmt)
 
     async def record_activity_snapshot(self, session: AsyncSession, snapshot: ActivitySnapshot) -> None:
-        session.add(ActivitySnapshotRow(
-            sampled_at=snapshot.observed_at,
-            total_players=snapshot.total_players,
-            total_rooms=snapshot.total_rooms,
-            rank_players=snapshot.rank_players,
-            rank_rooms=snapshot.rank_rooms,
-        ))
-        await session.execute(delete(ActivitySnapshotRow).where(
-            ActivitySnapshotRow.sampled_at < func.now() - timedelta(days=_ACTIVITY_RETENTION_DAYS)
-        ))
+        session.add(
+            ActivitySnapshotRow(
+                sampled_at=snapshot.observed_at,
+                total_players=snapshot.total_players,
+                total_rooms=snapshot.total_rooms,
+                rank_players=snapshot.rank_players,
+                rank_rooms=snapshot.rank_rooms,
+            )
+        )
+        await session.execute(
+            delete(ActivitySnapshotRow).where(
+                ActivitySnapshotRow.sampled_at < func.now() - timedelta(days=_ACTIVITY_RETENTION_DAYS)
+            )
+        )
 
     # -- Read: global stats --------------------------------------------------
 
@@ -107,7 +123,9 @@ class PostgresHistoryAdapter(HistoryPort):
         # hour's peak here and a day's peak there are the same measurement.
         stmt = (
             select(
-                func.extract("hour", func.timezone("Asia/Seoul", ActivitySnapshotRow.sampled_at)).cast(Integer).label("hour"),
+                func.extract("hour", func.timezone("Asia/Seoul", ActivitySnapshotRow.sampled_at))
+                .cast(Integer)
+                .label("hour"),
                 func.round(func.avg(ActivitySnapshotRow.total_players), 1).label("avg_players"),
                 func.max(ActivitySnapshotRow.total_players).label("peak_players"),
             )
@@ -141,17 +159,27 @@ class PostgresHistoryAdapter(HistoryPort):
         ).subquery()
         snapshot_date = _sql_stat_day(ActivitySnapshotRow.sampled_at).label("date")
         snapshots = (
-            select(snapshot_date, func.max(ActivitySnapshotRow.total_players).label("peak_players"),
+            select(
+                snapshot_date,
+                func.max(ActivitySnapshotRow.total_players).label("peak_players"),
                 func.round(func.avg(ActivitySnapshotRow.total_players), 1).label("avg_players"),
-                func.max(ActivitySnapshotRow.total_rooms).label("peak_rooms"))
+                func.max(ActivitySnapshotRow.total_rooms).label("peak_rooms"),
+            )
             .where(ActivitySnapshotRow.sampled_at >= start_at)
             .group_by(snapshot_date)
         ).subquery()
         date = func.coalesce(snapshots.c.date, players.c.date).label("date")
-        stmt = select(date, snapshots.c.peak_players, snapshots.c.avg_players, snapshots.c.peak_rooms,
-            func.coalesce(players.c.unique_players, 0).label("unique_players")).select_from(
-            snapshots.outerjoin(players, snapshots.c.date == players.c.date, full=True)
-        ).order_by(date)
+        stmt = (
+            select(
+                date,
+                snapshots.c.peak_players,
+                snapshots.c.avg_players,
+                snapshots.c.peak_rooms,
+                func.coalesce(players.c.unique_players, 0).label("unique_players"),
+            )
+            .select_from(snapshots.outerjoin(players, snapshots.c.date == players.c.date, full=True))
+            .order_by(date)
+        )
 
         result = await session.execute(stmt)
         return [
@@ -171,9 +199,14 @@ class PostgresHistoryAdapter(HistoryPort):
         cutoff = func.now() - timedelta(days=days)
 
         player_snapshots = (
-            select(RankMatchSnapshotRow.room_id, RankMatchSnapshotRow.created_dt,
-                   RankMatchSnapshotRow.user1_npid, RankMatchSnapshotRow.user2_npid,
-                   RankMatchSnapshotRow.user1_online_name, RankMatchSnapshotRow.user2_online_name)
+            select(
+                RankMatchSnapshotRow.room_id,
+                RankMatchSnapshotRow.created_dt,
+                RankMatchSnapshotRow.user1_npid,
+                RankMatchSnapshotRow.user2_npid,
+                RankMatchSnapshotRow.user1_online_name,
+                RankMatchSnapshotRow.user2_online_name,
+            )
             .where(
                 or_(RankMatchSnapshotRow.user1_npid == npid, RankMatchSnapshotRow.user2_npid == npid),
                 RankMatchSnapshotRow.created_dt >= cutoff,
@@ -200,7 +233,7 @@ class PostgresHistoryAdapter(HistoryPort):
                 ).label("online_name"),
                 func.count().label("times_together"),
             )
-            .group_by("npid","online_name")
+            .group_by("npid", "online_name")
             .order_by(func.count().desc())
             .limit(4)
         )
@@ -211,7 +244,9 @@ class PostgresHistoryAdapter(HistoryPort):
         cutoff_hours = func.now() - timedelta(days=7)
         hours_stmt = (
             select(
-                func.extract("hour", func.timezone("Asia/Seoul", RankMatchSnapshotRow.created_dt)).cast(Integer).label("hour"),
+                func.extract("hour", func.timezone("Asia/Seoul", RankMatchSnapshotRow.created_dt))
+                .cast(Integer)
+                .label("hour"),
                 func.count(func.distinct(_sql_stat_day(RankMatchSnapshotRow.created_dt))).label("day_count"),
             )
             .where(
@@ -231,14 +266,16 @@ class PostgresHistoryAdapter(HistoryPort):
             last_seen=row.last_seen if row else None,
             room_type_counts={},
             top_played_with=[
-                CoPlayer(npid=r.npid, online_name=r.online_name, times_together=r.times_together)
-                for r in top_rows
+                CoPlayer(npid=r.npid, online_name=r.online_name, times_together=r.times_together) for r in top_rows
             ],
             active_hours=active_hours,
         )
 
     async def get_weekly_top_players(
-        self, session: AsyncSession, limit: int = 10, excluded_npids: Sequence[str] = (),
+        self,
+        session: AsyncSession,
+        limit: int = 10,
+        excluded_npids: Sequence[str] = (),
     ) -> list[TopPlayer]:
         cutoff = func.now() - timedelta(days=7)
         # RPCN usernames are unique case-insensitively, so the list is too.
@@ -268,8 +305,4 @@ class PostgresHistoryAdapter(HistoryPort):
         )
 
         result = await session.execute(stmt)
-        return [
-            TopPlayer(npid=row.npid, online_name=row.online_name, match_count=row.match_count)
-            for row in result
-        ]
-
+        return [TopPlayer(npid=row.npid, online_name=row.online_name, match_count=row.match_count) for row in result]

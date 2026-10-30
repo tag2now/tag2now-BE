@@ -79,7 +79,10 @@ async def test_collect_once_records_one_observation_as_players_snapshot_and_matc
     collector_io.observe.return_value = _observation(
         rank_matches=[_rank_match(7, "ranked-a", "ranked-b", rank_id=12)],
         rank_player_npids={"ranked-a", "ranked-b"},
-        total_players=12, total_rooms=7, rank_players=3, rank_rooms=2,
+        total_players=12,
+        total_rooms=7,
+        rank_players=3,
+        rank_rooms=2,
     )
 
     await collector_io.collector.collect_once()

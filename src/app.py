@@ -1,5 +1,6 @@
 """The ASGI app: every module's router, and a lifespan that builds the services
 (container.py) and runs the collector. How to run it is in CLAUDE.md."""
+
 import json
 import logging
 import os
@@ -37,6 +38,7 @@ try:
 except Exception:
     logger.critical("Shutting down: Redis is unavailable")
     os._exit(1)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

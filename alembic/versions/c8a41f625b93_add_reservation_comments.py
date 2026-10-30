@@ -3,6 +3,7 @@
 Revision ID: c8a41f625b93
 Revises: b5e93c17d240
 """
+
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
@@ -29,7 +30,9 @@ def upgrade() -> None:
     # Every read is "the live comments on one reservation", so the partial index
     # carries the deleted_at filter rather than leaving it to a heap check.
     op.create_index(
-        "idx_reservation_comments_active", "reservation_comments", ["reservation_id"],
+        "idx_reservation_comments_active",
+        "reservation_comments",
+        ["reservation_id"],
         postgresql_where=sa.text("deleted_at IS NULL"),
     )
 

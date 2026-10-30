@@ -14,13 +14,36 @@ class ReservationRepository(ABC):
     async def get(self, reservation_id: int) -> Reservation: ...
 
     @abstractmethod
-    async def create(self, *, start_at: datetime, host_subject: str, host_display_name: str, host_ranks: list[str], match_type: MatchType, capacity: int, memo: str) -> Reservation: ...
+    async def create(
+        self,
+        *,
+        start_at: datetime,
+        host_subject: str,
+        host_display_name: str,
+        host_ranks: list[str],
+        match_type: MatchType,
+        capacity: int,
+        memo: str,
+    ) -> Reservation: ...
 
     @abstractmethod
-    async def update(self, reservation_id: int, host_subject: str, now: datetime, *, start_at: datetime | None = None, ranks: list[str] | None = None, match_type: MatchType | None = None, capacity: int | None = None, memo: str | None = None) -> Reservation: ...
+    async def update(
+        self,
+        reservation_id: int,
+        host_subject: str,
+        now: datetime,
+        *,
+        start_at: datetime | None = None,
+        ranks: list[str] | None = None,
+        match_type: MatchType | None = None,
+        capacity: int | None = None,
+        memo: str | None = None,
+    ) -> Reservation: ...
 
     @abstractmethod
-    async def join(self, reservation_id: int, *, subject: str, display_name: str, ranks: list[str], now: datetime) -> tuple[Reservation, Participant]: ...
+    async def join(
+        self, reservation_id: int, *, subject: str, display_name: str, ranks: list[str], now: datetime
+    ) -> tuple[Reservation, Participant]: ...
 
     @abstractmethod
     async def cancel_participation(self, reservation_id: int, subject: str, now: datetime) -> Reservation: ...
@@ -35,5 +58,6 @@ class ReservationRepository(ABC):
     async def add_comment(self, reservation_id: int, *, author_subject: str, author: str, body: str) -> Comment: ...
 
     @abstractmethod
-    async def delete_comment(self, reservation_id: int, comment_id: int, author_subject: str, now: datetime) -> None: ...
-
+    async def delete_comment(
+        self, reservation_id: int, comment_id: int, author_subject: str, now: datetime
+    ) -> None: ...

@@ -7,7 +7,9 @@ USER = {**signed_in("testuser"), "Content-Type": "application/json"}
 
 
 def _post(client, headers, title, post_type):
-    response = client.post("/community/posts", json={"title": title, "body": "b", "post_type": post_type}, headers=headers)
+    response = client.post(
+        "/community/posts", json={"title": title, "body": "b", "post_type": post_type}, headers=headers
+    )
     assert response.status_code == 201
     return response.json()["id"]
 

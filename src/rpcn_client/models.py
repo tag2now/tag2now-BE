@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+
 def _format_epoch(epoch_us: int) -> str:
     """Convert a microsecond epoch timestamp to a readable UTC datetime string."""
     if epoch_us == 0:
@@ -27,10 +28,12 @@ class RoomAttr:
     id: int
     value: int
 
+
 @dataclass
 class RoomBinAttr:
     id: int
     data: bytes
+
 
 @dataclass
 class RoomInfo:
@@ -57,10 +60,10 @@ class RoomInfo:
             int_attrs=[RoomAttr(id=a.id.value, value=a.num) for a in room.roomSearchableIntAttrExternal],
             bin_search_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomSearchableBinAttrExternal],
             bin_attrs=[RoomBinAttr(id=a.id.value, data=a.data) for a in room.roomBinAttrExternal],
-            users=[UserInfo(npid=ru.userInfo.npId,
-                            online_name=ru.userInfo.onlineName,
-                            avatar_url=ru.userInfo.avatarUrl)
-                   for ru in getattr(room, 'users', [])]
+            users=[
+                UserInfo(npid=ru.userInfo.npId, online_name=ru.userInfo.onlineName, avatar_url=ru.userInfo.avatarUrl)
+                for ru in getattr(room, "users", [])
+            ],
         )
 
     def __str__(self):
@@ -76,6 +79,7 @@ class RoomInfo:
             parts.append(f"  BinAttr[{a.id}] = {a.data.hex()}")
         return "\n".join(parts)
 
+
 @dataclass
 class SearchRoomsResult:
     total: int
@@ -86,6 +90,7 @@ class SearchRoomsResult:
         for room in self.rooms:
             lines.append(f"  {room}")
         return "\n".join(lines)
+
 
 @dataclass
 class ScoreEntry:
@@ -110,11 +115,12 @@ class ScoreEntry:
         if self.game_info:
             lines.append(f"       gameInfo ({len(self.game_info)} bytes):")
             for off in range(0, len(self.game_info), 16):
-                chunk = self.game_info[off:off + 16]
+                chunk = self.game_info[off : off + 16]
                 hex_part = " ".join(f"{b:02x}" for b in chunk)
                 ascii_part = "".join(chr(b) if 32 <= b < 127 else "." for b in chunk)
                 lines.append(f"         {off:04x}: {hex_part:<48s} {ascii_part}")
         return "\n".join(lines)
+
 
 @dataclass
 class ScoreResult:
@@ -139,17 +145,19 @@ class ScoreResult:
         for i, entry in enumerate(resp.rankArray):
             comment = resp.commentArray[i] if i < n_comments else ""
             game_info = resp.infoArray[i].data if i < n_info else b""
-            entries.append(ScoreEntry(
-                rank=entry.rank,
-                np_id=entry.npId,
-                online_name=entry.onlineName,
-                score=entry.score,
-                pc_id=entry.pcId,
-                record_date=entry.recordDate,
-                has_game_data=entry.hasGameData,
-                comment=comment,
-                game_info=game_info,
-            ))
+            entries.append(
+                ScoreEntry(
+                    rank=entry.rank,
+                    np_id=entry.npId,
+                    online_name=entry.onlineName,
+                    score=entry.score,
+                    pc_id=entry.pcId,
+                    record_date=entry.recordDate,
+                    has_game_data=entry.hasGameData,
+                    comment=comment,
+                    game_info=game_info,
+                )
+            )
         return cls(
             total_records=resp.totalRecord,
             last_sort_date=resp.lastSortDate,

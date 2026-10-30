@@ -36,7 +36,11 @@ class RpcnApiServerAccountAdmin(AccountAdmin):
         return _read(_to_ban_result, body)
 
     async def _post(self, path: str, admin_username: str, admin_password: str, username: str) -> dict:
-        payload = {"admin_username": admin_username, "admin_password": await derive_rpcn_password_in_thread(admin_password), "username": username}
+        payload = {
+            "admin_username": admin_username,
+            "admin_password": await derive_rpcn_password_in_thread(admin_password),
+            "username": username,
+        }
         try:
             response = await self._api.post(path, payload)
         except RpcnApiNotConfigured as exc:

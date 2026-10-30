@@ -219,6 +219,7 @@ class FloorWriteOut(SaveWriteOut):
 
 # --- profile (public, read-only) ----------------------------------------------
 
+
 class PlayerSaveOut(BaseModel):
     username: str
     # When the game last wrote the save.

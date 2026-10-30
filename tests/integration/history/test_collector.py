@@ -28,9 +28,9 @@ async def _delete_test_rows():
 
 async def _count_test_rows() -> int:
     async with get_session_factory()() as session:
-        return (await session.execute(
-            select(func.count()).select_from(RankMatchSnapshotRow).where(_in_test_rows())
-        )).scalar_one()
+        return (
+            await session.execute(select(func.count()).select_from(RankMatchSnapshotRow).where(_in_test_rows()))
+        ).scalar_one()
 
 
 @pytest_asyncio.fixture
@@ -50,8 +50,12 @@ async def collector(monkeypatch):
     room.current_members = 2
     room.users = [UserInfo(npid=npid, online_name=npid, avatar_url="") for npid in _NPIDS]
     observation = ActivityObservation(
-        rank_player_npids=set(_NPIDS), total_players=2, total_rooms=1,
-        rank_players=2, rank_rooms=1, rank_matches=[room],
+        rank_player_npids=set(_NPIDS),
+        total_players=2,
+        total_rooms=1,
+        rank_players=2,
+        rank_rooms=1,
+        rank_matches=[room],
     )
     history = HistoryService(PostgresHistoryAdapter(), get_session_factory())
     monkeypatch.setattr(history, "record_daily_matched_players", AsyncMock())

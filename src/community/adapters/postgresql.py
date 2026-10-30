@@ -58,8 +58,12 @@ class PostgresCommunityRepository(CommunityRepository):
 
     async def create_post(self, author, title, body, post_type="자유", characters=None, youtube_video_id=None):
         post = Post(
-            author=author, title=title, body=body, post_type=post_type,
-            characters=list(characters or []), youtube_video_id=youtube_video_id,
+            author=author,
+            title=title,
+            body=body,
+            post_type=post_type,
+            characters=list(characters or []),
+            youtube_video_id=youtube_video_id,
         )
         async with self._sessions() as session, session.begin():
             session.add(post)

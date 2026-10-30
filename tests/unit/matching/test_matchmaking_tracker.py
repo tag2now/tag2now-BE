@@ -19,8 +19,11 @@ T0 = 1_000_000.0
 def _room(room_id, *npids, rank_id):
     """A room as RPCN lists it. rank_id 0 is a player match; members follow users."""
     info = SimpleNamespace(
-        room_id=room_id, owner_npid=npids[0], owner_online_name=npids[0].title(),
-        current_members=len(npids), max_slots=2,
+        room_id=room_id,
+        owner_npid=npids[0],
+        owner_online_name=npids[0].title(),
+        current_members=len(npids),
+        max_slots=2,
         int_attrs={4: SimpleNamespace(value=rank_id)},
         users=[UserInfo(npid=npid, online_name=npid.title(), avatar_url="") for npid in npids],
     )
@@ -59,6 +62,7 @@ def clock(monkeypatch, mock_settings):
 
 # -- Baseline ----------------------------------------------------------------
 
+
 def test_first_snapshot_has_nothing_to_compare_so_no_phantoms(tracker, mock_settings):
     assert tracker.update_and_get_phantoms([hosting(1, "p1")]) == []
 
@@ -72,6 +76,7 @@ def test_phantom_survives_a_snapshot_with_no_rooms(tracker, mock_settings):
 
 
 # -- Entering searching --------------------------------------------------------
+
 
 def test_host_whose_room_disappears_becomes_a_phantom(tracker, mock_settings):
     tracker.update_and_get_phantoms([hosting(1, "p1")])
@@ -103,6 +108,7 @@ def test_phantom_is_a_solo_rank_room_at_the_rank_of_the_room_left(tracker, mock_
 
 
 # -- Leaving searching ---------------------------------------------------------
+
 
 def test_phantom_who_hosts_again_is_no_longer_a_phantom(tracker, mock_settings):
     tracker.update_and_get_phantoms([hosting(1, "p1")])
@@ -136,6 +142,7 @@ def test_phantom_lasts_until_the_ttl_then_expires(tracker, clock):
 
 
 # -- Independence --------------------------------------------------------------
+
 
 def test_players_are_tracked_independently(tracker, mock_settings):
     tracker.update_and_get_phantoms([hosting(1, "p1"), hosting(2, "p2")])

@@ -5,9 +5,16 @@ from datetime import datetime, time, timedelta, timezone
 import pytest
 
 from reservation.domain import (
-    MatchType, ReservationStatus, ensure_commentable, ensure_conditions_valid,
-    ensure_editable, ensure_joinable, ensure_participation_cancellable,
-    start_at_from, status_for, window_end,
+    MatchType,
+    ReservationStatus,
+    ensure_commentable,
+    ensure_conditions_valid,
+    ensure_editable,
+    ensure_joinable,
+    ensure_participation_cancellable,
+    start_at_from,
+    status_for,
+    window_end,
 )
 from reservation.exceptions import ReservationStateError
 

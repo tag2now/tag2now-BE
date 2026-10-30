@@ -39,6 +39,7 @@ _PATH_FIELDS = ("backup", "source")
 
 # --- profile --------------------------------------------------------------------
 
+
 def _key(npid: str) -> str:
     # RPCN usernames are unique regardless of case, and an admin may type any case.
     return f"saves:player:{npid.casefold()}"
@@ -47,8 +48,15 @@ def _key(npid: str) -> str:
 def _profile(save: dict | None) -> dict | None:
     if save is None:
         return None
-    return {"username": save["npid"], "saved_at": _saved_at(save), "account_rank": save["account_rank"],
-            "total": save["total"], "wins": save["wins"], "losses": save["losses"], "chars": save["chars"]}
+    return {
+        "username": save["npid"],
+        "saved_at": _saved_at(save),
+        "account_rank": save["account_rank"],
+        "total": save["total"],
+        "wins": save["wins"],
+        "losses": save["losses"],
+        "chars": save["chars"],
+    }
 
 
 # --- current rank: leaderboard and holders --------------------------------------
@@ -72,9 +80,15 @@ def _holders_by_rank(players: list[dict], places: dict[str, int]) -> dict[int, l
     by_rank = {rank: [] for rank in HOLDER_RANKS}
     for player in players:
         for rank, ids in _played_ids_by_rank(player["chars"]).items():
-            by_rank[rank].append({"npid": player["npid"], "saved_utc": player["saved_utc"],
-                                  "account_rank": player["account_rank"],
-                                  "place": places[player["npid"]], "chars": ids})
+            by_rank[rank].append(
+                {
+                    "npid": player["npid"],
+                    "saved_utc": player["saved_utc"],
+                    "account_rank": player["account_rank"],
+                    "place": places[player["npid"]],
+                    "chars": ids,
+                }
+            )
     return by_rank
 
 
@@ -91,8 +105,12 @@ def _holds_its_rank(char: dict) -> bool:
 
 
 def _holder(holder: dict) -> dict:
-    return {"username": holder["npid"], "saved_at": _saved_at(holder), "account_rank": holder["account_rank"],
-            "chars": [{"id": i, "character": TTT2_CHARACTERS[i]} for i in holder["chars"]]}
+    return {
+        "username": holder["npid"],
+        "saved_at": _saved_at(holder),
+        "account_rank": holder["account_rank"],
+        "chars": [{"id": i, "character": TTT2_CHARACTERS[i]} for i in holder["chars"]],
+    }
 
 
 def _without_excluded(players: list[dict]) -> list[dict]:
@@ -126,17 +144,27 @@ def _standing(player: dict) -> tuple:
 
 
 def _entry(player: dict) -> dict:
-    return {"username": player["npid"], "saved_at": _saved_at(player), "account_rank": player["account_rank"],
-            "chars": player["chars"]}
+    return {
+        "username": player["npid"],
+        "saved_at": _saved_at(player),
+        "account_rank": player["account_rank"],
+        "chars": player["chars"],
+    }
 
 
 # --- admin ----------------------------------------------------------------------
 
+
 def _audit_record(record: dict) -> dict:
     head = ("ts", "user", "action", "npid")
     details = {k: _label(v) if k in _PATH_FIELDS else v for k, v in record.items() if k not in head}
-    return {"ts": record["ts"], "user": record["user"], "action": record["action"],
-            "username": record["npid"], "details": details}
+    return {
+        "ts": record["ts"],
+        "user": record["user"],
+        "action": record["action"],
+        "username": record["npid"],
+        "details": details,
+    }
 
 
 def _label(path: str) -> str:
@@ -176,10 +204,15 @@ class SavesService:
         if (holders := cache_get(_holders_key(rank))) is None:
             _, by_rank = await self._fill_current_rank_cache()
             holders = by_rank[rank]
-        found = sorted(_saved_within(_without_excluded(holders), days),
-                       key=lambda h: (-h["place"], h["npid"].casefold()))
-        return {"rank": rank, "rank_name": TEKKEN_RANKS[rank]["name"], "total": len(found),
-                "entries": [_holder(h) for h in found[:top]]}
+        found = sorted(
+            _saved_within(_without_excluded(holders), days), key=lambda h: (-h["place"], h["npid"].casefold())
+        )
+        return {
+            "rank": rank,
+            "rank_name": TEKKEN_RANKS[rank]["name"],
+            "total": len(found),
+            "entries": [_holder(h) for h in found[:top]],
+        }
 
     async def _fill_current_rank_cache(self) -> tuple[list[dict], dict[int, list[dict]]]:
         """Read every save once and cache both views of it, an empty rank included,
@@ -193,9 +226,13 @@ class SavesService:
         cache_set(_CURRENT_RANK_KEY, board, ttl)
         for rank, holders in by_rank.items():
             cache_set(_holders_key(rank), holders, ttl)
-        logger.info("current rank cache filled: %d players, %d holders, largest rank %d, %.0f ms",
-                    len(players), sum(map(len, by_rank.values())), max(map(len, by_rank.values())),
-                    (time.perf_counter() - started) * 1000)
+        logger.info(
+            "current rank cache filled: %d players, %d holders, largest rank %d, %.0f ms",
+            len(players),
+            sum(map(len, by_rank.values())),
+            max(map(len, by_rank.values())),
+            (time.perf_counter() - started) * 1000,
+        )
         return board, by_rank
 
     async def show_save(self, admin: AuthUser, request: SaveRequest) -> dict:

@@ -1,4 +1,5 @@
 """Character tags through the public request models and the list route."""
+
 from unittest.mock import AsyncMock
 
 import pytest
@@ -13,16 +14,16 @@ from community.service import CommunityService
 
 
 def test_create_defaults_to_no_characters():
-    assert CreatePostRequest(title='t', body='b').characters == []
+    assert CreatePostRequest(title="t", body="b").characters == []
 
 
 def test_create_keeps_the_team_in_submitted_order():
-    assert CreatePostRequest(title='t', body='b', characters=['Kazuya', 'Jin']).characters == ['Kazuya', 'Jin']
+    assert CreatePostRequest(title="t", body="b", characters=["Kazuya", "Jin"]).characters == ["Kazuya", "Jin"]
 
 
 def test_edit_requires_an_explicit_character_list():
     with pytest.raises(ValidationError):
-        UpdatePostRequest(title='t', body='b', post_type='공략', youtube_video_id=None)
+        UpdatePostRequest(title="t", body="b", post_type="공략", youtube_video_id=None)
 
 
 @pytest.fixture
@@ -32,27 +33,27 @@ def listing():
     repo = AsyncMock()
     repo.list_posts.return_value = ([], 0)
     app = FastAPI()
-    app.include_router(router, prefix='/community')
+    app.include_router(router, prefix="/community")
     app.dependency_overrides[community_service] = lambda: CommunityService(repo)
-    cache_delete_pattern('community:*')
+    cache_delete_pattern("community:*")
     with TestClient(app) as client:
         yield client, repo
-    cache_delete_pattern('community:*')
+    cache_delete_pattern("community:*")
 
 
 def test_list_passes_the_team_regardless_of_order(listing):
     client, repo = listing
 
-    client.get('/community/posts', params=[('characters', 'Kazuya'), ('characters', 'Jin')])
-    client.get('/community/posts', params=[('characters', 'Jin'), ('characters', 'Kazuya')])
+    client.get("/community/posts", params=[("characters", "Kazuya"), ("characters", "Jin")])
+    client.get("/community/posts", params=[("characters", "Jin"), ("characters", "Kazuya")])
 
     # Both orders name the same team, so the second read is served from cache.
-    repo.list_posts.assert_awaited_once_with(1, 20, None, ['Jin', 'Kazuya'])
+    repo.list_posts.assert_awaited_once_with(1, 20, None, ["Jin", "Kazuya"])
 
 
 def test_list_without_characters_filters_nothing(listing):
     client, repo = listing
 
-    client.get('/community/posts', params={'post_type': '공략'})
+    client.get("/community/posts", params={"post_type": "공략"})
 
-    repo.list_posts.assert_awaited_once_with(1, 20, '공략', [])
+    repo.list_posts.assert_awaited_once_with(1, 20, "공략", [])

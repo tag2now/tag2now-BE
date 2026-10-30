@@ -25,6 +25,7 @@ from matching.models import Rank, RoomInfoDTO, RoomType
 # Internal state
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class _SnapshotRoom:
     room_id: int
@@ -34,6 +35,7 @@ class _SnapshotRoom:
     room_type: str
     rank_info: Rank | None
     users: list[UserInfo]
+
 
 @dataclass
 class _SearchingPlayer:
@@ -63,7 +65,7 @@ class MatchmakingTracker:
                 current_members=room.current_members,
                 room_type=room.room_type.value,
                 rank_info=room.rank_info,
-                users=room.users
+                users=room.users,
             )
             for room in current_rooms
         }

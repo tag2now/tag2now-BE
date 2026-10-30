@@ -35,6 +35,7 @@ def _invalidate_post(post_id: int) -> None:
 # Rules
 # ---------------------------------------------------------------------------
 
+
 def ensure_can_use_post_type(post_type: str, user: AuthUser) -> None:
     """A notice is pinned above everyone's posts, so only an admin may write one.
 
@@ -76,7 +77,9 @@ class CommunityService:
 
     # -- Posts ---------------------------------------------------------------
 
-    async def list_posts(self, page: int, page_size: int, post_type: str | None = None, characters: list[str] | None = None) -> dict:
+    async def list_posts(
+        self, page: int, page_size: int, post_type: str | None = None, characters: list[str] | None = None
+    ) -> dict:
         # A team is unordered: Jin+Kazuya and Kazuya+Jin share one cache entry.
         team = sorted(set(characters or ()))
         key = _list_key(page, page_size, post_type, team)
@@ -97,13 +100,30 @@ class CommunityService:
         cache_set(key, post, _ttl())
         return post
 
-    async def create_post(self, author: AuthUser, title: str, body: str, post_type: str = "자유", characters: list[str] | None = None, youtube_video_id: str | None = None) -> dict:
+    async def create_post(
+        self,
+        author: AuthUser,
+        title: str,
+        body: str,
+        post_type: str = "자유",
+        characters: list[str] | None = None,
+        youtube_video_id: str | None = None,
+    ) -> dict:
         ensure_can_use_post_type(post_type, author)
         post = await self._repo.create_post(author.username, title, body, post_type, characters, youtube_video_id)
         _invalidate_lists()
         return post
 
-    async def update_post(self, post_id: int, user: AuthUser, title: str, body: str, post_type: str, characters: list[str], youtube_video_id: str | None) -> dict:
+    async def update_post(
+        self,
+        post_id: int,
+        user: AuthUser,
+        title: str,
+        body: str,
+        post_type: str,
+        characters: list[str],
+        youtube_video_id: str | None,
+    ) -> dict:
         ensure_can_use_post_type(post_type, user)
         ensure_can_manage_post(await self._repo.get_post(post_id), user)
         post = await self._repo.update_post(post_id, title, body, post_type, characters, youtube_video_id)

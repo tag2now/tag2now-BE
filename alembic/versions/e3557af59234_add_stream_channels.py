@@ -1,4 +1,5 @@
 """Add stream_channels: an RPCN account's channel on a streaming platform."""
+
 from alembic import op
 import sqlalchemy as sa
 

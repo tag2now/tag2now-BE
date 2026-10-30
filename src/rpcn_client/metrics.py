@@ -16,10 +16,15 @@ logger = logging.getLogger("emf")
 _NAMESPACE = "RPCN"
 
 _TRACKED_METHODS = {
-    "connect", "login", "disconnect",
-    "get_server_list", "get_world_list",
-    "search_rooms", "search_rooms_all",
-    "get_score_range", "get_score_npid",
+    "connect",
+    "login",
+    "disconnect",
+    "get_server_list",
+    "get_world_list",
+    "search_rooms",
+    "search_rooms_all",
+    "get_score_range",
+    "get_score_npid",
 }
 
 
@@ -56,6 +61,7 @@ class TrackedRpcnClient:
     def __getattr__(self, name: str):
         attr = getattr(self._client, name)
         if name in _TRACKED_METHODS and callable(attr):
+
             @wraps(attr)
             def wrapper(*args, **kwargs):
                 start = time.monotonic()
@@ -71,6 +77,7 @@ class TrackedRpcnClient:
                         _emit_emf(name, duration_ms, success)
                     except Exception:
                         logger.debug("EMF emission failed for %s", name, exc_info=True)
+
             self.__dict__[name] = wrapper
             return wrapper
         return attr

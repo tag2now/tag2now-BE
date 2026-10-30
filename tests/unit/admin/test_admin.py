@@ -12,8 +12,15 @@ from admin.exceptions import AccountNotFoundError, AdminPasswordError, AdminUnav
 from shared.rpcn_api import RpcnApiClient
 
 INFO = {
-    "user_id": 7, "username": "Alice", "online_name": "앨리스", "avatar_url": "https://a/x.png",
-    "admin": False, "banned": False, "online": True, "creation": 1_700_000_000, "last_login": None,
+    "user_id": 7,
+    "username": "Alice",
+    "online_name": "앨리스",
+    "avatar_url": "https://a/x.png",
+    "admin": False,
+    "banned": False,
+    "online": True,
+    "creation": 1_700_000_000,
+    "last_login": None,
 }
 BANNED = {"user_id": 7, "username": "Alice", "banned": True, "kicked": True}
 # derive_rpcn_password("pw"), the value RPCS3 would send for it.
@@ -26,6 +33,7 @@ def _rpcn(status: int = 200, body: dict | None = None, seen: list | None = None)
             seen.append(request)
         default = BANNED if request.url.path.endswith("/ban") else INFO
         return httpx.Response(status, json=body if body is not None else default)
+
     return httpx.MockTransport(handler)
 
 
@@ -65,6 +73,7 @@ async def use_rpcn(installed):
 
 # --- RPCN adapter -----------------------------------------------------------
 
+
 async def test_ban_sends_the_admins_derived_password_with_the_api_key():
     seen = []
     adapter = await _adapter(_rpcn(seen=seen))
@@ -89,14 +98,17 @@ async def test_lookup_reads_rpcn_timestamps_as_utc_and_keeps_a_missing_one_empty
     assert status.last_login_at is None
 
 
-@pytest.mark.parametrize("status, body, error", [
-    (401, {"error": "invalid_credentials"}, AdminPasswordError),
-    (403, {"error": "forbidden"}, NotAdminError),
-    (404, {"error": "user_not_found"}, AccountNotFoundError),
-    (404, None, AdminUnavailableError),  # API switched off: a bare 404
-    (400, {"error": "invalid_request"}, AdminUnavailableError),
-    (500, {"error": "internal_error"}, AdminUnavailableError),
-])
+@pytest.mark.parametrize(
+    "status, body, error",
+    [
+        (401, {"error": "invalid_credentials"}, AdminPasswordError),
+        (403, {"error": "forbidden"}, NotAdminError),
+        (404, {"error": "user_not_found"}, AccountNotFoundError),
+        (404, None, AdminUnavailableError),  # API switched off: a bare 404
+        (400, {"error": "invalid_request"}, AdminUnavailableError),
+        (500, {"error": "internal_error"}, AdminUnavailableError),
+    ],
+)
 async def test_each_rpcn_refusal_maps_to_its_own_error(status, body, error):
     def handler(request):
         return httpx.Response(status, json=body) if body is not None else httpx.Response(status)
@@ -135,10 +147,12 @@ async def test_refuses_to_run_unconfigured():
 
 # --- HTTP -------------------------------------------------------------------
 
+
 @pytest.fixture
 def client():
     from fastapi.testclient import TestClient
     from app import app
+
     return TestClient(app)  # no `with`: lifespan stays off, the adapter is ours
 
 
@@ -152,9 +166,14 @@ async def test_lookup_route_returns_the_accounts_standing(client, use_rpcn, auth
 
     assert response.status_code == 200
     assert response.json() == {
-        "username": "Alice", "online_name": "앨리스", "avatar_url": "https://a/x.png",
-        "admin": False, "banned": False, "online": True,
-        "created_at": "2023-11-14T22:13:20Z", "last_login_at": None,
+        "username": "Alice",
+        "online_name": "앨리스",
+        "avatar_url": "https://a/x.png",
+        "admin": False,
+        "banned": False,
+        "online": True,
+        "created_at": "2023-11-14T22:13:20Z",
+        "last_login_at": None,
     }
 
 
@@ -202,7 +221,9 @@ async def test_an_admin_cannot_ban_their_own_account(client, use_rpcn, auth_head
     seen = []
     await use_rpcn(_rpcn(seen=seen))
 
-    response = client.post("/admin/users/ban", json={**BODY, "username": target}, headers=auth_headers("root", admin=True))
+    response = client.post(
+        "/admin/users/ban", json={**BODY, "username": target}, headers=auth_headers("root", admin=True)
+    )
 
     assert response.status_code == 400
     assert seen == []

@@ -9,7 +9,13 @@ from chat.domain import ChatEvent, Message
 class ChatRepository(ABC):
     @abstractmethod
     async def append(
-        self, author_username: str, author_online_name: str, body: str, created_at: datetime, *, author_admin: bool = False
+        self,
+        author_username: str,
+        author_online_name: str,
+        body: str,
+        created_at: datetime,
+        *,
+        author_admin: bool = False,
     ) -> Message: ...
 
     @abstractmethod

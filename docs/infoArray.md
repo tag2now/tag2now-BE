@@ -58,14 +58,14 @@ import struct
 # Note: We only slice the first 20 bytes as the rest is padding.
 data_format = ">4B4I"
 
+
 def parse_game_info(data_bytes):
     header = data_bytes[:20]
     c1_id, c1_rank, c2_id, c2_rank, c1_w, c1_l, c2_w, c2_l = struct.unpack(data_format, header)
     return {
         "char1": {"id": c1_id, "rank": c1_rank, "win": c1_w, "lose": c1_l},
-        "char2": {"id": c2_id, "rank": c2_rank, "win": c2_w, "lose": c2_l}
+        "char2": {"id": c2_id, "rank": c2_rank, "win": c2_w, "lose": c2_l},
     }
-
 ```
 
 ---

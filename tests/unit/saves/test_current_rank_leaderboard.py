@@ -13,8 +13,17 @@ from shared.cache import DictCache
 
 
 def _char(id: int, rank: int, points: int = 0, wins: int = 1) -> dict:
-    return {"id": id, "character": f"C{id}", "rank": rank, "rank_name": f"R{rank}", "tier": "t",
-            "points": points, "streak": 0, "wins": wins, "losses": 0}
+    return {
+        "id": id,
+        "character": f"C{id}",
+        "rank": rank,
+        "rank_name": f"R{rank}",
+        "tier": "t",
+        "points": points,
+        "streak": 0,
+        "wins": wins,
+        "losses": 0,
+    }
 
 
 def _player(npid: str, *chars: dict, account_rank: int = 20) -> dict:
@@ -29,6 +38,7 @@ def _server(status: int = 200, body: dict | None = None, seen: list | None = Non
         if seen is not None:
             seen.append(request)
         return httpx.Response(status, json={"players": PLAYERS} if body is None else body)
+
     return httpx.MockTransport(handler)
 
 
@@ -67,6 +77,7 @@ def cache(monkeypatch):
 def client():
     from fastapi.testclient import TestClient
     from app import app
+
     return TestClient(app)  # no `with`: lifespan stays off, the adapter is ours
 
 
@@ -75,6 +86,7 @@ def _order(board: list[dict]) -> list[tuple[int, str]]:
 
 
 # --- adapter ------------------------------------------------------------------
+
 
 async def test_reads_every_player_with_a_get_and_the_api_key_only():
     seen = []
@@ -86,10 +98,13 @@ async def test_reads_every_player_with_a_get_and_the_api_key_only():
     await adapter.close()
 
 
-@pytest.mark.parametrize("response", [
-    (403, {"error": "invalid_api_key", "message": "x"}),
-    (500, {"error": "internal_error", "message": "x"}),
-])
+@pytest.mark.parametrize(
+    "response",
+    [
+        (403, {"error": "invalid_api_key", "message": "x"}),
+        (500, {"error": "internal_error", "message": "x"}),
+    ],
+)
 async def test_a_refusal_is_unavailable(response):
     adapter = await _adapter(_server(*response))
     with pytest.raises(SavesUnavailableError):
@@ -99,29 +114,35 @@ async def test_a_refusal_is_unavailable(response):
 
 # --- ordering -------------------------------------------------------------------
 
+
 def test_best_character_first_then_the_second():
-    board = current_rank_board([
-        _player("Low", _char(0, 21), _char(1, 21)),
-        _player("Top", _char(0, 25), _char(1, 12)),
-        _player("Pair", _char(0, 22), _char(1, 22)),
-        _player("Second", _char(0, 22), _char(1, 14)),
-    ])
+    board = current_rank_board(
+        [
+            _player("Low", _char(0, 21), _char(1, 21)),
+            _player("Top", _char(0, 25), _char(1, 12)),
+            _player("Pair", _char(0, 22), _char(1, 22)),
+            _player("Second", _char(0, 22), _char(1, 14)),
+        ]
+    )
     assert _order(board) == [(1, "Top"), (2, "Pair"), (3, "Second"), (4, "Low")]
 
 
 def test_points_break_a_tie_of_ranks():
-    board = current_rank_board([
-        _player("A", _char(0, 22, 100), _char(1, 20, 9000)),
-        _player("B", _char(0, 22, 4000), _char(1, 20, 0)),
-        _player("C", _char(0, 22, 100), _char(1, 20, 9001)),
-    ])
+    board = current_rank_board(
+        [
+            _player("A", _char(0, 22, 100), _char(1, 20, 9000)),
+            _player("B", _char(0, 22, 4000), _char(1, 20, 0)),
+            _player("C", _char(0, 22, 100), _char(1, 20, 9001)),
+        ]
+    )
     assert _order(board) == [(1, "B"), (2, "C"), (3, "A")]
 
 
 def test_equal_standings_share_a_place_and_list_by_name():
     floor = (_char(0, 14, 5000), _char(1, 14, 5000))
-    board = current_rank_board([_player("carol", *floor), _player("Top", _char(0, 30)), _player("Bob", *floor),
-                        _player("Last", _char(0, 12))])
+    board = current_rank_board(
+        [_player("carol", *floor), _player("Top", _char(0, 30)), _player("Bob", *floor), _player("Last", _char(0, 12))]
+    )
     assert _order(board) == [(1, "Top"), (2, "Bob"), (2, "carol"), (4, "Last")]
 
 
@@ -136,16 +157,30 @@ def test_a_player_with_no_ranked_character_is_left_out():
 
 # --- HTTP -----------------------------------------------------------------------
 
+
 async def test_anyone_reads_the_board(client, use_server):
     await use_server(_server())
     response = client.get("/saves/leaderboard")
     assert response.status_code == 200
-    assert response.json() == {"total": 2, "entries": [
-        {"rank": 1, "username": "Alice", "saved_at": "2026-10-16T01:02:03Z", "account_rank": 20,
-         "chars": PLAYERS[1]["chars"]},
-        {"rank": 2, "username": "Bob", "saved_at": "2026-10-16T01:02:03Z", "account_rank": 20,
-         "chars": PLAYERS[0]["chars"]},
-    ]}
+    assert response.json() == {
+        "total": 2,
+        "entries": [
+            {
+                "rank": 1,
+                "username": "Alice",
+                "saved_at": "2026-10-16T01:02:03Z",
+                "account_rank": 20,
+                "chars": PLAYERS[1]["chars"],
+            },
+            {
+                "rank": 2,
+                "username": "Bob",
+                "saved_at": "2026-10-16T01:02:03Z",
+                "account_rank": 20,
+                "chars": PLAYERS[0]["chars"],
+            },
+        ],
+    }
 
 
 async def test_the_best_two_of_every_character_rank_and_show_on_the_board(client, use_server):
@@ -176,6 +211,7 @@ async def test_an_unreachable_server_is_502(client, use_server):
 
 # --- cache ----------------------------------------------------------------------
 
+
 async def test_asks_the_server_once_whatever_the_top(client, use_server):
     seen = []
     await use_server(_server(seen=seen))
@@ -192,17 +228,20 @@ async def test_an_outage_is_not_remembered(client, use_server):
     assert len(seen) == 2
 
 
-
 # --- excluded accounts -----------------------------------------------------------
+
 
 async def test_excluded_accounts_are_left_off_and_the_rest_ranked_without_them(client, use_server, monkeypatch):
     from shared.settings import get_settings
+
     monkeypatch.setattr(get_settings(), "ranking_excluded_npids", ["alice"])
     await use_server(_server())
     body = client.get("/saves/leaderboard").json()
     assert (body["total"], _order(body["entries"])) == (1, [(1, "Bob")])
 
+
 # --- days -----------------------------------------------------------------------
+
 
 def _saved(npid: str, days_ago: float, *chars: dict) -> dict:
     when = datetime.now(timezone.utc) - timedelta(days=days_ago)
@@ -245,6 +284,7 @@ def test_days_out_of_range_is_422(client, days):
 
 # --- current-rank holders -----------------------------------------------------------
 
+
 def _unplayed(id: int, rank: int = 10) -> dict:
     """A character the floor raised and no one has played."""
     return _char(id, rank, wins=0)
@@ -279,19 +319,33 @@ async def test_an_unplayed_character_holds_no_rank_but_its_player_stays_on_the_b
 
 
 async def test_the_lowest_on_the_leaderboard_comes_first_then_by_name(client, use_server):
-    await use_server(_server(body={"players": [
-        _saved("Strong", 1, _char(0, 30), _char(1, 14)),
-        _saved("lowb", 1, _char(0, 14)),
-        _saved("Mid", 1, _char(0, 20), _char(1, 14)),
-        _saved("LowA", 1, _char(0, 14)),
-    ]}))
+    await use_server(
+        _server(
+            body={
+                "players": [
+                    _saved("Strong", 1, _char(0, 30), _char(1, 14)),
+                    _saved("lowb", 1, _char(0, 14)),
+                    _saved("Mid", 1, _char(0, 20), _char(1, 14)),
+                    _saved("LowA", 1, _char(0, 14)),
+                ]
+            }
+        )
+    )
     assert _names(_holders(client, rank=14).json()) == ["LowA", "lowb", "Mid", "Strong"]
 
 
 async def test_without_days_only_the_last_30_count(client, use_server):
-    await use_server(_server(body={"players": [
-        _saved("Today", 0, _char(0, 15)), _saved("Recent", 29.9, _char(0, 15)), _saved("Gone", 30.1, _char(0, 15)),
-    ]}))
+    await use_server(
+        _server(
+            body={
+                "players": [
+                    _saved("Today", 0, _char(0, 15)),
+                    _saved("Recent", 29.9, _char(0, 15)),
+                    _saved("Gone", 30.1, _char(0, 15)),
+                ]
+            }
+        )
+    )
     assert sorted(_names(_holders(client, rank=15).json())) == ["Recent", "Today"]
     assert _names(_holders(client, rank=15, days=7).json()) == ["Today"]
 
@@ -304,6 +358,7 @@ async def test_holders_top_slices_and_total_counts_them_all(client, use_server):
 
 async def test_excluded_accounts_hold_nothing(client, use_server, monkeypatch):
     from shared.settings import get_settings
+
     monkeypatch.setattr(get_settings(), "ranking_excluded_npids", ["alice"])
     await use_server(_server(body={"players": [_saved("Alice", 1, _char(0, 15)), _saved("Bob", 1, _char(0, 15))]}))
     assert _names(_holders(client, rank=15).json()) == ["Bob"]
@@ -335,10 +390,18 @@ async def test_holders_outage_is_502_and_not_remembered(client, use_server):
     assert len(seen) == 2
 
 
-@pytest.mark.parametrize("params", [
-    {"rank": 9}, {"rank": 43}, {}, {"rank": 10, "top": 0}, {"rank": 10, "top": 1001},
-    {"rank": 10, "days": 0}, {"rank": 10, "days": 366},
-])
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"rank": 9},
+        {"rank": 43},
+        {},
+        {"rank": 10, "top": 0},
+        {"rank": 10, "top": 1001},
+        {"rank": 10, "days": 0},
+        {"rank": 10, "days": 366},
+    ],
+)
 def test_holders_params_out_of_range_are_422(client, params):
     assert _holders(client, **params).status_code == 422
 

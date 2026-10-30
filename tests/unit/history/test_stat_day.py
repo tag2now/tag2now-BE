@@ -9,14 +9,17 @@ from history.adapters.postgresql import STAT_DAY_START_HOUR, stat_day, stat_day_
 KST = timezone(timedelta(hours=9))
 
 
-@pytest.mark.parametrize("kst_moment, expected", [
-    (datetime(2026, 9, 16, 6, 0, tzinfo=KST), date(2026, 9, 16)),
-    (datetime(2026, 9, 16, 23, 59, tzinfo=KST), date(2026, 9, 16)),
-    (datetime(2026, 9, 17, 0, 0, tzinfo=KST), date(2026, 9, 16)),
-    (datetime(2026, 9, 17, 3, 30, tzinfo=KST), date(2026, 9, 16)),
-    (datetime(2026, 9, 17, 5, 59, tzinfo=KST), date(2026, 9, 16)),
-    (datetime(2026, 9, 17, 6, 0, tzinfo=KST), date(2026, 9, 17)),
-])
+@pytest.mark.parametrize(
+    "kst_moment, expected",
+    [
+        (datetime(2026, 9, 16, 6, 0, tzinfo=KST), date(2026, 9, 16)),
+        (datetime(2026, 9, 16, 23, 59, tzinfo=KST), date(2026, 9, 16)),
+        (datetime(2026, 9, 17, 0, 0, tzinfo=KST), date(2026, 9, 16)),
+        (datetime(2026, 9, 17, 3, 30, tzinfo=KST), date(2026, 9, 16)),
+        (datetime(2026, 9, 17, 5, 59, tzinfo=KST), date(2026, 9, 16)),
+        (datetime(2026, 9, 17, 6, 0, tzinfo=KST), date(2026, 9, 17)),
+    ],
+)
 def test_a_late_night_session_stays_on_the_day_it_started(kst_moment, expected):
     assert stat_day(kst_moment) == expected
 

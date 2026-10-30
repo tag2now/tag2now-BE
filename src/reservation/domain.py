@@ -134,7 +134,9 @@ def status_for(participant_count: int, capacity: int) -> ReservationStatus:
     return ReservationStatus.MATCHED if participant_count >= capacity else ReservationStatus.OPEN
 
 
-def ensure_joinable(status: ReservationStatus, start_at: datetime, participant_count: int, capacity: int, now: datetime) -> None:
+def ensure_joinable(
+    status: ReservationStatus, start_at: datetime, participant_count: int, capacity: int, now: datetime
+) -> None:
     if status is not ReservationStatus.OPEN or start_at <= now:
         raise ReservationStateError("지금은 참가할 수 없는 예약입니다.")
     if participant_count >= capacity:

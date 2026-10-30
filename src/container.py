@@ -85,8 +85,11 @@ async def build_container(stack: AsyncExitStack) -> Container:
 
 def _warn_if_login_unconfigured(settings: Settings) -> None:
     """Unconfigured, the server still starts: login and every signed-in route answer 502."""
-    configured = (settings.rpcn_api_server_url and settings.rpcn_api_server_key.get_secret_value()
-                  and settings.jwt_secret.get_secret_value())
+    configured = (
+        settings.rpcn_api_server_url
+        and settings.rpcn_api_server_key.get_secret_value()
+        and settings.jwt_secret.get_secret_value()
+    )
     if not configured:
         logger.warning("Login is not configured: set RPCN_API_SERVER_URL, RPCN_API_SERVER_KEY and JWT_SECRET")
 
@@ -94,7 +97,8 @@ def _warn_if_login_unconfigured(settings: Settings) -> None:
 def _rpcn_api(settings: Settings) -> RpcnApiClient:
     """rpcn-narco's API server, which answers both login and moderation with one key."""
     return RpcnApiClient(
-        settings.rpcn_api_server_url, settings.rpcn_api_server_key.get_secret_value(),
+        settings.rpcn_api_server_url,
+        settings.rpcn_api_server_key.get_secret_value(),
         settings.rpcn_api_server_timeout_seconds,
     )
 
@@ -102,7 +106,9 @@ def _rpcn_api(settings: Settings) -> RpcnApiClient:
 def _save_server(settings: Settings) -> SaveAdminServer:
     """Unconfigured, the server still starts; the save routes answer 502 and log why."""
     return SaveAdminServer(
-        settings.save_admin_url, settings.save_admin_key.get_secret_value(), settings.save_admin_timeout_seconds,
+        settings.save_admin_url,
+        settings.save_admin_key.get_secret_value(),
+        settings.save_admin_timeout_seconds,
     )
 
 
@@ -112,7 +118,14 @@ def _chzzk(settings: Settings) -> ChzzkPlatform:
 
 def _rpcn(settings: Settings) -> SharedRpcnClient:
     """Connects to RPCN on first use; closing the game server disconnects it."""
-    return SharedRpcnClient(partial(
-        create_client, settings.rpcn_host, settings.rpcn_port, settings.rpcn_user,
-        settings.rpcn_password, settings.rpcn_token, settings.rpcn_metric_enable,
-    ))
+    return SharedRpcnClient(
+        partial(
+            create_client,
+            settings.rpcn_host,
+            settings.rpcn_port,
+            settings.rpcn_user,
+            settings.rpcn_password,
+            settings.rpcn_token,
+            settings.rpcn_metric_enable,
+        )
+    )

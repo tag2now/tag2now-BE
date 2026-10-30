@@ -11,19 +11,30 @@ from streaming.models import LiveBroadcast, PlatformChannel
 CHANNEL_ID = "c42cd75ec4855a9edf204a407c3c1dd2"
 CHANNEL = {"code": 200, "content": {"channelId": CHANNEL_ID, "channelName": "철권러"}}
 UNKNOWN_CHANNEL = {"code": 200, "content": {"channelId": None, "channelName": "(알 수 없음)"}}
-LIVE = {"code": 200, "content": {"status": "OPEN", "liveTitle": "TTT2 랭크전", "concurrentUserCount": 42,
-                                 "liveCategoryValue": "Tekken Tag Tournament 2"}}
+LIVE = {
+    "code": 200,
+    "content": {
+        "status": "OPEN",
+        "liveTitle": "TTT2 랭크전",
+        "concurrentUserCount": 42,
+        "liveCategoryValue": "Tekken Tag Tournament 2",
+    },
+}
 OFFLINE = {"code": 200, "content": {"status": "CLOSE", "liveTitle": "지난 방송", "concurrentUserCount": 3}}
 
 
 # --- ids ------------------------------------------------------------------------
 
-@pytest.mark.parametrize("text", [
-    CHANNEL_ID,
-    f"https://chzzk.naver.com/{CHANNEL_ID}",
-    f"https://chzzk.naver.com/live/{CHANNEL_ID}?from=share",
-    f"  chzzk.naver.com/{CHANNEL_ID.upper()}  ",
-])
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        CHANNEL_ID,
+        f"https://chzzk.naver.com/{CHANNEL_ID}",
+        f"https://chzzk.naver.com/live/{CHANNEL_ID}?from=share",
+        f"  chzzk.naver.com/{CHANNEL_ID.upper()}  ",
+    ],
+)
 def test_finds_the_channel_id_in_a_url_or_alone(text):
     assert parse_chzzk_channel_id(text) == CHANNEL_ID
 
@@ -38,6 +49,7 @@ def test_links_to_the_live_page():
 
 
 # --- adapter --------------------------------------------------------------------
+
 
 async def _adapter(handler) -> ChzzkPlatform:
     adapter = ChzzkPlatform("https://api.chzzk.test", 1.0, transport=httpx.MockTransport(handler))
@@ -77,17 +89,21 @@ async def test_an_open_broadcast_is_live():
         return httpx.Response(200, json=LIVE)
 
     adapter = await _adapter(handler)
-    assert await adapter.live(CHANNEL_ID) == LiveBroadcast(title="TTT2 랭크전", viewer_count=42,
-                                                         category="Tekken Tag Tournament 2")
+    assert await adapter.live(CHANNEL_ID) == LiveBroadcast(
+        title="TTT2 랭크전", viewer_count=42, category="Tekken Tag Tournament 2"
+    )
     assert seen[0].url.path == f"/polling/v2/channels/{CHANNEL_ID}/live-status"
     await adapter.close()
 
 
-@pytest.mark.parametrize("status, body", [
-    (200, OFFLINE),
-    (404, {"code": 404, "message": "채널이 존재하지 않습니다."}),
-    (200, {"code": 200, "content": None}),
-])
+@pytest.mark.parametrize(
+    "status, body",
+    [
+        (200, OFFLINE),
+        (404, {"code": 404, "message": "채널이 존재하지 않습니다."}),
+        (200, {"code": 200, "content": None}),
+    ],
+)
 async def test_a_closed_or_missing_channel_is_not_live(status, body):
     adapter = await _adapter(_answer(status, body))
     assert await adapter.live(CHANNEL_ID) is None

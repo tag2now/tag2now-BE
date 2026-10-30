@@ -3,9 +3,16 @@ import socket
 import struct
 
 from .constants import (
-    HEADER_SIZE, PROTOCOL_VERSION,
-    PKT_REQUEST, PKT_REPLY, PKT_NOTIF, PKT_SERVERINFO,
-    Cmd, ERR_NO_ERROR, _HDR_FMT, COMMUNICATION_ID_SIZE,
+    HEADER_SIZE,
+    PROTOCOL_VERSION,
+    PKT_REQUEST,
+    PKT_REPLY,
+    PKT_NOTIF,
+    PKT_SERVERINFO,
+    Cmd,
+    ERR_NO_ERROR,
+    _HDR_FMT,
+    COMMUNICATION_ID_SIZE,
 )
 from .exceptions import RpcnError
 from .models import UserInfo, RoomInfo, SearchRoomsResult, ScoreResult
@@ -22,12 +29,13 @@ except ImportError:
 
 def _unpack_data_packet(data: bytes) -> bytes:
     """Extract the raw protobuf bytes written by Client::add_data_packet.
-add_data_packet prepends u32 LE length before the protobuf bytes.
-"""
+    add_data_packet prepends u32 LE length before the protobuf bytes.
+    """
     if len(data) < 4:
         raise RpcnError(f"Data packet too short: {len(data)} bytes")
     (size,) = struct.unpack_from("<I", data, 0)
-    return data[4:4 + size]
+    return data[4 : 4 + size]
+
 
 def _read_null_terminated_str(data: bytes, pos: int) -> tuple:
     """Read a null-terminated UTF-8 string starting at *pos* in *data*.
@@ -35,7 +43,6 @@ def _read_null_terminated_str(data: bytes, pos: int) -> tuple:
     """
     end = data.index(b"\x00", pos)
     return data[pos:end].decode("utf-8", errors="replace"), end + 1
-
 
 
 class RpcnClient:
@@ -108,9 +115,7 @@ class RpcnClient:
         Raises RpcnError on failure.
         """
         payload = (
-            username.encode("utf-8") + b"\x00"
-            + password.encode("utf-8") + b"\x00"
-            + token.encode("utf-8") + b"\x00"
+            username.encode("utf-8") + b"\x00" + password.encode("utf-8") + b"\x00" + token.encode("utf-8") + b"\x00"
         )
         self._send(Cmd.LOGIN, payload)
         error, data = self._recv_reply()
@@ -126,7 +131,7 @@ class RpcnClient:
 
         pos = 0
         online_name, pos = _read_null_terminated_str(data, pos)
-        avatar_url, pos  = _read_null_terminated_str(data, pos)
+        avatar_url, pos = _read_null_terminated_str(data, pos)
         (npid,) = struct.unpack_from("<q", data, pos)
         # The remainder is friend-list data which we don't need to parse here.
         return UserInfo(online_name=online_name, avatar_url=avatar_url, npid=npid)
@@ -152,7 +157,9 @@ class RpcnClient:
     # Rooms
     # ------------------------------------------------------------------
 
-    def search_rooms(self, com_id: str, world_id: int = 0, start_index: int = 1, max_results: int = 20, flag_attr: int = 0) -> SearchRoomsResult:
+    def search_rooms(
+        self, com_id: str, world_id: int = 0, start_index: int = 1, max_results: int = 20, flag_attr: int = 0
+    ) -> SearchRoomsResult:
         """start_index must be >= 1 (the server rejects 0)."""
         req = self._build_search_room_request(world_id, flag_attr, start_index, max_results)
         data = self._request_proto(com_id, Cmd.SEARCH_ROOM, req)
@@ -161,7 +168,9 @@ class RpcnClient:
         resp.ParseFromString(_unpack_data_packet(data))
         return SearchRoomsResult(total=resp.total, rooms=[RoomInfo.from_response_room(room) for room in resp.rooms])
 
-    def search_rooms_all(self, com_id: str, world_id: int = 0, start_index: int = 1, max_results: int = 20, flag_attr: int = 0) -> SearchRoomsResult:
+    def search_rooms_all(
+        self, com_id: str, world_id: int = 0, start_index: int = 1, max_results: int = 20, flag_attr: int = 0
+    ) -> SearchRoomsResult:
         """Search for all rooms including HIDDEN ones, skipping flag filtering.
 
         Same request/response format as search_rooms, but the server uses
@@ -178,18 +187,24 @@ class RpcnClient:
     # Scores / Leaderboards
     # ------------------------------------------------------------------
 
-    def get_score_range(self, com_id: str, board_id: int,
-                        start_rank: int = 1, num_ranks: int = 10,
-                        with_comment: bool = False, with_game_info: bool = False) -> ScoreResult:
+    def get_score_range(
+        self,
+        com_id: str,
+        board_id: int,
+        start_rank: int = 1,
+        num_ranks: int = 10,
+        with_comment: bool = False,
+        with_game_info: bool = False,
+    ) -> ScoreResult:
         """Fetch leaderboard entries by rank range.
 
         Returns a ScoreResult DTO.
         """
         req = pb.GetScoreRangeRequest()
-        req.boardId    = board_id
-        req.startRank  = start_rank
-        req.numRanks   = num_ranks
-        req.withComment  = with_comment
+        req.boardId = board_id
+        req.startRank = start_rank
+        req.numRanks = num_ranks
+        req.withComment = with_comment
         req.withGameInfo = with_game_info
 
         data = self._request_proto(com_id, Cmd.GET_SCORE_RANGE, req)
@@ -198,15 +213,22 @@ class RpcnClient:
         resp.ParseFromString(_unpack_data_packet(data))
         return ScoreResult.from_response(resp)
 
-    def get_score_npid(self, com_id: str, board_id: int, npids: list,
-                       pc_id: int = 0, with_comment: bool = False, with_game_info: bool = False) -> ScoreResult:
+    def get_score_npid(
+        self,
+        com_id: str,
+        board_id: int,
+        npids: list,
+        pc_id: int = 0,
+        with_comment: bool = False,
+        with_game_info: bool = False,
+    ) -> ScoreResult:
         """Fetch scores for a list of NP IDs.
 
         Returns a ScoreResult DTO.
         """
         req = pb.GetScoreNpIdRequest()
-        req.boardId    = board_id
-        req.withComment  = with_comment
+        req.boardId = board_id
+        req.withComment = with_comment
         req.withGameInfo = with_game_info
         for npid in npids:
             entry = req.npids.add()

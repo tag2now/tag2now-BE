@@ -88,7 +88,9 @@ def test_post_creation_names_the_field_that_failed(client, payload, expected):
 
 
 def test_post_filter_caps_characters_at_a_team(client):
-    response = client.get("/community/posts", params=[("characters", "Jin"), ("characters", "Kazuya"), ("characters", "Lars")])
+    response = client.get(
+        "/community/posts", params=[("characters", "Jin"), ("characters", "Kazuya"), ("characters", "Lars")]
+    )
 
     assert response.status_code == 422
     assert response.json()["detail"] == "캐릭터는 2개를 넘을 수 없습니다."

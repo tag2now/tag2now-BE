@@ -7,7 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from datetime import datetime
 
-from history.models import ActivitySnapshot, DailySummary, HourlyActivity, PlayerStats, RankMatchSnapshotRecord, TopPlayer
+from history.models import (
+    ActivitySnapshot,
+    DailySummary,
+    HourlyActivity,
+    PlayerStats,
+    RankMatchSnapshotRecord,
+    TopPlayer,
+)
 
 
 class HistoryPort(ABC):
@@ -45,6 +52,9 @@ class HistoryPort(ABC):
 
     @abstractmethod
     async def get_weekly_top_players(
-        self, session: AsyncSession, limit: int = 10, excluded_npids: Sequence[str] = (),
+        self,
+        session: AsyncSession,
+        limit: int = 10,
+        excluded_npids: Sequence[str] = (),
     ) -> list[TopPlayer]:
         """Return the top N most frequently seen players in the last 7 days, skipping excluded npids."""

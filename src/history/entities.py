@@ -14,8 +14,7 @@ class RankMatchSnapshotRow(Base):
     # RPCN room ids come from an in-memory counter that restarts at 1 with the
     # server, so they are unique only within one RPCN uptime --- never the key.
     __table_args__ = (
-        UniqueConstraint("room_id", "user1_npid", "user2_npid", "match_date",
-                         name="uq_rank_match_snapshots_match"),
+        UniqueConstraint("room_id", "user1_npid", "user2_npid", "match_date", name="uq_rank_match_snapshots_match"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
@@ -31,6 +30,7 @@ class RankMatchSnapshotRow(Base):
 
 class DailyMatchedPlayerRow(Base):
     """A player observed in a completed rank match on a KST calendar day."""
+
     __tablename__ = "daily_matched_players"
 
     date: Mapped[date] = mapped_column(Date, primary_key=True)

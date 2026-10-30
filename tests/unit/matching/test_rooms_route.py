@@ -8,8 +8,13 @@ from fastapi.testclient import TestClient
 from matching.dependencies import matching_service
 from streaming.dependencies import streaming_service
 
-LIVE = {"platform": "chzzk", "channel_name": "앨리스", "url": "https://chzzk.naver.com/live/" + "a" * 32,
-        "title": "TTT2 랭크전", "viewer_count": 42}
+LIVE = {
+    "platform": "chzzk",
+    "channel_name": "앨리스",
+    "url": "https://chzzk.naver.com/live/" + "a" * 32,
+    "title": "TTT2 랭크전",
+    "viewer_count": 42,
+}
 
 
 def _room(*npids):
