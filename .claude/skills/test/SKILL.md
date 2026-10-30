@@ -102,15 +102,23 @@ dozens of failures that look like a broken change and are not.
 
 ### 4. Integration tests
 
+First stop every local backend. The 13 `rpcn`-marked tests log in to live RPCN
+as `env/.env.local`'s `RPCN_USER` --- a local account, not production's --- and
+RPCN allows one session per account, so a dev server logged in as that user
+fails them with `LoginAlreadyLoggedIn`. `docker ps` does not show a venv uvicorn:
+
 ```bash
-.venv/Scripts/python.exe -m pytest tests/integration/ -v -m "not rpcn" > test-results/integration.log 2>&1; echo "exit=$?"
+powershell "Get-CimInstance Win32_Process -Filter \"Name like '%python%'\" | Where-Object { $_.CommandLine -match 'uvicorn' } | Select-Object ProcessId, CommandLine"
 ```
 
-`-m "not rpcn"` is the form CI runs and the form to use here. The marked tests
-need sole use of the RPCN account, which production holds around the clock, and
-a local dev server holds it too. They are a deliberate local-only extra: run the
-bare `pytest tests/integration/ -v` only when testing RPCN client behaviour
-specifically, after stopping every local backend.
+Stop every match (the reloader's worker goes with its parent), then run all 147:
+
+```bash
+.venv/Scripts/python.exe -m pytest tests/integration/ -v > test-results/integration.log 2>&1; echo "exit=$?"
+```
+
+Start the server again afterwards if you stopped one. CI runs `-m "not rpcn"`
+instead: it has no RPCN account, so the marked tests are checked here or nowhere.
 
 ### 5. Lint
 

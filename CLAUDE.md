@@ -66,11 +66,10 @@ as empty. `.env.local` alone is a complete config. Do not read the absence of
 `env/.env` --- or one failed `ls`/`cat` naming it --- as "there is no config":
 load `get_settings()` and look at the values before concluding anything.
 
-**A local run does not need its own RPCN account.** Production holds the same
-account around the clock, so startup may fail with `LoginAlreadyLoggedIn`. That
-is a self-announcing failure with a clear message, not a risk to production and
-not something to plan around --- just start the server and read the log. The
-RPCN *tests* are the case that genuinely collides (see Tests below).
+**A local run logs in with its own RPCN account.** `env/.env.local`'s
+`RPCN_USER` is not the account production holds around the clock, so a local
+server and production do not collide. A local server and the RPCN *tests* do,
+since both log in as that one local account (see Tests below).
 
 **Redis is optional.** `shared/cache.py` picks its backend from `redis_url`: set,
 and it is `RedisCache`; empty (the default), and it is `DictCache`, an
@@ -89,8 +88,8 @@ empty, so every deploy or restart starts with an empty cache.
 .venv/Scripts/python.exe -m pytest tests/unit/ -v                        # no external services needed
 docker compose -f compose.test.yml up -d --wait                          # Redis + PostgreSQL
 DATABASE_URL=postgresql+psycopg://tag2now:tag2now@127.0.0.1:5433/tag2now .venv/Scripts/python.exe -m alembic upgrade head
-.venv/Scripts/python.exe -m pytest tests/integration/ -v -m "not rpcn"   # 134, services only
-.venv/Scripts/python.exe -m pytest tests/integration/ -v                 # all 147, adds live RPCN
+.venv/Scripts/python.exe -m pytest tests/integration/ -v                 # all 147; stop any local backend first
+.venv/Scripts/python.exe -m pytest tests/integration/ -v -m "not rpcn"   # 134, what CI runs
 ```
 
 - `tests/unit/` — pure logic; no network, no database.
@@ -106,12 +105,9 @@ tables, hence the `alembic` line above, once per fresh container.
 
 **The `rpcn` marker separates the live-RPCN modules from the rest.** Both live-RPCN modules carry a
 module-level `pytestmark = pytest.mark.rpcn`, so `-m "not rpcn"` leaves 134 tests
-that need nothing but the two containers. CI runs exactly that: it cannot hold
-the account (production is logged in as that user around the clock, and two
-overlapping runs would collide with each other besides), so the 13 marked tests
-are a local check and nothing more. A second RPCN account would fix the local
-collision below, but not the CI one — concurrency and third-party availability
-remain.
+that need nothing but the two containers. CI runs exactly that, since it has no
+RPCN account. Locally the 13 marked tests run with the rest, as `.env.local`'s
+account, once every local backend is stopped.
 
 **Stop any running backend before the RPCN tests.** RPCN allows one session per
 account, and a dev server logs in at startup with the same `RPCN_USER` the tests

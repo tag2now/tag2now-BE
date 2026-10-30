@@ -96,10 +96,8 @@ jobs:
       - name: Generate protobuf
         run: python -m grpc_tools.protoc -I. --python_out=src/rpcn_client np2_structs.proto
 
-      # The rpcn-marked tests need sole use of an RPCN account, which CI cannot
-      # hold: production is logged in as that user around the clock, and two
-      # overlapping runs would collide with each other besides. They stay a
-      # local check.
+      # The rpcn-marked tests log in to live RPCN, and CI has no account (the
+      # RPCN_* above are placeholders). They run locally instead.
       - name: Run integration tests
         run: pytest tests/integration/ -v -m "not rpcn"
 

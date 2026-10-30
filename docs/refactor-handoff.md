@@ -8,9 +8,9 @@
 
 ## 0. 지금 상태 (가장 먼저 확인)
 
-- **E6a까지 모두 커밋됨** (`5ef2ed4`). tag2now-BE 워킹 트리는 깨끗하다. 다음은 **E6b 계획을 보여주는 것**부터.
+- **E6b까지 모두 커밋됨** (`609ffee`). 다음은 **E7 계획을 보여주는 것**부터.
   워크스페이스 루트 `CLAUDE.md`도 이번 작업 중 한 줄 바뀌었다(git 밖).
-- BE master의 로컬 커밋은 **push하지 않았다.** push는 사용자가 따로 요청할 때만.
+- origin에는 `de5750b`(이 문서)까지 올라가 있고, 그 뒤 커밋은 **push하지 않았다.** push는 사용자가 따로 요청할 때만.
 - (이 PC) Docker Desktop은 하루 지나면 꺼져 있을 수 있다. Git Bash에서 띄우면 셸과 함께 죽으니
   PowerShell `Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"`로 띄운다.
 
@@ -27,10 +27,11 @@
   .venv/Scripts/python.exe -m pytest tests/unit/ -v > test-results/unit.log 2>&1
   docker compose -f compose.test.yml up -d --wait
   DATABASE_URL=postgresql+psycopg://tag2now:tag2now@127.0.0.1:5433/tag2now .venv/Scripts/python.exe -m alembic upgrade head > test-results/migrate.log 2>&1
-  .venv/Scripts/python.exe -m pytest tests/integration/ -v -m "not rpcn" > test-results/integration.log 2>&1
+  .venv/Scripts/python.exe -m pytest tests/integration/ -v > test-results/integration.log 2>&1
   .venv/Scripts/ruff.exe check . > test-results/lint.log 2>&1
   ```
-- rpcn 마커 테스트는 운영이 RPCN 계정을 상시 점유하므로 로컬 실행 불가 → `--collect-only`로만 확인.
+- integration은 `-m "not rpcn"` 없이 147개 전부 돌린다. rpcn 마커 테스트는 `.env.local`의 로컬 계정으로 접속하므로
+  **실행 중인 uvicorn(dev 서버)만 먼저 끄면** 된다(운영과는 다른 계정). 확인 명령은 테스트 스킬 4단계.
 - 커밋 메시지는 짧게, 사용자 관점의 변화를 쓴다. 동작이 그대로면 "behaves exactly as before".
 - 들여쓰기 3단계 초과 금지, 불필요한 분기 금지, private 메서드 테스트 금지 (전역 CLAUDE.md).
 
@@ -55,6 +56,7 @@
 | a1d01db | E4: auth·admin (공유 `RpcnApiClient`를 container가 소유) |
 | 4712404 | E5: streaming (세션을 서비스가 직접 염) |
 | 5ef2ed4 | E6a: matching + tracker 인스턴스화 + `/rooms/all` router 조합 + Collector 클래스 |
+| 609ffee | E6b: RPCN 연결을 `SharedRpcnClient(client_factory)` 인스턴스로, container가 생성. 재접속·쿨다운 단위 테스트 |
 
 ## 3. E 단계의 목표 구조 (확정된 설계)
 
@@ -76,29 +78,6 @@
 - 현재 `container._LIFECYCLES`에 남은 옛 방식 모듈: `init_database`, `init_history_repo`, `init_chat`.
 
 ## 4. 남은 작업
-
-### E6b — RPCN 클라이언트 싱글턴을 인스턴스로 (계획 승인 필요)
-
-**지금**: `src/matching/rpcn_lifecycle.py`가 모듈 전역으로 소켓 연결 하나를 관리한다 —
-`_client_lock`(threading.Lock, 소켓이 동시 사용 불가라서), `_shared_client`, `_last_failure`,
-`_RECONNECT_COOLDOWN = 5.0`, import 시점의 `settings = get_settings()`, 그리고 함수
-`init_rpcn_client()`(쓰이지 않는 `global` 선언 있음), `shutdown_client()`, `api_client()`(contextmanager:
-없으면 연결·로그인, `RpcnError`/`OSError` 시 끊고 비우고 쿨다운 기록 후 `RpcnUnavailableError`).
-사용처: `src/matching/adapters/rpcn.py`(3개 메서드 + close), rpcn 마커 integration 테스트.
-
-**계획**
-1. `rpcn_lifecycle.py`를 클래스 `SharedRpcnClient`로: 위 전역들을 인스턴스 속성으로, 메서드 `api_client()`·`shutdown()`.
-   생성자는 접속 정보(host, port, user, password, token, metric_enable) 또는 settings를 받는다.
-2. `RpcnGameServerAdapter(rpcn: SharedRpcnClient)` — `self._rpcn.api_client()` 사용, `close()`는 `shutdown()`.
-3. `GameServerPort`의 `init()`은 no-op이므로 포트·어댑터에서 제거(close는 유지).
-4. container: `RpcnGameServerAdapter(SharedRpcnClient(...settings...))`, close 등록은 지금처럼.
-5. rpcn integration 테스트(`tests/integration/matching/test_service_integration.py`)를 새 구조로. `--collect-only` 확인.
-6. BE CLAUDE.md "RPCN client lifecycle" 절 갱신.
-
-**결정 필요**
-- `SharedRpcnClient`에 연결 함수(`connect: Callable[[], RpcnClient]`)를 주입할 수 있게 해서
-  **재접속 쿨다운·오류 시 연결 폐기 동작에 단위 테스트를 새로 붙일지** (지금은 테스트가 전혀 없음).
-  추천: 붙인다 — 가짜 클라이언트로 "실패 후 5초 안 재시도는 즉시 RpcnUnavailableError", "오류 시 disconnect 후 비움".
 
 ### E7 — history (+ Collector에 history 주입)
 
