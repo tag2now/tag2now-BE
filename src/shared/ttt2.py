@@ -58,13 +58,13 @@ TTT2_CHARACTERS = {
     0x30: "Miharu",
     0x31: "Combot",
     0x32: "Slim Bob",
-    0x33: "Sebastian",
+    0x33: "Michelle",
     0x34: "P-Jack",
     0x35: "Alex",
     0x36: "Ancient Ogre",
     0x37: "Violet",
     0x38: "Dr.",
-    0x39: "Michelle",
+    0x39: "Sebastian",
     0x3A: "Tiger",
 }
 
