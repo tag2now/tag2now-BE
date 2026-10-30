@@ -1,6 +1,5 @@
-"""Shared SQLAlchemy async engine, session factory, and transaction decorators."""
+"""Shared SQLAlchemy async engine and session factory."""
 
-import functools
 import logging
 from urllib.parse import quote
 
@@ -63,43 +62,3 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
         raise RuntimeError("Database not initialized — call init_database() first")
     return _session_factory
 
-
-# ---------------------------------------------------------------------------
-# Transaction decorators
-# ---------------------------------------------------------------------------
-
-def transactional(func):
-    """Inject an AsyncSession with an active transaction as the first argument.
-
-    Commits on success, rolls back on exception. Similar to Spring's @Transactional.
-
-    Usage::
-
-        @transactional
-        async def create_order(session: AsyncSession, items: list) -> Order:
-            ...
-    """
-    @functools.wraps(func)
-    async def wrapper(*args, **kwargs):
-        async with get_session_factory()() as session:
-            async with session.begin():
-                return await func(session, *args, **kwargs)
-    return wrapper
-
-
-def read_only(func):
-    """Inject an AsyncSession (no explicit transaction) as the first argument.
-
-    For read-only operations that don't need an explicit transaction.
-
-    Usage::
-
-        @read_only
-        async def get_users(session: AsyncSession, days: int) -> list:
-            ...
-    """
-    @functools.wraps(func)
-    async def wrapper(*args, **kwargs):
-        async with get_session_factory()() as session:
-            return await func(session, *args, **kwargs)
-    return wrapper

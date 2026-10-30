@@ -9,6 +9,7 @@ from admin.service import AdminService
 from auth.service import AuthService
 from community.service import CommunityService
 from history.collector import Collector
+from history.service import HistoryService
 from matching.service import MatchingService
 from reservation.service import ReservationService
 from saves.service import SavesService
@@ -45,6 +46,7 @@ async def test_every_module_opens_in_order_and_closes_in_reverse(monkeypatch):
     assert isinstance(built.community, CommunityService)
     assert isinstance(built.matching, MatchingService)
     assert isinstance(built.collector, Collector)
+    assert isinstance(built.history, HistoryService)
     assert isinstance(built.reservations, ReservationService)
     assert isinstance(built.saves, SavesService)
     assert isinstance(built.streaming, StreamingService)

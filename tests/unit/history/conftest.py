@@ -1,76 +1,36 @@
 """Fixtures for history unit tests."""
 
 from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from history.models import RankMatchSnapshotRecord
 from history.ports import HistoryPort
-import history.collector as collector_mod
-
-
-@pytest.fixture(autouse=True)
-def reset_rank_match_diff():
-    yield
-    collector_mod._prev_rank_match_ids = set()
+from history.service import HistoryService
 
 
 @pytest.fixture
-def mock_session():
-    """A mock AsyncSession that supports 'async with session.begin()'."""
-    session = AsyncMock()
+def repo():
+    return AsyncMock(spec=HistoryPort)
+
+
+@pytest.fixture
+def session():
+    """A session whose `begin()` works as `async with`."""
+    session = MagicMock()
 
     @asynccontextmanager
-    async def _fake_begin():
+    async def begin():
         yield
 
-    session.begin = _fake_begin
+    session.begin = begin
     return session
 
 
 @pytest.fixture
-def mock_session_factory(monkeypatch, mock_session):
-    """Mock get_session_factory so decorators don't need a real DB."""
+def service(repo, session):
     @asynccontextmanager
-    async def _fake_session():
-        yield mock_session
+    async def sessions():
+        yield session
 
-    def factory():
-        return _fake_session()
-
-    monkeypatch.setattr("shared.database.get_session_factory", lambda: factory)
-    return factory
-
-
-@pytest.fixture
-def mock_history_repo(monkeypatch):
-    repo = AsyncMock(spec=HistoryPort)
-    monkeypatch.setattr("history.service.get_history_repo", lambda: repo)
-    return repo
-
-
-@pytest.fixture
-def mock_cache(monkeypatch):
-    monkeypatch.setattr("history.service.cache_get", lambda key: None)
-    monkeypatch.setattr("history.service.cache_set", lambda key, value, ttl: None)
-
-
-@pytest.fixture
-def sample_snapshot_record():
-    from datetime import datetime, timedelta, timezone
-    KST = timezone(timedelta(hours=9))
-
-    def _factory(**overrides):
-        defaults = dict(
-            room_id=100,
-            rank_id=10,
-            user1_npid="player1",
-            user1_online_name="Player1",
-            user2_npid="player2",
-            user2_online_name="Player2",
-            created_dt=datetime.now(KST),
-        )
-        defaults.update(overrides)
-        return RankMatchSnapshotRecord(**defaults)
-    return _factory
+    return HistoryService(repo, sessions)

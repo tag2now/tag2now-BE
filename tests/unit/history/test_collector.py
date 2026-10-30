@@ -29,7 +29,7 @@ def _observation(rank_matches=(), **counts):
 
 
 @pytest.fixture
-def collector_io(monkeypatch):
+def collector_io():
     """Stub RPCN and every history write; tests queue observations on `observe`
     and drive `io.collector`."""
     from history import collector
@@ -39,10 +39,14 @@ def collector_io(monkeypatch):
     io.record_players = AsyncMock()
     io.record_activity = AsyncMock()
     io.record_matches = AsyncMock()
-    io.collector = collector.Collector(MagicMock(collect_activity_observation=io.observe))
-    monkeypatch.setattr(collector.history_service, "record_daily_matched_players", io.record_players)
-    monkeypatch.setattr(collector.history_service, "record_activity_snapshot", io.record_activity)
-    monkeypatch.setattr(collector.history_service, "record_snapshot", io.record_matches)
+    io.collector = collector.Collector(
+        MagicMock(collect_activity_observation=io.observe),
+        MagicMock(
+            record_daily_matched_players=io.record_players,
+            record_activity_snapshot=io.record_activity,
+            record_snapshot=io.record_matches,
+        ),
+    )
     return io
 
 
@@ -57,7 +61,7 @@ async def test_collector_retries_after_a_failed_collection(monkeypatch):
     attempts = AsyncMock(side_effect=[RuntimeError("rpcn unavailable"), None, asyncio.CancelledError])
     sleep = AsyncMock()
     settings = MagicMock(match_history_collection_interval_seconds=30)
-    loop = collector.Collector(MagicMock())
+    loop = collector.Collector(MagicMock(), MagicMock())
     monkeypatch.setattr(loop, "collect_once", attempts)
     monkeypatch.setattr(collector.asyncio, "sleep", sleep)
     monkeypatch.setattr(collector, "get_settings", lambda: settings)

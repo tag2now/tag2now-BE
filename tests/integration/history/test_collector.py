@@ -37,12 +37,12 @@ async def _count_test_rows() -> int:
 async def collector(monkeypatch):
     """The real collector over a stubbed RPCN, with only rank-match writes live."""
     from history import collector as collector_mod
-    from history.db import close_history_repo, init_history_repo
+    from history.adapters.postgresql import PostgresHistoryAdapter
+    from history.service import HistoryService
     from matching.models import ActivityObservation, Rank, RoomInfoDTO, RoomType
     from rpcn_client.models import UserInfo
 
     await init_database()
-    await init_history_repo()
     await _delete_test_rows()
 
     room = RoomInfoDTO.phantom(_NPIDS[0], "P1", RoomType.RANK_MATCH, Rank(id=10))
@@ -53,13 +53,13 @@ async def collector(monkeypatch):
         rank_player_npids=set(_NPIDS), total_players=2, total_rooms=1,
         rank_players=2, rank_rooms=1, rank_matches=[room],
     )
-    monkeypatch.setattr(collector_mod.history_service, "record_daily_matched_players", AsyncMock())
-    monkeypatch.setattr(collector_mod.history_service, "record_activity_snapshot", AsyncMock())
+    history = HistoryService(PostgresHistoryAdapter(), get_session_factory())
+    monkeypatch.setattr(history, "record_daily_matched_players", AsyncMock())
+    monkeypatch.setattr(history, "record_activity_snapshot", AsyncMock())
 
-    yield collector_mod.Collector(MagicMock(collect_activity_observation=AsyncMock(return_value=observation)))
+    yield collector_mod.Collector(MagicMock(collect_activity_observation=AsyncMock(return_value=observation)), history)
 
     await _delete_test_rows()
-    await close_history_repo()
     await close_database()
 
 

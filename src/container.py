@@ -17,8 +17,9 @@ from auth.service import AuthService
 from chat.db import init_chat
 from community.adapters.postgresql import PostgresCommunityRepository
 from community.service import CommunityService
+from history.adapters.postgresql import PostgresHistoryAdapter
 from history.collector import Collector
-from history.db import close_history_repo, init_history_repo
+from history.service import HistoryService
 from matching.adapters.rpcn import RpcnGameServerAdapter
 from matching.rpcn_lifecycle import SharedRpcnClient, create_client
 from matching.service import MatchingService
@@ -43,7 +44,6 @@ async def _no_close() -> None:
 # Modules still initialised through module-level state, in dependency order.
 _LIFECYCLES = (
     (init_database, close_database),
-    (init_history_repo, close_history_repo),
     (init_chat, _no_close),
 )
 
@@ -54,6 +54,7 @@ class Container:
     auth: AuthService
     admin: AdminService
     community: CommunityService
+    history: HistoryService
     matching: MatchingService
     reservations: ReservationService
     saves: SavesService
@@ -101,12 +102,14 @@ async def build_container(stack: AsyncExitStack) -> Container:
     matching = MatchingService(game_server)
 
     sessions = get_session_factory()
+    history = HistoryService(PostgresHistoryAdapter(), sessions)
     streaming = StreamingService(PostgresStreamChannelRepository(), chzzk, sessions)
     return Container(
-        collector=Collector(matching),
+        collector=Collector(matching, history),
         auth=AuthService(RpcnApiServerAccountVerifier(rpcn_api)),
         admin=AdminService(RpcnApiServerAccountAdmin(rpcn_api)),
         community=CommunityService(PostgresCommunityRepository(sessions)),
+        history=history,
         matching=matching,
         reservations=ReservationService(PostgresReservationRepository(sessions)),
         saves=SavesService(save_server),

@@ -300,10 +300,9 @@ or construct the service directly; neither needs a module patched.
 A service that judges time takes a `shared.clock.Clock` (default `SystemClock`),
 so its tests pass a fixed one.
 
-**Migration in progress.** `auth/`, `admin/`, `community/`, `matching/` (with the
-collector), `reservation/`, `saves/` and `streaming/` are built this way so far;
-`history/` still keeps its repository in `db.py` and is opened from
-`container._LIFECYCLES`, and `chat/` injects its own with `service.configure(...)`.
+**Migration in progress.** Every module but `chat/` is built this way so far;
+`chat/` injects its own with `service.configure(...)` and is opened from
+`container._LIFECYCLES`.
 `current_user` and `admin_user` read only the token, so they need no service.
 
 ### Caching
@@ -387,7 +386,7 @@ Matching knows nothing of streaming, and a streaming failure leaves every
 ### Match-history collector
 
 `history/collector.py`'s `Collector`, built by the container with the matching
-service, runs as a background asyncio task started in `lifespan`
+and history services, runs as a background asyncio task started in `lifespan`
 and cancelled before the database closes. Every
 `match_history_collection_interval_seconds` (default 30) it calls
 `MatchingService.collect_activity_observation()`, which reads RPCN directly and

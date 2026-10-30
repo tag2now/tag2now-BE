@@ -1,8 +1,9 @@
 """FastAPI router for history and statistics endpoints."""
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Depends, Path, Query
 
-from history import service
+from history.dependencies import history_service
+from history.service import HistoryService
 
 router = APIRouter(prefix="/history", tags=["History & Statistics"])
 
@@ -10,6 +11,7 @@ router = APIRouter(prefix="/history", tags=["History & Statistics"])
 @router.get("/stats", summary="Hourly player activity (KST)")
 async def hourly_activity(
     days: int = Query(default=7, ge=1, le=90, description="Number of days to aggregate"),
+    service: HistoryService = Depends(history_service),
 ):
     """Return average and peak player counts per KST hour."""
     return await service.get_hourly_activity(days)
@@ -18,6 +20,7 @@ async def hourly_activity(
 @router.get("/stats/daily", summary="Daily summary")
 async def daily_summary(
     days: int = Query(default=30, ge=1, le=90, description="Number of days"),
+    service: HistoryService = Depends(history_service),
 ):
     """Return daily peak/average player and room counts."""
     return await service.get_daily_summary(days)
@@ -26,6 +29,7 @@ async def daily_summary(
 @router.get("/stats/weekly-top", summary="Weekly top players")
 async def weekly_top_players(
     limit: int = Query(default=10, ge=1, le=50, description="Number of top players to return"),
+    service: HistoryService = Depends(history_service),
 ):
     """Return the top N most frequently seen players in the last 7 days."""
     return await service.get_weekly_top_players(limit)
@@ -35,6 +39,7 @@ async def weekly_top_players(
 async def player_history(
     npid: str = Path(description="Player NPID"),
     days: int = Query(default=30, ge=1, le=90, description="Number of days"),
+    service: HistoryService = Depends(history_service),
 ):
     """Return aggregated history stats for a player."""
     return await service.get_player_stats(npid, days)

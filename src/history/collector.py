@@ -5,8 +5,8 @@ import contextlib
 import logging
 from datetime import datetime, timezone
 
-from history import service as history_service
 from history.models import ActivitySnapshot, RankMatchSnapshotRecord
+from history.service import HistoryService
 from matching.models import RoomInfoDTO
 from matching.service import MatchingService
 from shared.settings import get_settings
@@ -30,8 +30,9 @@ def _to_snapshot_record(room: RoomInfoDTO, observed_at: datetime) -> RankMatchSn
 
 
 class Collector:
-    def __init__(self, matching: MatchingService):
+    def __init__(self, matching: MatchingService, history: HistoryService):
         self._matching = matching
+        self._history = history
         # Room ids of the matches in progress at the last recorded cycle, so a match is
         # written once, on the cycle it first appears. A restart empties this set; the
         # unique key on rank_match_snapshots catches the matches it then sees again.
@@ -45,15 +46,15 @@ class Collector:
         """
         new_rooms = [room for room in rooms if room.room_id not in self._prev_rank_match_ids]
         if new_rooms:
-            await history_service.record_snapshot([_to_snapshot_record(room, observed_at) for room in new_rooms])
+            await self._history.record_snapshot([_to_snapshot_record(room, observed_at) for room in new_rooms])
         self._prev_rank_match_ids = {room.room_id for room in rooms}
 
     async def collect_once(self) -> None:
         """Store the current activity snapshot, ranked-room participants and new rank matches."""
         observed_at = datetime.now(timezone.utc)
         observation = await self._matching.collect_activity_observation(TTT2_COM_ID)
-        await history_service.record_daily_matched_players(observation.rank_player_npids, observed_at)
-        await history_service.record_activity_snapshot(ActivitySnapshot(
+        await self._history.record_daily_matched_players(observation.rank_player_npids, observed_at)
+        await self._history.record_activity_snapshot(ActivitySnapshot(
             observed_at=observed_at, total_players=observation.total_players, total_rooms=observation.total_rooms,
             rank_players=observation.rank_players, rank_rooms=observation.rank_rooms,
         ))

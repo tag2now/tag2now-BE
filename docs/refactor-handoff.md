@@ -8,7 +8,7 @@
 
 ## 0. 지금 상태 (가장 먼저 확인)
 
-- **E6b까지 모두 커밋됨** (`609ffee`). 다음은 **E7 계획을 보여주는 것**부터.
+- **E7까지 모두 커밋됨.** 다음은 **E8 계획을 보여주는 것**부터.
   워크스페이스 루트 `CLAUDE.md`도 이번 작업 중 한 줄 바뀌었다(git 밖).
 - origin에는 `de5750b`(이 문서)까지 올라가 있고, 그 뒤 커밋은 **push하지 않았다.** push는 사용자가 따로 요청할 때만.
 - (이 PC) Docker Desktop은 하루 지나면 꺼져 있을 수 있다. Git Bash에서 띄우면 셸과 함께 죽으니
@@ -57,6 +57,8 @@
 | 4712404 | E5: streaming (세션을 서비스가 직접 염) |
 | 5ef2ed4 | E6a: matching + tracker 인스턴스화 + `/rooms/all` router 조합 + Collector 클래스 |
 | 609ffee | E6b: RPCN 연결을 `SharedRpcnClient(client_factory)` 인스턴스로, container가 생성. 재접속·쿨다운 단위 테스트 |
+| c2ed546 | 문서: rpcn 테스트를 로컬에서 dev 서버를 끄고 돌린다(`.env.local`은 운영과 다른 계정) |
+| (E7 커밋) | E7: `HistoryService(repo, sessions)` + router Depends + `Collector(matching, history)`. `history/db.py`, `transactional`/`read_only` 삭제 |
 
 ## 3. E 단계의 목표 구조 (확정된 설계)
 
@@ -75,20 +77,9 @@
 - 남기는 전역: `shared.database`의 engine/session factory, `get_settings()`(lru_cache), cache 백엔드.
 - 트랜잭션: 서비스가 받은 `sessions`(session factory)로 직접 연다 —
   읽기 `async with self._sessions() as s`, 쓰기 `async with self._sessions() as s, s.begin()`.
-- 현재 `container._LIFECYCLES`에 남은 옛 방식 모듈: `init_database`, `init_history_repo`, `init_chat`.
+- 현재 `container._LIFECYCLES`에 남은 옛 방식 모듈: `init_database`, `init_chat`.
 
 ## 4. 남은 작업
-
-### E7 — history (+ Collector에 history 주입)
-
-- `HistoryService(repo, sessions)` 클래스. `@transactional`/`@read_only` 데코레이터 대신 세션 직접 열기(E5와 동일).
-  `record_daily_matched_players` 등은 쓰기 후 `cache_delete_pattern("history:daily:*")` 유지.
-- `history/dependencies.py`, router Depends. `history/db.py` 삭제, `_LIFECYCLES`에서 `init_history_repo` 제거.
-  `history/__init__.py`는 alembic용 `import history.entities`만 남긴다.
-- `Collector(matching, history)` — 지금 `history_service` 모듈 함수 호출을 주입받은 서비스로.
-- 테스트: `tests/unit/history/conftest.py`, collector unit/integration 테스트(history_service 모듈 패치 → 가짜 history 주입),
-  history 어댑터 integration 테스트, `test_container`, `test_validation_messages`(history 라우트 쓰면).
-- 이후 `shared/database.py`의 `transactional`/`read_only`를 쓰는 곳이 없으면 삭제.
 
 ### E8 — chat
 
