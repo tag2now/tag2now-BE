@@ -5,11 +5,11 @@ from datetime import datetime, timedelta
 import pytest_asyncio
 from sqlalchemy import delete
 
-from chat import service
+from chat.adapters.memory_bus import MemoryChatEventBus
 from chat.adapters.postgresql import PostgresChatRepository
-from chat.db import init_chat
-from chat.domain import KST
+from chat.domain import KST, MAX_LISTED_MESSAGES
 from chat.entities import ChatMessageRow
+from chat.service import ChatService
 from shared.database import close_database, get_session_factory, init_database
 
 NOON = datetime(2026, 10, 7, 12, 0, tzinfo=KST)
@@ -24,7 +24,7 @@ async def database():
     await close_database()
 
 
-def _repo(max_listed: int = 500) -> PostgresChatRepository:
+def _repo(max_listed: int = MAX_LISTED_MESSAGES) -> PostgresChatRepository:
     return PostgresChatRepository(get_session_factory(), max_listed)
 
 
@@ -74,13 +74,13 @@ async def test_a_deleted_message_is_gone(database):
 
 
 async def test_chat_and_its_deletions_survive_a_restart(database):
-    await init_chat()
+    service = ChatService(_repo(), MemoryChatEventBus())
     kept = await service.post_message(subject="alice", display_name="Alice", body="kept")
     gone = await service.post_message(subject="bob", display_name="Bob", body="gone")
     await service.delete_message(gone.id, subject="bob", admin=False)
 
     await _restart()
-    await init_chat()
+    service = ChatService(_repo(), MemoryChatEventBus())
 
     assert await service.recent_messages() == [kept]
     later = await service.post_message(subject="carol", display_name="Carol", body="after the restart")

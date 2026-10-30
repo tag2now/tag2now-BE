@@ -8,7 +8,7 @@
 
 ## 0. 지금 상태 (가장 먼저 확인)
 
-- **E7까지 모두 커밋됨.** 다음은 **E8 계획을 보여주는 것**부터.
+- **E8까지 모두 커밋됨.** 다음은 **E9 계획을 보여주는 것**부터.
   워크스페이스 루트 `CLAUDE.md`도 이번 작업 중 한 줄 바뀌었다(git 밖).
 - origin에는 `de5750b`(이 문서)까지 올라가 있고, 그 뒤 커밋은 **push하지 않았다.** push는 사용자가 따로 요청할 때만.
 - (이 PC) Docker Desktop은 하루 지나면 꺼져 있을 수 있다. Git Bash에서 띄우면 셸과 함께 죽으니
@@ -58,7 +58,8 @@
 | 5ef2ed4 | E6a: matching + tracker 인스턴스화 + `/rooms/all` router 조합 + Collector 클래스 |
 | 609ffee | E6b: RPCN 연결을 `SharedRpcnClient(client_factory)` 인스턴스로, container가 생성. 재접속·쿨다운 단위 테스트 |
 | c2ed546 | 문서: rpcn 테스트를 로컬에서 dev 서버를 끄고 돌린다(`.env.local`은 운영과 다른 계정) |
-| (E7 커밋) | E7: `HistoryService(repo, sessions)` + router Depends + `Collector(matching, history)`. `history/db.py`, `transactional`/`read_only` 삭제 |
+| c1a739f | E7: `HistoryService(repo, sessions)` + router Depends + `Collector(matching, history)`. `history/db.py`, `transactional`/`read_only` 삭제 |
+| (E8 커밋) | E8: `ChatService(repo, bus, clock)` + router Depends(SSE 포함). `chat/db.py`, `configure()`, chat 전용 `Clock` 삭제. `MAX_LISTED_MESSAGES`는 `chat/domain.py`로 |
 
 ## 3. E 단계의 목표 구조 (확정된 설계)
 
@@ -77,19 +78,9 @@
 - 남기는 전역: `shared.database`의 engine/session factory, `get_settings()`(lru_cache), cache 백엔드.
 - 트랜잭션: 서비스가 받은 `sessions`(session factory)로 직접 연다 —
   읽기 `async with self._sessions() as s`, 쓰기 `async with self._sessions() as s, s.begin()`.
-- 현재 `container._LIFECYCLES`에 남은 옛 방식 모듈: `init_database`, `init_chat`.
+- 현재 `container._LIFECYCLES`에 남은 옛 방식 모듈: `init_database`뿐.
 
 ## 4. 남은 작업
-
-### E8 — chat
-
-- `ChatService(repo, bus, clock=None)` 클래스. 모듈 전역 `_repo`/`_bus`/`_clock`/`_last_post`(연타 방지)와
-  `configure()`가 사라지고 `_last_post`는 인스턴스 상태 → 테스트마다 새 인스턴스면 상태도 새로 시작.
-- `chat/ports.py`의 `Clock`을 지우고 `shared.clock` 사용. `chat/db.py`(init_chat) 삭제,
-  container가 `PostgresChatRepository(sessions, MAX_LISTED_MESSAGES)` + `MemoryChatEventBus()`로 생성
-  (`MAX_LISTED_MESSAGES = 500`과 그 주석을 container 또는 chat 모듈로 옮김).
-- SSE 라우트 `GET /chat/stream`도 `Depends(chat_service)`. 스트림이 오래 열려 있어도 서비스는 container 수명이라 문제없음.
-- 테스트: `tests/unit/chat/test_router.py`(configure 4곳), `test_service.py`(2곳), integration `test_postgresql_adapter.py`(init_chat 2곳).
 
 ### E9 — 마무리
 

@@ -14,7 +14,10 @@ from admin.adapters.rpcn_api_server import RpcnApiServerAccountAdmin
 from admin.service import AdminService
 from auth.adapters.rpcn_api_server import RpcnApiServerAccountVerifier
 from auth.service import AuthService
-from chat.db import init_chat
+from chat.adapters.memory_bus import MemoryChatEventBus
+from chat.adapters.postgresql import PostgresChatRepository
+from chat.domain import MAX_LISTED_MESSAGES
+from chat.service import ChatService
 from community.adapters.postgresql import PostgresCommunityRepository
 from community.service import CommunityService
 from history.adapters.postgresql import PostgresHistoryAdapter
@@ -37,14 +40,9 @@ from streaming.service import StreamingService
 logger = logging.getLogger(__name__)
 
 
-async def _no_close() -> None:
-    pass
-
-
 # Modules still initialised through module-level state, in dependency order.
 _LIFECYCLES = (
     (init_database, close_database),
-    (init_chat, _no_close),
 )
 
 
@@ -53,6 +51,7 @@ class Container:
     collector: Collector
     auth: AuthService
     admin: AdminService
+    chat: ChatService
     community: CommunityService
     history: HistoryService
     matching: MatchingService
@@ -108,6 +107,8 @@ async def build_container(stack: AsyncExitStack) -> Container:
         collector=Collector(matching, history),
         auth=AuthService(RpcnApiServerAccountVerifier(rpcn_api)),
         admin=AdminService(RpcnApiServerAccountAdmin(rpcn_api)),
+        # The bus is memory and goes with the process; nothing to close.
+        chat=ChatService(PostgresChatRepository(sessions, MAX_LISTED_MESSAGES), MemoryChatEventBus()),
         community=CommunityService(PostgresCommunityRepository(sessions)),
         history=history,
         matching=matching,

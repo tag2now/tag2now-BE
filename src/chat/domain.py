@@ -16,6 +16,11 @@ KST = ZoneInfo("Asia/Seoul")
 # conversation running from 23:00 to 01:00 would be cut in half.
 DAY_START_HOUR = 6
 
+# Enough for two busy evenings' conversation. Every stream opens with all of it, so
+# this bounds the snapshot: ~75 KB for typical short lines, ~375 KB if every
+# message ran to the 200-character limit.
+MAX_LISTED_MESSAGES = 500
+
 
 @dataclass(frozen=True)
 class Message:

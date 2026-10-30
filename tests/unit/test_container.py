@@ -7,6 +7,7 @@ import pytest
 import container
 from admin.service import AdminService
 from auth.service import AuthService
+from chat.service import ChatService
 from community.service import CommunityService
 from history.collector import Collector
 from history.service import HistoryService
@@ -43,6 +44,7 @@ async def test_every_module_opens_in_order_and_closes_in_reverse(monkeypatch):
     assert calls[4:] == ["close3", "close2", "close1", "close0"]
     assert isinstance(built.auth, AuthService)
     assert isinstance(built.admin, AdminService)
+    assert isinstance(built.chat, ChatService)
     assert isinstance(built.community, CommunityService)
     assert isinstance(built.matching, MatchingService)
     assert isinstance(built.collector, Collector)

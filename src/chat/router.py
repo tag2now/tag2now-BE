@@ -5,8 +5,10 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from auth.dependencies import current_user
 from auth.models import AuthUser
-from chat import models, service
+from chat import models
+from chat.dependencies import chat_service
 from chat.domain import ChatEvent, Deleted, Posted
+from chat.service import ChatService
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -20,7 +22,7 @@ def _to_sse(event: ChatEvent) -> ServerSentEvent:
 
 
 @router.get("/stream", response_class=EventSourceResponse)
-async def stream() -> AsyncIterable[ServerSentEvent]:
+async def stream(service: ChatService = Depends(chat_service)) -> AsyncIterable[ServerSentEvent]:
     """Today's chat, then every change to it as it happens. Public.
 
     Opens with a `snapshot` event holding the recent messages (see `chat.domain`), then sends
@@ -41,12 +43,12 @@ async def stream() -> AsyncIterable[ServerSentEvent]:
 
 
 @router.post("/messages", response_model=models.ChatMessageOut, status_code=201)
-async def post_message(request: models.PostMessageRequest, user: AuthUser = Depends(current_user)):
+async def post_message(request: models.PostMessageRequest, user: AuthUser = Depends(current_user), service: ChatService = Depends(chat_service)):
     return await service.post_message(subject=user.username, display_name=user.online_name, body=request.body, admin=user.admin)
 
 
 @router.delete("/messages/{message_id}", status_code=204)
-async def delete_message(message_id: int, user: AuthUser = Depends(current_user)):
+async def delete_message(message_id: int, user: AuthUser = Depends(current_user), service: ChatService = Depends(chat_service)):
     """The author's own message, or any message for an admin."""
     await service.delete_message(message_id, subject=user.username, admin=user.admin)
     return Response(status_code=204)

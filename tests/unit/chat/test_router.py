@@ -13,10 +13,12 @@ from contextlib import asynccontextmanager
 import pytest
 from fastapi.testclient import TestClient
 
-from chat import router, service
+from chat import router
 from chat.adapters.memory_repository import MemoryChatRepository
 from chat.adapters.memory_bus import MemoryChatEventBus
+from chat.dependencies import chat_service
 from chat.ports import ChatEventBus
+from chat.service import ChatService
 
 logging.disable(logging.CRITICAL)
 
@@ -28,8 +30,19 @@ async def _next(events):
 
 
 @pytest.fixture(autouse=True)
-def configured():
-    service.configure(MemoryChatRepository(max_kept=10), MemoryChatEventBus())
+def installed():
+    """The service every route receives; a test that needs another store or bus replaces it."""
+    from app import app
+
+    current = {"service": ChatService(MemoryChatRepository(max_kept=10), MemoryChatEventBus())}
+    app.dependency_overrides[chat_service] = lambda: current["service"]
+    yield current
+    app.dependency_overrides.pop(chat_service, None)
+
+
+@pytest.fixture
+def service(installed):
+    return installed["service"]
 
 
 @pytest.fixture
@@ -56,8 +69,8 @@ async def _no_events():
     yield
 
 
-def test_anyone_can_read_the_chat_without_logging_in(client, auth_headers):
-    service.configure(MemoryChatRepository(max_kept=10), EndedBus())
+def test_anyone_can_read_the_chat_without_logging_in(client, auth_headers, installed):
+    installed["service"] = ChatService(MemoryChatRepository(max_kept=10), EndedBus())
     client.post("/chat/messages", json={"body": "hello"}, headers=auth_headers("alice"))
 
     response = client.get("/chat/stream")
@@ -84,8 +97,8 @@ def test_a_post_answers_the_message_under_the_signed_in_name(client, auth_header
     assert (body["author_username"], body["author_online_name"], body["body"]) == ("alice", "Alice", "한 판 하실 분")
 
 
-def test_a_post_says_whether_its_author_is_an_admin(client, auth_headers):
-    service.configure(MemoryChatRepository(max_kept=10), EndedBus())
+def test_a_post_says_whether_its_author_is_an_admin(client, auth_headers, installed):
+    installed["service"] = ChatService(MemoryChatRepository(max_kept=10), EndedBus())
     client.post("/chat/messages", json={"body": "공지"}, headers=auth_headers("mod", admin=True))
     client.post("/chat/messages", json={"body": "hi"}, headers=auth_headers("alice"))
 
@@ -126,9 +139,9 @@ def test_delete_is_the_authors_or_an_admins(client, auth_headers):
     assert client.delete(f"/chat/messages/{message_id}", headers=auth_headers("alice")).status_code == 404
 
 
-async def test_the_stream_opens_with_recent_messages_then_follows_changes():
+async def test_the_stream_opens_with_recent_messages_then_follows_changes(service):
     earlier = await service.post_message(subject="alice", display_name="Alice", body="earlier")
-    events = router.stream()
+    events = router.stream(service)
 
     snapshot = await _next(events)
     assert snapshot.event == "snapshot"
@@ -145,8 +158,8 @@ async def test_the_stream_opens_with_recent_messages_then_follows_changes():
     await events.aclose()
 
 
-async def test_someone_who_joins_later_gets_all_of_the_recent_chat_then_the_same_live_events():
-    first = router.stream()
+async def test_someone_who_joins_later_gets_all_of_the_recent_chat_then_the_same_live_events(service):
+    first = router.stream(service)
     assert (await _next(first)).data == []
 
     lines = [await service.post_message(subject=f"user{i}", display_name=f"User{i}", body=f"line {i}") for i in range(3)]
@@ -154,7 +167,7 @@ async def test_someone_who_joins_later_gets_all_of_the_recent_chat_then_the_same
     for _ in range(4):  # three messages and a delete, as they happened
         await _next(first)
 
-    second = router.stream()
+    second = router.stream(service)
     snapshot = await _next(second)
     assert snapshot.event == "snapshot"
     assert [m.body for m in snapshot.data] == ["line 0", "line 2"]
@@ -191,8 +204,8 @@ class SlowReadRepository(MemoryChatRepository):
 
 async def test_a_message_posted_while_the_snapshot_is_read_still_reaches_the_new_reader():
     repository = SlowReadRepository()
-    service.configure(repository, MemoryChatEventBus())
-    events = router.stream()
+    service = ChatService(repository, MemoryChatEventBus())
+    events = router.stream(service)
 
     opening = asyncio.ensure_future(_next(events))
     await asyncio.wait_for(repository.reading.wait(), 1)

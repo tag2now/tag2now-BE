@@ -1,17 +1,16 @@
 """Chat use cases: post, delete, and what a newly opened stream starts from.
 
 Like reservation, writes name their actor by `subject` (the RPCN username) and
-`display_name`; the router takes both from the signed-in user. The service
-knows only the ports --- the repository, event bus and clock are injected by
-`chat.db`, which is the seam the tests use as well.
+`display_name`; the router takes both from the signed-in user.
 """
 
 from collections.abc import AsyncIterable
 from contextlib import AbstractAsyncContextManager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from chat.domain import ChatEvent, Deleted, Message, Posted, history_start
-from chat.ports import ChatEventBus, ChatRepository, Clock
+from chat.ports import ChatEventBus, ChatRepository
+from shared.clock import Clock, SystemClock
 from shared.exceptions import ForbiddenError, NotFoundError, RateLimitedError
 
 # One message a second per account. Enough for a quick follow-up line, and it
@@ -19,66 +18,39 @@ from shared.exceptions import ForbiddenError, NotFoundError, RateLimitedError
 MIN_POST_INTERVAL = timedelta(seconds=1)
 
 
-class SystemClock(Clock):
-    def now(self) -> datetime:
-        return datetime.now(timezone.utc)
-
-
-_repo: ChatRepository | None = None
-_bus: ChatEventBus | None = None
-_clock: Clock = SystemClock()
-# Last post per subject. Memory, like everything else here: a restart forgets
-# it, which at worst lets someone post twice within a second.
-_last_post: dict[str, datetime] = {}
-
-
-def configure(repository: ChatRepository, bus: ChatEventBus, clock: Clock | None = None) -> None:
-    global _repo, _bus, _clock
-    _repo = repository
-    _bus = bus
-    _clock = clock or SystemClock()
-    _last_post.clear()
-
-
-def _repository() -> ChatRepository:
-    if _repo is None:
-        raise RuntimeError("Chat repository not initialized")
-    return _repo
-
-
-def _event_bus() -> ChatEventBus:
-    if _bus is None:
-        raise RuntimeError("Chat event bus not initialized")
-    return _bus
-
-
 def ensure_not_flooding(last_post: datetime | None, now: datetime) -> None:
     if last_post is not None and now - last_post < MIN_POST_INTERVAL:
         raise RateLimitedError("메시지를 너무 빨리 보내고 있습니다. 잠시 후 다시 보내 주세요.")
 
 
-def subscribe() -> AbstractAsyncContextManager[AsyncIterable[ChatEvent]]:
-    return _event_bus().subscribe()
+class ChatService:
+    def __init__(self, repo: ChatRepository, bus: ChatEventBus, clock: Clock | None = None):
+        self._repo = repo
+        self._bus = bus
+        self._clock = clock or SystemClock()
+        # Last post per subject. Memory, like the bus: a restart forgets it,
+        # which at worst lets someone post twice within a second.
+        self._last_post: dict[str, datetime] = {}
 
+    def subscribe(self) -> AbstractAsyncContextManager[AsyncIterable[ChatEvent]]:
+        return self._bus.subscribe()
 
-async def recent_messages() -> list[Message]:
-    return await _repository().list_since(history_start(_clock.now()))
+    async def recent_messages(self) -> list[Message]:
+        return await self._repo.list_since(history_start(self._clock.now()))
 
+    async def post_message(self, *, subject: str, display_name: str, body: str, admin: bool = False) -> Message:
+        now = self._clock.now()
+        ensure_not_flooding(self._last_post.get(subject), now)
+        message = await self._repo.append(subject, display_name, body, now, author_admin=admin)
+        self._last_post[subject] = now
+        await self._bus.publish(Posted(message))
+        return message
 
-async def post_message(*, subject: str, display_name: str, body: str, admin: bool = False) -> Message:
-    now = _clock.now()
-    ensure_not_flooding(_last_post.get(subject), now)
-    message = await _repository().append(subject, display_name, body, now, author_admin=admin)
-    _last_post[subject] = now
-    await _event_bus().publish(Posted(message))
-    return message
-
-
-async def delete_message(message_id: int, *, subject: str, admin: bool) -> None:
-    message = await _repository().get(message_id)
-    if message is None:
-        raise NotFoundError("메시지를 찾을 수 없습니다.")
-    if message.author_username != subject and not admin:
-        raise ForbiddenError("본인 메시지만 삭제할 수 있습니다.")
-    await _repository().delete(message_id)
-    await _event_bus().publish(Deleted(message_id))
+    async def delete_message(self, message_id: int, *, subject: str, admin: bool) -> None:
+        message = await self._repo.get(message_id)
+        if message is None:
+            raise NotFoundError("메시지를 찾을 수 없습니다.")
+        if message.author_username != subject and not admin:
+            raise ForbiddenError("본인 메시지만 삭제할 수 있습니다.")
+        await self._repo.delete(message_id)
+        await self._bus.publish(Deleted(message_id))

@@ -41,8 +41,3 @@ class ChatEventBus(ABC):
         Iteration may end on its own --- the bus can drop a reader --- and the
         caller should then end its stream so the client reconnects.
         """
-
-
-class Clock(ABC):
-    @abstractmethod
-    def now(self) -> datetime: ...

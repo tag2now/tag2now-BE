@@ -300,9 +300,8 @@ or construct the service directly; neither needs a module patched.
 A service that judges time takes a `shared.clock.Clock` (default `SystemClock`),
 so its tests pass a fixed one.
 
-**Migration in progress.** Every module but `chat/` is built this way so far;
-`chat/` injects its own with `service.configure(...)` and is opened from
-`container._LIFECYCLES`.
+**Migration in progress.** Every module is built this way now; only the database
+is still opened from `container._LIFECYCLES`.
 `current_user` and `admin_user` read only the token, so they need no service.
 
 ### Caching
