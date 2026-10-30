@@ -7,15 +7,14 @@ import pytest
 
 
 def _rank_match(room_id, npid1, npid2, rank_id=10):
-    from matching.models import Rank, RoomInfoDTO, RoomType
-    from rpcn_client.models import UserInfo
+    from matching.models import Rank, RoomInfoDTO, RoomType, RoomUser
 
     room = RoomInfoDTO.phantom(npid1, npid1.title(), RoomType.RANK_MATCH, Rank(id=rank_id))
     room.room_id = room_id
     room.current_members = 2
     room.users = [
-        UserInfo(npid=npid1, online_name=npid1.title(), avatar_url=""),
-        UserInfo(npid=npid2, online_name=npid2.title(), avatar_url=""),
+        RoomUser(npid=npid1, online_name=npid1.title(), avatar_url=""),
+        RoomUser(npid=npid2, online_name=npid2.title(), avatar_url=""),
     ]
     return room
 

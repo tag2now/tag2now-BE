@@ -16,9 +16,8 @@ in a real room again or matchmaking_ttl passes.
 import time
 from dataclasses import dataclass
 
-from rpcn_client import UserInfo
 from shared.settings import get_settings
-from matching.models import Rank, RoomInfoDTO, RoomType
+from matching.models import Rank, RoomInfoDTO, RoomType, RoomUser
 
 
 # ---------------------------------------------------------------------------
@@ -34,7 +33,7 @@ class _SnapshotRoom:
     current_members: int
     room_type: str
     rank_info: Rank | None
-    users: list[UserInfo]
+    users: list[RoomUser]
 
 
 @dataclass

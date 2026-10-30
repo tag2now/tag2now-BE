@@ -9,7 +9,8 @@ RPCN에 현재 존재하는 TTT2 방을 모아 "지금 누가 무슨 매치를 �
 
 1. RPCN의 서버 → 월드 계층을 조회한다(`{server_id: [world_id...]}`). 변동이 거의 없어 TTL 3600s로 캐시한다. `GET /servers`로도 공개돼 있지만 FE는 부르지 않는다.
 2. 모든 월드 ID를 모아 `SearchRoomAll`로 **숨김 방 포함** 전체 방을 조회한다.
-3. 각 방의 `int_attrs[4]` 값으로 방 종류를 판별한다.
+3. 각 방의 `int_attrs[4]` 값으로 방 종류를 판별한다. 이 해석은 RPCN 어댑터(`matching/adapters/rpcn.py`)만 하고,
+   도메인은 번역된 `RoomInfoDTO`·`RoomUser`만 안다.
    - `0` → `player_match` (플레이어 매치, 계급 없음)
    - `0` 이외 → `rank_match` (랭크 매치, 해당 값이 계급 ID)
 4. 계급 ID는 `shared/ttt2.py:TEKKEN_RANKS`로 이름/티어를 해석한다.
@@ -24,7 +25,8 @@ RPCN에 현재 존재하는 TTT2 방을 모아 "지금 누가 무슨 매치를 �
 ```
 
 `RoomInfoDTO` 필드: `room_id`, `owner_npid`, `owner_online_name`, `current_members`, `max_slots`,
-`room_type`, `rank_info{ id, name, tier }`, `users[{ user_id, online_name, avatar_url }]`.
+`room_type`, `rank_info{ id, name, tier }`, `users[{ online_name, avatar_url, npid, stream }]`.
+`stream`은 router가 붙이는 방송 정보로, 방송 중이 아니면 null이다.
 
 랭크 매치 그룹은 계급 ID 오름차순으로 정렬한다. 캐시 TTL은 10초(`cache_ttl_rooms_all`).
 

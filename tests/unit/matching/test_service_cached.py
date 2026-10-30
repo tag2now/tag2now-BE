@@ -59,16 +59,15 @@ async def test_get_rooms_all_groups_rooms_and_merges_matchmaking_phantoms(mock_c
 
 @pytest.mark.asyncio
 async def test_collect_activity_observation_bypasses_http_cache(service, mock_game_repo, monkeypatch):
-    from matching.models import Rank, RoomInfoDTO
-    from rpcn_client.models import UserInfo
+    from matching.models import Rank, RoomInfoDTO, RoomUser
 
     monkeypatch.setattr(service, "get_server_world_tree", lambda com_id: {"1": [10]})
     solo_ranked = RoomInfoDTO.phantom("solo", "Solo", RoomType.RANK_MATCH, Rank(id=1))
     full_ranked = RoomInfoDTO.phantom("first", "First", RoomType.RANK_MATCH, Rank(id=2))
     full_ranked.current_members = 2
     full_ranked.users = [
-        UserInfo(npid="first", online_name="First", avatar_url=""),
-        UserInfo(npid="second", online_name="Second", avatar_url=""),
+        RoomUser(npid="first", online_name="First", avatar_url=""),
+        RoomUser(npid="second", online_name="Second", avatar_url=""),
     ]
     player_match = RoomInfoDTO.phantom("ignored", "Ignored", RoomType.PLAYER_MATCH, None)
     empty_ranked = RoomInfoDTO.phantom("", "", RoomType.RANK_MATCH, Rank(id=3))
@@ -182,19 +181,16 @@ def test_get_leaderboard_drops_excluded_accounts_and_closes_their_gaps(
 
 
 def _listed_room(room_id, *npids, rank_id):
-    """A room as RPCN lists it. rank_id 0 is a player match."""
-    from types import SimpleNamespace
-    from matching.models import RoomInfoDTO
-    from rpcn_client.models import UserInfo
+    """A room as the game server lists it. rank_id 0 is a player match."""
+    from matching.models import Rank, RoomInfoDTO, RoomUser
 
     return RoomInfoDTO(
-        SimpleNamespace(
-            room_id=room_id,
-            owner_npid=npids[0],
-            owner_online_name=npids[0],
-            current_members=len(npids),
-            max_slots=2,
-            int_attrs={4: SimpleNamespace(value=rank_id)},
-            users=[UserInfo(npid=npid, online_name=npid, avatar_url="") for npid in npids],
-        )
+        room_id=room_id,
+        owner_npid=npids[0],
+        owner_online_name=npids[0],
+        current_members=len(npids),
+        max_slots=2,
+        room_type=RoomType.RANK_MATCH if rank_id else RoomType.PLAYER_MATCH,
+        rank_info=Rank(id=rank_id) if rank_id else None,
+        users=[RoomUser(online_name=npid, avatar_url="", npid=npid) for npid in npids],
     )

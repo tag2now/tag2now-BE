@@ -39,8 +39,7 @@ async def collector(monkeypatch):
     from history import collector as collector_mod
     from history.adapters.postgresql import PostgresHistoryAdapter
     from history.service import HistoryService
-    from matching.models import ActivityObservation, Rank, RoomInfoDTO, RoomType
-    from rpcn_client.models import UserInfo
+    from matching.models import ActivityObservation, Rank, RoomInfoDTO, RoomType, RoomUser
 
     await init_database()
     await _delete_test_rows()
@@ -48,7 +47,7 @@ async def collector(monkeypatch):
     room = RoomInfoDTO.phantom(_NPIDS[0], "P1", RoomType.RANK_MATCH, Rank(id=10))
     room.room_id = 424242
     room.current_members = 2
-    room.users = [UserInfo(npid=npid, online_name=npid, avatar_url="") for npid in _NPIDS]
+    room.users = [RoomUser(npid=npid, online_name=npid, avatar_url="") for npid in _NPIDS]
     observation = ActivityObservation(
         rank_player_npids=set(_NPIDS),
         total_players=2,

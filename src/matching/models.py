@@ -5,7 +5,6 @@ from enum import Enum
 
 from pydantic import BaseModel
 
-from rpcn_client import RoomInfo, UserInfo
 from shared.ttt2 import TEKKEN_RANKS, TTT2_CHARACTERS
 
 # ---------------------------------------------------------------------------
@@ -105,6 +104,14 @@ class ActivityObservation:
 
 
 @dataclass
+class RoomUser:
+    # The fields and their order match what /rooms/all has always answered.
+    online_name: str
+    avatar_url: str
+    npid: str
+
+
+@dataclass
 class RoomInfoDTO:
     room_id: int
     owner_npid: str
@@ -113,33 +120,21 @@ class RoomInfoDTO:
     max_slots: int
     room_type: RoomType
     rank_info: Rank | None
-    users: list[UserInfo]
-
-    def __init__(self, room_info: RoomInfo):
-        self.room_id = room_info.room_id
-        self.owner_npid = room_info.owner_npid
-        self.owner_online_name = room_info.owner_online_name
-        self.current_members = room_info.current_members
-        self.max_slots = room_info.max_slots
-        self.users = room_info.users
-
-        attr4_value = room_info.int_attrs[4].value
-        self.room_type = RoomType.PLAYER_MATCH if attr4_value == 0 else RoomType.RANK_MATCH
-        self.rank_info = Rank(id=attr4_value) if attr4_value != 0 else None
+    users: list[RoomUser]
 
     @classmethod
     def phantom(cls, owner_npid: str, owner_online_name: str, room_type: RoomType, rank_info: Rank | None):
         """Create a phantom room for a searching player, who has no room of their own to list."""
-        obj = object.__new__(cls)
-        obj.room_id = 0
-        obj.owner_npid = owner_npid
-        obj.owner_online_name = owner_online_name
-        obj.current_members = 1
-        obj.max_slots = 2
-        obj.room_type = room_type
-        obj.rank_info = rank_info
-        obj.users = [UserInfo(npid=owner_npid, online_name=owner_online_name, avatar_url="")]
-        return obj
+        return cls(
+            room_id=0,
+            owner_npid=owner_npid,
+            owner_online_name=owner_online_name,
+            current_members=1,
+            max_slots=2,
+            room_type=room_type,
+            rank_info=rank_info,
+            users=[RoomUser(online_name=owner_online_name, avatar_url="", npid=owner_npid)],
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -10,24 +10,23 @@ from types import SimpleNamespace
 import pytest
 
 from matching.matchmaking_tracker import MatchmakingTracker
-from matching.models import RoomInfoDTO, RoomType
-from rpcn_client import UserInfo
+from matching.models import Rank, RoomInfoDTO, RoomType, RoomUser
 
 T0 = 1_000_000.0
 
 
 def _room(room_id, *npids, rank_id):
-    """A room as RPCN lists it. rank_id 0 is a player match; members follow users."""
-    info = SimpleNamespace(
+    """A room as the game server lists it. rank_id 0 is a player match; members follow users."""
+    return RoomInfoDTO(
         room_id=room_id,
         owner_npid=npids[0],
         owner_online_name=npids[0].title(),
         current_members=len(npids),
         max_slots=2,
-        int_attrs={4: SimpleNamespace(value=rank_id)},
-        users=[UserInfo(npid=npid, online_name=npid.title(), avatar_url="") for npid in npids],
+        room_type=RoomType.RANK_MATCH if rank_id else RoomType.PLAYER_MATCH,
+        rank_info=Rank(id=rank_id) if rank_id else None,
+        users=[RoomUser(online_name=npid.title(), avatar_url="", npid=npid) for npid in npids],
     )
-    return RoomInfoDTO(info)
 
 
 def hosting(room_id, npid, rank_id=10):

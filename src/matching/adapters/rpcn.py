@@ -2,11 +2,13 @@
 
 import struct
 
-from rpcn_client import RpcnError
+from rpcn_client import RoomInfo, RpcnError
 from matching.models import (
     CharInfo,
     Rank,
     RoomInfoDTO,
+    RoomType,
+    RoomUser,
     TTT2GameInfo,
     TTT2LeaderboardEntry,
     TTT2LeaderboardResult,
@@ -18,6 +20,9 @@ from matching.rpcn_lifecycle import SharedRpcnClient
 # ranks, wins and losses.
 _GAME_INFO_FMT = ">4B4I"
 _GAME_INFO_SIZE = 20
+
+# TTT2 keeps a room's rank code in int attribute 4; 0 means a player match.
+_RANK_ATTR = 4
 
 
 class RpcnGameServerAdapter(GameServerPort):
@@ -44,7 +49,7 @@ class RpcnGameServerAdapter(GameServerPort):
                 try:
                     resp = client.search_rooms_all(com_id, world_id=world_id)
                     if resp.total > 0:
-                        all_rooms.extend(RoomInfoDTO(room) for room in resp.rooms)
+                        all_rooms.extend(_room(room) for room in resp.rooms)
                 except RpcnError:
                     pass
             return all_rooms
@@ -78,6 +83,20 @@ class RpcnGameServerAdapter(GameServerPort):
             last_sort_date=result.last_sort_date,
             entries=entries,
         )
+
+
+def _room(info: RoomInfo) -> RoomInfoDTO:
+    rank_id = info.int_attrs[_RANK_ATTR].value
+    return RoomInfoDTO(
+        room_id=info.room_id,
+        owner_npid=info.owner_npid,
+        owner_online_name=info.owner_online_name,
+        current_members=info.current_members,
+        max_slots=info.max_slots,
+        room_type=RoomType.RANK_MATCH if rank_id else RoomType.PLAYER_MATCH,
+        rank_info=Rank(id=rank_id) if rank_id else None,
+        users=[RoomUser(online_name=u.online_name, avatar_url=u.avatar_url, npid=u.npid) for u in info.users],
+    )
 
 
 def _parse_game_info(data: bytes) -> TTT2GameInfo | None:
