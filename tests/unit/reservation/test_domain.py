@@ -7,16 +7,20 @@ import pytest
 from reservation.domain import (
     MatchType,
     ReservationStatus,
+    ensure_cancellable,
+    ensure_comment_deletable_by,
     ensure_commentable,
     ensure_conditions_valid,
     ensure_editable,
+    ensure_edited_by_host,
     ensure_joinable,
+    ensure_joinable_by,
     ensure_participation_cancellable,
     start_at_from,
     status_for,
     window_end,
 )
-from reservation.exceptions import ReservationStateError
+from reservation.exceptions import ReservationAccessError, ReservationStateError
 
 NOW = datetime(2026, 8, 25, 12, 0, tzinfo=timezone.utc)
 FUTURE = NOW + timedelta(hours=1)
@@ -52,18 +56,23 @@ def test_a_reservation_at_capacity_rejects_participants():
 
 @pytest.mark.parametrize("status", [ReservationStatus.OPEN, ReservationStatus.MATCHED])
 def test_participation_in_a_live_future_reservation_is_cancellable(status):
-    ensure_participation_cancellable(status, FUTURE, NOW)
+    ensure_participation_cancellable(status, FUTURE, NOW, participating=True)
 
 
 @pytest.mark.parametrize("status", [ReservationStatus.CANCELLED, ReservationStatus.ENDED])
 def test_participation_in_a_dead_reservation_is_not_cancellable(status):
     with pytest.raises(ReservationStateError, match="취소되었거나 종료된"):
-        ensure_participation_cancellable(status, FUTURE, NOW)
+        ensure_participation_cancellable(status, FUTURE, NOW, participating=True)
 
 
 def test_participation_in_a_started_reservation_is_not_cancellable():
     with pytest.raises(ReservationStateError, match="이미 시작된"):
-        ensure_participation_cancellable(ReservationStatus.OPEN, PAST, NOW)
+        ensure_participation_cancellable(ReservationStatus.OPEN, PAST, NOW, participating=True)
+
+
+def test_only_a_participant_can_cancel_their_participation():
+    with pytest.raises(ReservationAccessError, match="참가 중인 예약이 아닙니다"):
+        ensure_participation_cancellable(ReservationStatus.OPEN, FUTURE, NOW, participating=False)
 
 
 def test_a_rank_match_needs_ranks_and_a_capacity_of_one():
@@ -235,3 +244,63 @@ def test_a_reservation_can_be_commented_on_even_after_it_ends(status):
 def test_a_cancelled_reservation_takes_no_comments():
     with pytest.raises(ReservationStateError):
         ensure_commentable(ReservationStatus.CANCELLED)
+
+
+def test_anyone_but_the_host_may_join():
+    ensure_joinable_by("host", "joiner", already_joined=False)
+
+
+def test_the_host_cannot_join_their_own_reservation():
+    with pytest.raises(ReservationStateError, match="내가 만든 예약에는"):
+        ensure_joinable_by("host", "host", already_joined=False)
+
+
+def test_an_account_cannot_join_twice():
+    with pytest.raises(ReservationStateError, match="이미 참가한"):
+        ensure_joinable_by("host", "joiner", already_joined=True)
+
+
+def test_anyone_may_join_a_reservation_from_before_login():
+    ensure_joinable_by(None, "joiner", already_joined=False)
+
+
+def test_the_host_edits_their_reservation():
+    ensure_edited_by_host("host", "host")
+
+
+@pytest.mark.parametrize("host_subject", ["host", None])
+def test_nobody_else_edits_it_and_a_hostless_row_has_no_editor(host_subject):
+    with pytest.raises(ReservationAccessError, match="예약한 사람만 수정"):
+        ensure_edited_by_host(host_subject, "stranger")
+
+
+@pytest.mark.parametrize("status", [ReservationStatus.OPEN, ReservationStatus.MATCHED])
+def test_the_host_cancels_a_live_reservation_before_it_starts(status):
+    ensure_cancellable("host", "host", status, FUTURE, NOW)
+
+
+@pytest.mark.parametrize("host_subject", ["host", None])
+def test_nobody_else_cancels_it_and_a_hostless_row_has_no_canceller(host_subject):
+    with pytest.raises(ReservationAccessError, match="예약한 사람만 취소"):
+        ensure_cancellable(host_subject, "stranger", ReservationStatus.OPEN, FUTURE, NOW)
+
+
+@pytest.mark.parametrize("status", [ReservationStatus.CANCELLED, ReservationStatus.ENDED])
+def test_a_dead_reservation_cannot_be_cancelled(status):
+    with pytest.raises(ReservationAccessError, match="시작했거나 끝난"):
+        ensure_cancellable("host", "host", status, FUTURE, NOW)
+
+
+def test_a_started_reservation_cannot_be_cancelled():
+    with pytest.raises(ReservationAccessError, match="시작했거나 끝난"):
+        ensure_cancellable("host", "host", ReservationStatus.OPEN, NOW, NOW)
+
+
+def test_the_author_deletes_their_comment():
+    ensure_comment_deletable_by("author", "author")
+
+
+@pytest.mark.parametrize("author_subject", ["author", None])
+def test_nobody_else_deletes_it_and_an_authorless_comment_has_no_deleter(author_subject):
+    with pytest.raises(ReservationAccessError, match="작성한 사람만 삭제"):
+        ensure_comment_deletable_by(author_subject, "stranger")

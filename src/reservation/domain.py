@@ -5,7 +5,7 @@ from datetime import datetime, time, timedelta
 from enum import StrEnum
 from zoneinfo import ZoneInfo
 
-from reservation.exceptions import ReservationStateError
+from reservation.exceptions import ReservationAccessError, ReservationStateError
 
 
 class MatchType(StrEnum):
@@ -134,6 +134,13 @@ def status_for(participant_count: int, capacity: int) -> ReservationStatus:
     return ReservationStatus.MATCHED if participant_count >= capacity else ReservationStatus.OPEN
 
 
+def ensure_joinable_by(host_subject: str | None, subject: str, already_joined: bool) -> None:
+    if host_subject == subject:
+        raise ReservationStateError("내가 만든 예약에는 참가할 수 없습니다.")
+    if already_joined:
+        raise ReservationStateError("이미 참가한 예약입니다.")
+
+
 def ensure_joinable(
     status: ReservationStatus, start_at: datetime, participant_count: int, capacity: int, now: datetime
 ) -> None:
@@ -141,6 +148,12 @@ def ensure_joinable(
         raise ReservationStateError("지금은 참가할 수 없는 예약입니다.")
     if participant_count >= capacity:
         raise ReservationStateError("모집이 완료된 예약입니다.")
+
+
+def ensure_edited_by_host(host_subject: str | None, subject: str) -> None:
+    """A row from before login has no host, and None equals no one."""
+    if host_subject != subject:
+        raise ReservationAccessError("예약한 사람만 수정할 수 있습니다.")
 
 
 def ensure_editable(status: ReservationStatus, start_at: datetime, participant_count: int, now: datetime) -> None:
@@ -170,8 +183,29 @@ def ensure_commentable(status: ReservationStatus) -> None:
         raise ReservationStateError("취소된 예약에는 댓글을 쓸 수 없습니다.")
 
 
-def ensure_participation_cancellable(status: ReservationStatus, start_at: datetime, now: datetime) -> None:
+def ensure_comment_deletable_by(author_subject: str | None, subject: str) -> None:
+    """A comment from before login has no author, and None equals no one."""
+    if author_subject != subject:
+        raise ReservationAccessError("작성한 사람만 삭제할 수 있습니다.")
+
+
+def ensure_participation_cancellable(
+    status: ReservationStatus, start_at: datetime, now: datetime, *, participating: bool
+) -> None:
     if status not in LIVE_STATUSES:
         raise ReservationStateError("이미 취소되었거나 종료된 예약입니다.")
     if start_at <= now:
         raise ReservationStateError("이미 시작된 예약은 변경할 수 없습니다.")
+    if not participating:
+        raise ReservationAccessError("참가 중인 예약이 아닙니다.")
+
+
+def ensure_cancellable(
+    host_subject: str | None, subject: str, status: ReservationStatus, start_at: datetime, now: datetime
+) -> None:
+    """Only the host, and only before the start. A row from before login has no
+    host, and None equals no one."""
+    if host_subject != subject:
+        raise ReservationAccessError("예약한 사람만 취소할 수 있습니다.")
+    if status not in LIVE_STATUSES or start_at <= now:
+        raise ReservationAccessError("이미 시작했거나 끝난 예약은 취소할 수 없습니다.")

@@ -35,8 +35,11 @@
 참가자는 "그때의 조건"에 동의한 것이므로, 호스트가 시각이나 매치 종류를 바꾸면 동의한 적 없는 약속에 묶인다.
 참가자가 생긴 뒤에는 수정 대신 취소 후 재등록한다.
 
-### 참가 취소 조건
-`open`/`matched` + 시작 전.
+### 참가 취소 조건 (`ensure_participation_cancellable`)
+`open`/`matched` + 시작 전 + 참가 중인 계정. 참가 중이 아니면 403.
+
+### 예약 취소 조건 (`ensure_cancellable`)
+방장 + `open`/`matched` + 시작 전. 어느 쪽을 어겨도 403.
 
 ### 댓글 가능 조건 (`ensure_commentable`)
 **취소된 예약만** 거부한다. 시작했든 끝났든 그 약속은 실제로 있었던 일이고 페이지는 공유 가능하므로,
@@ -53,6 +56,9 @@
 3. 화면에 보이는 이름(`host_display_name`, 참가자 `display_name`, 댓글 `author`)은 `online_name`이다.
 4. 응답은 비교용 `host_username`, 참가자 `username`, 댓글 `author_username`을 함께 싣는다.
    FE는 이것을 `/auth/me`의 `username`과 비교해 "내 예약인가"를 판단한다.
+
+소유권 규칙도 `reservation/domain.py`의 `ensure_*` 함수다 — `ensure_joinable_by`, `ensure_edited_by_host`,
+`ensure_cancellable`, `ensure_comment_deletable_by`. 어댑터는 행을 잠그고 사실을 읽어 넘길 뿐이다.
 
 | 규칙 | 결과 |
 |------|------|

@@ -16,9 +16,13 @@ from reservation.domain import (
     ParticipantSummary,
     Reservation,
     ReservationStatus,
+    ensure_cancellable,
+    ensure_comment_deletable_by,
     ensure_commentable,
     ensure_editable,
+    ensure_edited_by_host,
     ensure_joinable,
+    ensure_joinable_by,
     ensure_participation_cancellable,
     status_for,
     window_end,
@@ -26,7 +30,7 @@ from reservation.domain import (
 from reservation.entities import Reservation as ReservationRow
 from reservation.entities import ReservationComment as ReservationCommentRow
 from reservation.entities import ReservationParticipant as ReservationParticipantRow
-from reservation.exceptions import ReservationAccessError, ReservationNotFoundError, ReservationStateError
+from reservation.exceptions import ReservationNotFoundError, ReservationStateError
 from reservation.ports import ReservationRepository
 
 
@@ -215,8 +219,7 @@ class PostgresReservationRepository(ReservationRepository):
             )
             if row is None:
                 raise ReservationNotFoundError("Reservation not found")
-            if row.host_subject is None or row.host_subject != host_subject:
-                raise ReservationAccessError("예약한 사람만 수정할 수 있습니다.")
+            ensure_edited_by_host(row.host_subject, host_subject)
             count = await self._active_participant_count(session, reservation_id)
             ensure_editable(ReservationStatus(row.status), row.start_at, count, now)
 
@@ -259,10 +262,8 @@ class PostgresReservationRepository(ReservationRepository):
                     ReservationParticipantRow.cancelled_at.is_(None),
                 )
             )
-            if row.host_subject == subject:
-                raise ReservationStateError("내가 만든 예약에는 참가할 수 없습니다.")
-            if await self._active_participation(session, reservation_id, subject) is not None:
-                raise ReservationStateError("이미 참가한 예약입니다.")
+            already_joined = await self._active_participation(session, reservation_id, subject) is not None
+            ensure_joinable_by(row.host_subject, subject, already_joined)
             ensure_joinable(ReservationStatus(row.status), row.start_at, count, row.capacity, now)
             participant = ReservationParticipantRow(
                 reservation_id=reservation_id,
@@ -292,10 +293,10 @@ class PostgresReservationRepository(ReservationRepository):
             )
             if row is None:
                 raise ReservationNotFoundError("Reservation not found")
-            ensure_participation_cancellable(ReservationStatus(row.status), row.start_at, now)
             participant = await self._active_participation(session, reservation_id, subject)
-            if participant is None:
-                raise ReservationAccessError("참가 중인 예약이 아닙니다.")
+            ensure_participation_cancellable(
+                ReservationStatus(row.status), row.start_at, now, participating=participant is not None
+            )
             participant.cancelled_at = now
             await session.flush()
             count = await session.scalar(
@@ -351,8 +352,7 @@ class PostgresReservationRepository(ReservationRepository):
             row = await session.get(ReservationCommentRow, comment_id)
             if row is None or row.reservation_id != reservation_id or row.deleted_at is not None:
                 raise ReservationNotFoundError("Comment not found")
-            if row.author_subject is None or row.author_subject != author_subject:
-                raise ReservationAccessError("작성한 사람만 삭제할 수 있습니다.")
+            ensure_comment_deletable_by(row.author_subject, author_subject)
             row.deleted_at = now
 
     async def cancel(self, reservation_id: int, host_subject: str, now: datetime) -> None:
@@ -362,9 +362,6 @@ class PostgresReservationRepository(ReservationRepository):
             )
             if row is None:
                 raise ReservationNotFoundError("Reservation not found")
-            if row.host_subject is None or row.host_subject != host_subject:
-                raise ReservationAccessError("예약한 사람만 취소할 수 있습니다.")
-            if row.status not in LIVE_STATUSES or row.start_at <= now:
-                raise ReservationAccessError("이미 시작했거나 끝난 예약은 취소할 수 없습니다.")
-            row.status, row.cancelled_at, row.updated_at = "cancelled", now, now
+            ensure_cancellable(row.host_subject, host_subject, ReservationStatus(row.status), row.start_at, now)
+            row.status, row.cancelled_at, row.updated_at = ReservationStatus.CANCELLED.value, now, now
             await self._release_participants(session, reservation_id, now)
