@@ -416,14 +416,16 @@ absorbs the matches then seen again.
 
 ### RPCN client lifecycle
 
-`matching/rpcn_lifecycle.py` manages one shared `RpcnClient` behind a `threading.Lock`, since the underlying socket is not concurrency-safe. Use the `api_client()` context manager rather than constructing a client:
+`matching/rpcn_lifecycle.py`'s `SharedRpcnClient` holds one `RpcnClient` behind a `threading.Lock`, since the underlying socket is not concurrency-safe. The container builds one and hands it to `RpcnGameServerAdapter`; use its `api_client()` context manager rather than constructing a client:
 
 ```python
-with api_client() as client:
+with self._rpcn.api_client() as client:
     rooms = client.search_rooms(...)
 ```
 
-On `RpcnError` or `OSError` the client is disconnected, the singleton is cleared, and `RpcnUnavailableError` is raised. A `_RECONNECT_COOLDOWN` of 5 s prevents reconnect storms. When `rpcn_metric_enable` is set, the client is wrapped in `TrackedRpcnClient` (`rpcn_client/metrics.py`).
+It is given a **client factory**, not a client: `create_client` (connect and log in) with the settings bound by `functools.partial`. It calls the factory on first use and again after every failure, and its unit tests pass a fake one.
+
+On `RpcnError` or `OSError` the client is disconnected and dropped, and `RpcnUnavailableError` is raised; for the next 5 s (`cooldown`) a use fails at once rather than reconnecting. When `rpcn_metric_enable` is set, the client is wrapped in `TrackedRpcnClient` (`rpcn_client/metrics.py`).
 
 `RpcnUnavailableError` derives from the shared `ServiceUnavailableError`, which maps to HTTP 502.
 

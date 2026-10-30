@@ -11,15 +11,18 @@ These tests require a running RPCN server and Redis instance.
 The RPCN connection settings are read from shared.settings (env vars).
 """
 
+from functools import partial
+
 import pytest
 from rpcn_client import SearchRoomsResult
 from matching.adapters.rpcn import RpcnGameServerAdapter
-from matching.rpcn_lifecycle import api_client, shutdown_client
+from matching.rpcn_lifecycle import SharedRpcnClient, create_client
 from matching.service import MatchingService
+from shared.settings import get_settings
 from shared.ttt2 import TTT2_COM_ID, TTT2_RANK_BOARD_ID
 
-# These reach RPCN through the shared api_client(), so they carry the same
-# one-session-per-account restriction as tests/integration/test_rpcn_client.py.
+# These log in to RPCN, so they carry the same one-session-per-account
+# restriction as tests/integration/test_rpcn_client.py.
 pytestmark = pytest.mark.rpcn
 
 # ---------------------------------------------------------------------------
@@ -35,10 +38,19 @@ BOARD_ID = TTT2_RANK_BOARD_ID
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
-def service():
-    """One service over the shared RPCN connection, disconnected after the module."""
-    yield MatchingService(RpcnGameServerAdapter())
-    shutdown_client()
+def rpcn():
+    """One RPCN connection for the module, disconnected after it."""
+    s = get_settings()
+    shared = SharedRpcnClient(partial(
+        create_client, s.rpcn_host, s.rpcn_port, s.rpcn_user, s.rpcn_password, s.rpcn_token, s.rpcn_metric_enable,
+    ))
+    yield shared
+    shared.shutdown()
+
+
+@pytest.fixture(scope="module")
+def service(rpcn):
+    return MatchingService(RpcnGameServerAdapter(rpcn))
 
 
 # ---------------------------------------------------------------------------
@@ -56,12 +68,12 @@ def test_get_server_world_tree(service):
         assert all(isinstance(w, int) for w in worlds)
 
 
-def test_search_rooms_all(service):
+def test_search_rooms_all(service, rpcn):
     """search_rooms_all returns all rooms including HIDDEN ones."""
     pytest.importorskip("rpcn_client.np2_structs_pb2")
     tree = service.get_server_world_tree(COM_ID)
     all_worlds = [w for worlds in tree.values() for w in worlds]
-    with api_client() as client:
+    with rpcn.api_client() as client:
         for world_id in all_worlds:
             resp = client.search_rooms_all(COM_ID, world_id=world_id)
             print(f"SearchRoomAll world {world_id}: total={resp.total}, rooms={len(resp.rooms)}")

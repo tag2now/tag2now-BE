@@ -9,10 +9,6 @@ class GameServerPort(ABC):
     """Outbound port for game server operations."""
 
     @abstractmethod
-    async def init(self) -> None:
-        """Initialize connection to the game server."""
-
-    @abstractmethod
     async def close(self) -> None:
         """Release resources held by the game server connection."""
 

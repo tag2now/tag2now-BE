@@ -8,6 +8,7 @@ collector, is handed one by the lifespan.
 import logging
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
+from functools import partial
 
 from admin.adapters.rpcn_api_server import RpcnApiServerAccountAdmin
 from admin.service import AdminService
@@ -19,6 +20,7 @@ from community.service import CommunityService
 from history.collector import Collector
 from history.db import close_history_repo, init_history_repo
 from matching.adapters.rpcn import RpcnGameServerAdapter
+from matching.rpcn_lifecycle import SharedRpcnClient, create_client
 from matching.service import MatchingService
 from reservation.adapters.postgresql import PostgresReservationRepository
 from reservation.service import ReservationService
@@ -90,7 +92,11 @@ async def build_container(stack: AsyncExitStack) -> Container:
     stack.push_async_callback(chzzk.close)
 
     # Connects to RPCN on first use; closing disconnects it.
-    game_server = RpcnGameServerAdapter()
+    rpcn = SharedRpcnClient(partial(
+        create_client, settings.rpcn_host, settings.rpcn_port, settings.rpcn_user,
+        settings.rpcn_password, settings.rpcn_token, settings.rpcn_metric_enable,
+    ))
+    game_server = RpcnGameServerAdapter(rpcn)
     stack.push_async_callback(game_server.close)
     matching = MatchingService(game_server)
 

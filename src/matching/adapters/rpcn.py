@@ -12,7 +12,7 @@ from matching.models import (
     TTT2LeaderboardResult,
 )
 from matching.ports import GameServerPort
-from matching.rpcn_lifecycle import api_client, shutdown_client
+from matching.rpcn_lifecycle import SharedRpcnClient
 
 # The leading bytes of a leaderboard entry's game_info: both characters' ids,
 # ranks, wins and losses.
@@ -23,14 +23,14 @@ _GAME_INFO_SIZE = 20
 class RpcnGameServerAdapter(GameServerPort):
     """GameServerPort backed by the RPCN binary protocol."""
 
-    async def init(self) -> None:
-        pass  # lazy connection via api_client()
+    def __init__(self, rpcn: SharedRpcnClient):
+        self._rpcn = rpcn
 
     async def close(self) -> None:
-        shutdown_client()
+        self._rpcn.shutdown()
 
     def get_server_world_tree(self, com_id: str) -> dict[int, list[int]]:
-        with api_client() as client:
+        with self._rpcn.api_client() as client:
             servers = client.get_server_list(com_id)
             tree = {}
             for server_id in servers:
@@ -38,7 +38,7 @@ class RpcnGameServerAdapter(GameServerPort):
             return tree
 
     def search_rooms_all(self, com_id: str, worlds: list[int]) -> list[RoomInfoDTO]:
-        with api_client() as client:
+        with self._rpcn.api_client() as client:
             all_rooms: list[RoomInfoDTO] = []
             for world_id in worlds:
                 try:
@@ -50,7 +50,7 @@ class RpcnGameServerAdapter(GameServerPort):
             return all_rooms
 
     def get_leaderboard(self, com_id: str, board_id: int, num_ranks: int) -> TTT2LeaderboardResult:
-        with api_client() as client:
+        with self._rpcn.api_client() as client:
             result = client.get_score_range(
                 com_id, board_id,
                 start_rank=1, num_ranks=num_ranks,

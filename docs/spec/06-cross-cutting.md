@@ -50,10 +50,11 @@ FE는 `main.tsx`에 전역 `unhandledrejection` 핸들러를 두어 토스트로
 
 ## RPCN 클라이언트 수명주기
 
-- `matching/rpcn_lifecycle.py`가 `threading.Lock` 뒤에서 **단일 `RpcnClient`** 를 관리한다(소켓이 동시성 안전하지 않다).
-- 사용은 반드시 `with api_client() as client:` 컨텍스트 매니저로.
-- `RpcnError` / `OSError` 발생 시 연결 해제 → 싱글턴 제거 → `RpcnUnavailableError`.
-- 재연결 폭주 방지를 위한 5초 쿨다운(`_RECONNECT_COOLDOWN`).
+- `matching/rpcn_lifecycle.py`의 `SharedRpcnClient`가 `threading.Lock` 뒤에서 **단일 `RpcnClient`** 를 관리한다(소켓이 동시성 안전하지 않다). container가 하나 만들어 `RpcnGameServerAdapter`에 넘긴다.
+- 사용은 반드시 `with self._rpcn.api_client() as client:` 컨텍스트 매니저로.
+- 클라이언트가 아니라 **클라이언트 factory**(`create_client` + `partial`로 묶은 설정)를 받아, 첫 사용과 실패 뒤마다 새로 만든다.
+- `RpcnError` / `OSError` 발생 시 연결 해제 → 클라이언트 폐기 → `RpcnUnavailableError`.
+- 재연결 폭주 방지를 위한 5초 쿨다운(`cooldown`).
 - `rpcn_metric_enable`이 켜지면 `TrackedRpcnClient`(타이밍 래퍼)로 감싼다.
 - RPCN은 **계정당 세션 1개**다. 서버와 통합 테스트를 동시에 돌릴 수 없다.
 

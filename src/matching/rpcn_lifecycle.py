@@ -1,67 +1,78 @@
-"""Singleton RPCN client lifecycle management."""
+"""One RPCN connection shared by every caller, replaced after a failure."""
 import logging
-import time
 import threading
+import time
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
 from rpcn_client import RpcnClient, RpcnError
 from matching.exceptions import RpcnUnavailableError
-from shared.settings import get_settings
 from rpcn_client.metrics import TrackedRpcnClient
 
 logger = logging.getLogger(__name__)
 
-_client_lock = threading.Lock()
-_shared_client: RpcnClient | None = None
-_RECONNECT_COOLDOWN = 5.0  # seconds
-_last_failure: float = 0.0
 
-settings = get_settings()
-
-def init_rpcn_client():
-    global _shared_client
-    client = RpcnClient(host=settings.rpcn_host, port=settings.rpcn_port)
-    if settings.rpcn_metric_enable:
+def create_client(host: str, port: int, user: str, password: str, token: str, metric_enable: bool) -> RpcnClient:
+    """A connected client, already logged in."""
+    client = RpcnClient(host=host, port=port)
+    if metric_enable:
         client = TrackedRpcnClient(client)
 
     client.connect()
-    client.login(settings.rpcn_user, settings.rpcn_password, settings.rpcn_token)
+    client.login(user, password, token)
     return client
 
 
-def shutdown_client():
-    """Disconnect the shared RPCN client if connected."""
-    global _shared_client
-    with _client_lock:
-        if _shared_client is not None:
+class SharedRpcnClient:
+    """Hands out one client at a time, since its socket is not concurrency-safe."""
+
+    def __init__(self, client_factory: Callable[[], RpcnClient], cooldown: float = 5.0):
+        self._client_factory = client_factory
+        self._cooldown = cooldown
+        self._lock = threading.Lock()
+        self._client: RpcnClient | None = None
+        self._failed_at = float("-inf")
+
+    def shutdown(self) -> None:
+        """Disconnect the client if connected."""
+        with self._lock:
+            if self._client is None:
+                return
             try:
-                _shared_client.disconnect()
+                self._client.disconnect()
                 logger.info("RPCN client disconnected")
             except Exception:
                 logger.warning("RPCN disconnect failed", exc_info=True)
             finally:
-                _shared_client = None
+                self._client = None
 
+    @contextmanager
+    def api_client(self) -> Iterator[RpcnClient]:
+        with self._lock:
+            try:
+                yield self._connected()
+            except (RpcnError, OSError) as exc:
+                logger.error("RPCN connection error: %s", exc)
+                self._discard()
+                raise RpcnUnavailableError(str(exc)) from exc
 
-@contextmanager
-def api_client():
-    global _shared_client, _last_failure
-    with _client_lock:
-        if _shared_client is None:
-            elapsed = time.monotonic() - _last_failure
-            if _last_failure and elapsed < _RECONNECT_COOLDOWN:
-                raise RpcnUnavailableError(f"RPCN reconnect cooldown ({_RECONNECT_COOLDOWN - elapsed:.1f}s remaining)")
-        try:
-            if _shared_client is None:
-                _shared_client = init_rpcn_client()
-            yield _shared_client
-        except (RpcnError, OSError) as exc:
-            logger.error("RPCN connection error: %s", exc)
-            if _shared_client is not None:
-                try:
-                    _shared_client.disconnect()
-                except Exception:
-                    pass
-                _shared_client = None
-            _last_failure = time.monotonic()
-            raise RpcnUnavailableError(str(exc)) from exc
+    def _connected(self) -> RpcnClient:
+        if self._client is None:
+            self._ensure_cooled_down()
+            self._client = self._client_factory()
+        return self._client
+
+    def _ensure_cooled_down(self) -> None:
+        # Without a pause every request would retry a server that just refused us.
+        remaining = self._failed_at + self._cooldown - time.monotonic()
+        if remaining > 0:
+            raise RpcnUnavailableError(f"RPCN reconnect cooldown ({remaining:.1f}s remaining)")
+
+    def _discard(self) -> None:
+        if self._client is not None:
+            try:
+                self._client.disconnect()
+            except Exception:
+                pass
+        self._client = None
+        self._failed_at = time.monotonic()
