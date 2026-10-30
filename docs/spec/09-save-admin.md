@@ -122,6 +122,8 @@ FE ◀──{changes, applied, result}──────────────
 
 - 순위: 1위 캐릭터 계급 → 2위 캐릭터 계급 → 1위 포인트 → 2위 포인트. 모두 같으면 같은 순위(1, 2, 2, 4)이고
   아이디 순으로 늘어놓는다. floor로 올라간 캐릭터도 센다. 계급 있는 캐릭터가 없으면 빠진다.
+- 순위와 아래 보유자 규칙은 `saves/domain.py`의 순수 함수다. 모양은 TypedDict라 캐시의 JSON dict를 그대로 쓰고,
+  요청마다 객체로 바꾸는 비용이 없다. 서비스는 캐시와 응답 조립만 맡는다.
 - `RANKING_EXCLUDED_NPIDS`(03-statistics.md)에 든 계정은 순위를 매기기 전에 빠진다(`total`에서도).
 - save-admin의 `GET /players/top-ranks`를 부른다(API 키만). 세이브마다 캐릭터 전부가 오고, 가장 높은 두
   캐릭터는 여기서 고른다. save-admin은 지난 호출 뒤 `data_id`가 바뀐

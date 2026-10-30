@@ -8,7 +8,8 @@ import pytest
 from shared.ttt2 import TEKKEN_RANKS, TTT2_CHARACTERS
 from saves.adapters.save_admin_server import SaveAdminServer
 from saves.exceptions import SavesUnavailableError
-from saves.service import SavesService, current_rank_board
+from saves.domain import current_rank_board
+from saves.service import SavesService
 from shared.cache import DictCache
 
 

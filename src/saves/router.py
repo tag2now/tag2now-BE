@@ -7,6 +7,7 @@ from admin.dependencies import admin_user
 from auth.models import AuthUser
 from saves import models
 from saves.dependencies import saves_service
+from saves.domain import HOLDER_RANKS
 from saves.service import SavesService
 
 router = APIRouter(prefix="/saves", tags=["Saves"])
@@ -38,8 +39,8 @@ async def current_rank_leaderboard(
 @router.get("/current-rank-holders", response_model=models.CurrentRankHoldersOut)
 async def current_rank_holders(
     rank: int = Query(
-        ge=models.HOLDER_RANKS.start,
-        le=models.HOLDER_RANKS.stop - 1,
+        ge=HOLDER_RANKS.start,
+        le=HOLDER_RANKS.stop - 1,
         description="Current rank code, from 1st dan (10)",
     ),
     top: int = Query(100, ge=1, le=1000, description="How many players to answer"),

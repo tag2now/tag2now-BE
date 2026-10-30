@@ -19,14 +19,14 @@ RPCN every time.
 import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone
-from itertools import groupby
 
 from auth.models import AuthUser
 from saves.ports import SaveServer
 from saves.exceptions import SaveNotFoundError
-from saves.models import HOLDER_RANKS, SaveLogRequest, SaveRequest
+from saves.domain import Holder, current_rank_board, holders_by_rank, saved_at, saved_within, top_two
+from saves.models import SaveLogRequest, SaveRequest
 from shared.cache import cache_delete, cache_get, cache_set
+from shared.clock import Clock, SystemClock
 from shared.settings import get_settings
 from shared.ttt2 import TEKKEN_RANKS, TTT2_CHARACTERS
 
@@ -50,7 +50,7 @@ def _profile(save: dict | None) -> dict | None:
         return None
     return {
         "username": save["npid"],
-        "saved_at": _saved_at(save),
+        "saved_at": saved_at(save),
         "account_rank": save["account_rank"],
         "total": save["total"],
         "wins": save["wins"],
@@ -63,93 +63,23 @@ def _profile(save: dict | None) -> dict | None:
 
 _CURRENT_RANK_KEY = "saves:current-rank-leaderboard"
 
-# Stands in for a second character a player does not have; below any rank.
-_NO_CHAR = {"rank": -1, "points": -1}
-
 
 def _holders_key(rank: int) -> str:
     return f"saves:current-rank-holders:{rank}"
 
 
-def _top_two(chars: list[dict]) -> list[dict]:
-    # A stable sort keeps the lower id on a tie, as save-admin's own top two did.
-    return sorted(chars, key=lambda c: (c["rank"], c["points"]), reverse=True)[:2]
-
-
-def _holders_by_rank(players: list[dict], places: dict[str, int]) -> dict[int, list[dict]]:
-    by_rank = {rank: [] for rank in HOLDER_RANKS}
-    for player in players:
-        for rank, ids in _played_ids_by_rank(player["chars"]).items():
-            by_rank[rank].append(
-                {
-                    "npid": player["npid"],
-                    "saved_utc": player["saved_utc"],
-                    "account_rank": player["account_rank"],
-                    "place": places[player["npid"]],
-                    "chars": ids,
-                }
-            )
-    return by_rank
-
-
-def _played_ids_by_rank(chars: list[dict]) -> dict[int, list[int]]:
-    played = {}
-    for c in filter(_holds_its_rank, chars):
-        played.setdefault(c["rank"], []).append(c["id"])
-    return played
-
-
-def _holds_its_rank(char: dict) -> bool:
-    # The floor gives every character a rank; only one played there makes a holder.
-    return bool(char["wins"] or char["losses"]) and char["rank"] in HOLDER_RANKS
-
-
-def _holder(holder: dict) -> dict:
+def _holder(holder: Holder) -> dict:
     return {
         "username": holder["npid"],
-        "saved_at": _saved_at(holder),
+        "saved_at": saved_at(holder),
         "account_rank": holder["account_rank"],
         "chars": [{"id": i, "character": TTT2_CHARACTERS[i]} for i in holder["chars"]],
     }
 
 
-def _without_excluded(players: list[dict]) -> list[dict]:
+def _without_excluded(players: list) -> list:
     settings = get_settings()
     return [p for p in players if not settings.is_ranking_excluded(p["npid"])]
-
-
-def _saved_within(players: list[dict], days: int | None) -> list[dict]:
-    if days is None:
-        return players
-    since = datetime.now(timezone.utc) - timedelta(days=days)
-    return [p for p in players if _saved_at(p) >= since]
-
-
-def current_rank_board(players: list[dict]) -> list[dict]:
-    """Players with a ranked character, best first; equal standings share a place
-    (1, 2, 2, 4) and are listed by name."""
-    ranked = sorted((p for p in players if p["chars"]), key=lambda p: (_standing(p), p["npid"].casefold()))
-    board, place = [], 1
-    for _, tied in groupby(ranked, key=_standing):
-        tied = list(tied)
-        board += [{"rank": place, **_entry(p)} for p in tied]
-        place += len(tied)
-    return board
-
-
-def _standing(player: dict) -> tuple:
-    # Sorts ascending, so higher ranks and points come first.
-    first, second = (player["chars"] + [_NO_CHAR, _NO_CHAR])[:2]
-    return -first["rank"], -second["rank"], -first["points"], -second["points"]
-
-
-def _entry(player: dict) -> dict:
-    return {
-        "username": player["npid"],
-        "saved_at": _saved_at(player),
-        "account_rank": player["account_rank"],
-        "chars": player["chars"],
-    }
 
 
 # --- admin ----------------------------------------------------------------------
@@ -171,14 +101,10 @@ def _label(path: str) -> str:
     return os.path.splitext(os.path.basename(path))[0]
 
 
-def _saved_at(save: dict) -> datetime:
-    # saved_utc is a naive UTC "YYYY-MM-DD HH:MM:SS[.ffffff]"
-    return datetime.fromisoformat(save["saved_utc"]).replace(tzinfo=timezone.utc)
-
-
 class SavesService:
-    def __init__(self, server: SaveServer):
+    def __init__(self, server: SaveServer, clock: Clock | None = None):
         self._server = server
+        self._clock = clock or SystemClock()
 
     async def get_player_save(self, npid: str) -> dict:
         key = _key(npid)
@@ -194,7 +120,7 @@ class SavesService:
         # so `days` needs no key of its own.
         if (players := cache_get(_CURRENT_RANK_KEY)) is None:
             players, _ = await self._fill_current_rank_cache()
-        board = current_rank_board(_saved_within(_without_excluded(players), days))
+        board = current_rank_board(saved_within(_without_excluded(players), days, self._clock.now()))
         return {"total": len(board), "entries": board[:top]}
 
     async def get_current_rank_holders(self, rank: int, top: int, days: int) -> dict:
@@ -205,7 +131,8 @@ class SavesService:
             _, by_rank = await self._fill_current_rank_cache()
             holders = by_rank[rank]
         found = sorted(
-            _saved_within(_without_excluded(holders), days), key=lambda h: (-h["place"], h["npid"].casefold())
+            saved_within(_without_excluded(holders), days, self._clock.now()),
+            key=lambda h: (-h["place"], h["npid"].casefold()),
         )
         return {
             "rank": rank,
@@ -219,9 +146,9 @@ class SavesService:
         so a rank no one plays is not asked of save-admin every time."""
         started = time.perf_counter()
         players = await self._server.read_ranks()
-        board = [{**p, "chars": _top_two(p["chars"])} for p in players]
+        board = [{**p, "chars": top_two(p["chars"])} for p in players]
         places = {e["username"]: e["rank"] for e in current_rank_board(board)}
-        by_rank = _holders_by_rank(players, places)
+        by_rank = holders_by_rank(players, places)
         ttl = get_settings().cache_ttl_current_rank_leaderboard
         cache_set(_CURRENT_RANK_KEY, board, ttl)
         for rank, holders in by_rank.items():
@@ -237,7 +164,7 @@ class SavesService:
 
     async def show_save(self, admin: AuthUser, request: SaveRequest) -> dict:
         save = await self._admin_call("show", admin, request)
-        return {**save, "username": save["npid"], "saved_at": _saved_at(save)}
+        return {**save, "username": save["npid"], "saved_at": saved_at(save)}
 
     async def list_backups(self, admin: AuthUser, request: SaveRequest) -> dict:
         return await self._admin_call("backups", admin, request)
