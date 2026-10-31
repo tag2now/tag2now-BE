@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     cache_ttl_stream_channels: int = 300
     # Rank event standings; each refresh reads every save, like the current-rank board.
     cache_ttl_event: int = 300
+    # Active popups, read on every page load; an admin's write clears it sooner.
+    cache_ttl_popups: int = 60
     matchmaking_ttl: int = 60
     match_history_collection_interval_seconds: int = 30
     # RPCN usernames (= npid) kept off every ranking, e.g. test accounts.

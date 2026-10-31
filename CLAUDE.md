@@ -177,11 +177,11 @@ bytes). They default to empty so the app still boots without them, but then
 get a `JWT_SECRET` from `tests/conftest.py`, which also provides the
 `auth_headers(username)` fixture for signed-in requests.
 
-Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leaderboard`, `cache_ttl_rooms_all`, `cache_ttl_community`, `cache_ttl_activity`, `cache_ttl_player_hours`, `cache_ttl_player_save`, `cache_ttl_current_rank_leaderboard`, `cache_ttl_live_streams`, `cache_ttl_stream_channels`, `matchmaking_ttl`.
+Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leaderboard`, `cache_ttl_rooms_all`, `cache_ttl_community`, `cache_ttl_activity`, `cache_ttl_player_hours`, `cache_ttl_player_save`, `cache_ttl_current_rank_leaderboard`, `cache_ttl_live_streams`, `cache_ttl_stream_channels`, `cache_ttl_popups`, `matchmaking_ttl`.
 
 ## Architecture
 
-Nine modules under `src/` --- seven domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
+Ten modules under `src/` --- eight domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
 
 | Module | Responsibility |
 |--------|----------------|
@@ -193,6 +193,7 @@ Nine modules under `src/` --- seven domains plus `auth/` and `admin/` --- a `sha
 | `auth/` | RPCN account login; stateless bearer tokens other routers depend on |
 | `saves/` | TTT2 saves through tag2now-save-admin: anyone's ranks for the profile, and admins' reads and edits |
 | `streaming/` | Players' own Chzzk channels, and who in a room is live — carried on `/rooms/all` as each user's `stream` |
+| `popup/` | Popups admins write and every visitor sees on opening the site, images stored in PostgreSQL. Spec: `docs/spec/11-popup.md` |
 | `admin/` | RPCN account moderation (lookup, ban) through rpcn-narco's admin API, and the admin gate other routers use |
 | `shared/` | Settings, cache, database, exceptions, TTT2's ids and character/rank tables (`ttt2.py`), and the rpcn-narco API server client `auth/` and `admin/` share (`rpcn_api.py`) |
 | `rpcn_client/` | Standalone RPCN protocol client (no FastAPI dependency) |
@@ -461,6 +462,8 @@ error array. A new user-facing request field belongs in that map.
 | `/saves` | `saves/router.py` — `GET /players/{npid}`, `GET /leaderboard`, `GET /current-rank-holders`, public |
 | `/streams` | `streaming/router.py` — `GET`/`PUT`/`DELETE /me`, the signed-in account's channel |
 | `/admin/streams` | `streaming/router.py` (`admin_router`) — `GET`, `DELETE /{username}`; admins only, no password |
+| `/popups` | `popup/router.py` — `GET /active`, `GET /{id}/image`, public |
+| `/admin/popups` | `popup/router.py` (`admin_router`) — `GET`, `POST`, `PUT /{id}`, `DELETE /{id}`; admins only, no password, writes are multipart |
 | *(none)* | `matching/router.py` — `/game-data`, `/servers`, `/rooms/all`, `/leaderboard` |
 | `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/stats/weekly-top`, `/players/{npid}` |
 | `/community` | `community/router.py` — posts, comments, thumbs |

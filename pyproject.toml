@@ -17,6 +17,7 @@ dependencies = [
     "redis>=5.0",
     "httpx",
     "PyJWT>=2.8",
+    "python-multipart>=0.0.20",
     "sqlalchemy[asyncio]>=2.0",
     "asyncpg>=0.29",
     "alembic>=1.13",

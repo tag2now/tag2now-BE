@@ -21,6 +21,7 @@ from history.router import router as history_router
 from matching.router import router as ttt2_router
 from community.router import router as community_router
 from event.router import router as event_router
+from popup.router import router as popup_router, admin_router as popup_admin_router
 from reservation.router import router as reservation_router
 from saves.router import router as saves_router, admin_router as saves_admin_router
 from streaming.router import router as streaming_router, admin_router as streaming_admin_router
@@ -76,6 +77,8 @@ app.include_router(event_router)
 app.include_router(chat_router)
 app.include_router(streaming_router)
 app.include_router(streaming_admin_router)
+app.include_router(popup_router)
+app.include_router(popup_admin_router)
 
 register_exception_handlers(app)
 

@@ -83,6 +83,11 @@ _FIELD_LABELS = {
     "refloor": "강등 캐릭터 재적용",
     "label": "백업 이름",
     "channel": "치지직 채널",
+    "image": "이미지",
+    "remove_image": "이미지 삭제",
+    "allow_dismiss_forever": "다시 보지 않기",
+    "allow_dismiss_day": "하루 동안 보지 않기",
+    "active": "활성",
 }
 
 

@@ -24,6 +24,7 @@ Tekken Tag Tournament 2(TTT2)의 RPCN 온라인 현황을 보여주는 웹 서�
 | [08-admin.md](08-admin.md) | 관리자 — RPCN 계정 조회·밴 |
 | [09-save-admin.md](09-save-admin.md) | 관리자 — TTT2 세이브 조회·계급 수정 (tag2now-save-admin) |
 | [10-chat.md](10-chat.md) | 로비 채팅 — SSE 스트림, 작성·삭제, PostgreSQL 저장 |
+| [11-popup.md](11-popup.md) | 사이트 팝업 — 관리자 작성, 이미지 업로드, 브라우저별 닫기 기록 |
 
 ## 시스템 구성
 
@@ -59,3 +60,4 @@ RPCS3 유저 ──▶ RPCN 서버 (바이너리 프로토콜, TLS)
 | 6 | 커뮤니티 | `/community`, `/community/:postId` | `/community/posts` 등 |
 | 7 | 개요 | `/` | 위 항목들의 요약 조합 |
 | 8 | 채팅 | 모든 화면(오른쪽 열 또는 런처) | `GET /chat/stream`(SSE), `/chat/messages` |
+| 9 | 사이트 팝업 | 접속 시 대화상자, `/admin` | `GET /popups/active`, `/admin/popups` CRUD |

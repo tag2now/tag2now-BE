@@ -28,6 +28,8 @@ from history.service import HistoryService
 from matching.adapters.rpcn import RpcnGameServerAdapter
 from matching.rpcn_lifecycle import SharedRpcnClient, create_client
 from matching.service import MatchingService
+from popup.adapters.postgresql import PostgresPopupRepository
+from popup.service import PopupService
 from reservation.adapters.postgresql import PostgresReservationRepository
 from reservation.service import ReservationService
 from saves.adapters.save_admin_server import SaveAdminServer
@@ -52,6 +54,7 @@ class Container:
     event: EventService
     history: HistoryService
     matching: MatchingService
+    popups: PopupService
     reservations: ReservationService
     saves: SavesService
     streaming: StreamingService
@@ -81,6 +84,7 @@ async def build_container(stack: AsyncExitStack) -> Container:
         event=EventService(load_baselines(settings.event_baseline_path), save_server),
         history=history,
         matching=matching,
+        popups=PopupService(PostgresPopupRepository(), sessions),
         reservations=ReservationService(PostgresReservationRepository(sessions)),
         saves=SavesService(save_server),
         streaming=StreamingService(PostgresStreamChannelRepository(), chzzk, sessions),
