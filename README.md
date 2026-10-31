@@ -154,7 +154,7 @@ and credentials are added from the other three (see
 
 ### With docker compose (recommended)
 
-Brings up the backend, frontend, Redis and PostgreSQL. Reads
+Brings up the backend, frontend and PostgreSQL. Reads
 its configuration from `env/.env.dev`, so create that file first:
 
 ```bash

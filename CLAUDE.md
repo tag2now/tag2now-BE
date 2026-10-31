@@ -47,12 +47,14 @@ The ASGI app is `src/app.py:app`. Note `--app-dir src`, since packages live unde
 # config it needs (env/.env.local) lives.
 .venv/Scripts/python.exe -m uvicorn app:app --reload --app-dir src
 
-# Dependencies (Redis, PostgreSQL) + both images
+# PostgreSQL + both images
 docker compose up
 
 # RPCN client CLI smoke test (connect + login + disconnect)
 .venv/Scripts/python.exe -m rpcn_client --user YOUR_USER --password YOUR_PASS
 ```
+
+**테스트나 실행을 위해 docker를 실행할 경우 `compose.yml`을 사용**
 
 **`env/` is resolved from the repository root, not your shell's cwd.**
 `settings.py` walks up from its own file (`src/shared/settings.py` → three
@@ -159,8 +161,8 @@ values arrive as real environment variables, which take precedence anyway.
 **The two files are not interchangeable**, and picking the wrong one is the
 usual local-setup mistake: `.env.local` is read by a venv run and ignored by
 compose, `.env.dev` the reverse. Their hostnames differ accordingly —
-`redis://redis:6379` and `postgres:5432` resolve only inside the compose
-network, `localhost` only outside it.
+`postgres:5432` resolves only inside the compose network, `localhost` only
+outside it.
 
 Both files are gitignored copies, so their contents drift between machines.
 Check what yours actually holds before assuming a service is configured.

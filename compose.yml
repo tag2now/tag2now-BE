@@ -7,7 +7,6 @@ services:
     # Create it once with: cp env/.env.example env/.env.dev
     env_file: env/.env.dev
     depends_on:
-      - redis
       - postgres
   fe:
     image: 864573346741.dkr.ecr.ap-northeast-2.amazonaws.com/tag2-now/fe
@@ -26,11 +25,6 @@ services:
       POSTGRES_DB: tag2now
     volumes:
       - postgres-data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
 
 volumes:
   postgres-data:
