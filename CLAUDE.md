@@ -88,8 +88,8 @@ empty, so every deploy or restart starts with an empty cache.
 .venv/Scripts/python.exe -m pytest tests/unit/ -v                        # no external services needed
 docker compose -f compose.test.yml up -d --wait                          # Redis + PostgreSQL
 DATABASE_URL=postgresql+psycopg://tag2now:tag2now@127.0.0.1:5433/tag2now .venv/Scripts/python.exe -m alembic upgrade head
-.venv/Scripts/python.exe -m pytest tests/integration/ -v                 # all 147; stop any local backend first
-.venv/Scripts/python.exe -m pytest tests/integration/ -v -m "not rpcn"   # 134, what CI runs
+.venv/Scripts/python.exe -m pytest tests/integration/ -v                 # all 170; stop any local backend first
+.venv/Scripts/python.exe -m pytest tests/integration/ -v -m "not rpcn"   # 157, what CI runs
 ```
 
 - `tests/unit/` — pure logic; no network, no database.
@@ -104,7 +104,7 @@ community tests' `TRUNCATE` wiped the dev server's posts. Startup creates no
 tables, hence the `alembic` line above, once per fresh container.
 
 **The `rpcn` marker separates the live-RPCN modules from the rest.** Both live-RPCN modules carry a
-module-level `pytestmark = pytest.mark.rpcn`, so `-m "not rpcn"` leaves 134 tests
+module-level `pytestmark = pytest.mark.rpcn`, so `-m "not rpcn"` leaves 157 tests
 that need nothing but the two containers. CI runs exactly that, since it has no
 RPCN account. Locally the 13 marked tests run with the rest, as `.env.local`'s
 account, once every local backend is stopped.
@@ -179,12 +179,14 @@ Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leade
 
 ## Architecture
 
-Nine modules under `src/` --- seven domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
+Eleven modules under `src/` --- nine domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
 
 | Module | Responsibility |
 |--------|----------------|
 | `matching/` | Live rooms, leaderboard, matchmaking detection |
 | `history/` | Persisted snapshots, time-series statistics, the match collector |
+| `records/` | Who played whom: finished matches found in saves, queued in PostgreSQL, resolved to rooms |
+| `event/` | The rank event: every save against the baseline it began with |
 | `community/` | Message board — posts, comments, thumbs |
 | `reservation/` | Appointments — create, join, edit, cancel |
 | `chat/` | Two-day lobby chat, stored in PostgreSQL, pushed over SSE |
@@ -291,8 +293,8 @@ one place adapters and services are constructed, called from `lifespan` with an
 `AsyncExitStack`: each resource is opened with `stack.enter_async_context(...)`,
 which registers its close in the same line, so shutdown runs in reverse and a
 failure part-way closes exactly what was already open. Code outside a request
-(the collector) is handed its services by the lifespan rather than reaching for
-them.
+(the collector, the match-record workers) is handed its services by the lifespan
+rather than reaching for them.
 
 A resource is a `shared.resource.AsyncResource`: `init` (optional) and `close`,
 and the async context manager built on them. The ports of outbound clients
@@ -414,6 +416,27 @@ the set advances after the write commits, so a failed write is retried next
 cycle. A restart empties it, and the unique key
 `(room_id, user1_npid, user2_npid, match_date)` on `rank_match_snapshots`
 absorbs the matches then seen again.
+
+A room can hold several matches of the same two players, so a row is a room and
+not a match; every cycle moves its `last_seen_at`.
+
+### Match records
+
+`records/` works out who played whom from two sources that each lack half of it:
+saves have the result and the characters, rooms have the opponent. Two asyncio
+tasks beside the collector do it, so a save-admin outage stops only them.
+
+`SaveCapture` (10 s) reads saves past a `data_id` from save-admin, which decodes
+them, and compares each with `save_states`. **A finished match is a change in the
+cumulative record, not a room and not a save:** a room is reused and half of all
+saves change nothing. The new state and the `match_events` row commit together.
+A missed save loses only the split between matches, since the next one still
+carries the totals.
+
+`EventConsumer` takes events with `FOR UPDATE SKIP LOCKED`, finds the room the
+player was in at that moment, stores a `match_results` row and joins it to the
+opponent's side through `counterpart_id`, which is how the opponent's characters
+are read. Saves themselves are not kept. Spec: `docs/spec/11-records.md`.
 
 ### RPCN client lifecycle
 

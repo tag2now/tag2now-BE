@@ -1,0 +1,173 @@
+"""The capture and queue steps of match records, over a stubbed repository."""
+
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from history.models import RankOpponent
+from records.models import CharRecord, MatchEvent, MatchOutcome, PlayerSave
+from records.ports import RecordsPort
+from records.service import RecordsService
+from shared.clock import Clock
+
+_NOW = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc)
+
+
+class _Fixed(Clock):
+    def now(self) -> datetime:
+        return _NOW
+
+
+def _answer(data_id=101, wins=11, npid="alice") -> dict:
+    return {
+        "npid": npid,
+        "data_id": data_id,
+        "saved_utc": "2026-11-02 12:00:00",
+        "wins": wins,
+        "losses": 5,
+        "own_chars": [],
+        "chars": [{"id": 0, "wins": wins, "losses": 5}],
+    }
+
+
+def _state(data_id=100, wins=10) -> PlayerSave:
+    return PlayerSave("alice", data_id, _NOW, wins, 5, {0: CharRecord(wins, 5)})
+
+
+def _event() -> MatchEvent:
+    return MatchEvent(1, "alice", MatchOutcome.WIN, (0,), _NOW)
+
+
+@pytest.fixture
+def repo():
+    repo = AsyncMock(spec=RecordsPort)
+    repo.latest_data_id.return_value = 100
+    repo.lock_state.return_value = _state()
+    repo.claim_event.return_value = _event()
+    repo.add_result.return_value = 7
+    return repo
+
+
+@pytest.fixture
+def saves():
+    saves = AsyncMock()
+    saves.read_changed.return_value = [_answer()]
+    return saves
+
+
+@pytest.fixture
+def history():
+    history = AsyncMock()
+    history.rank_opponent.return_value = RankOpponent("bob", 42)
+    return history
+
+
+@pytest.fixture
+def service(repo, saves, history):
+    session = MagicMock()
+
+    @asynccontextmanager
+    async def scope():
+        yield
+
+    session.begin = scope
+    session.begin_nested = scope
+
+    @asynccontextmanager
+    async def sessions():
+        yield session
+
+    return RecordsService(repo, sessions, saves, history, _Fixed())
+
+
+# --- capture --------------------------------------------------------------------
+
+
+async def test_capture_reads_a_little_behind_the_newest_save(service, saves):
+    await service.capture()
+    saves.read_changed.assert_awaited_once_with(84, 200)
+
+
+async def test_capture_starts_from_the_beginning(service, repo, saves):
+    repo.latest_data_id.return_value = 3
+    await service.capture()
+    saves.read_changed.assert_awaited_once_with(0, 200)
+
+
+async def test_a_finished_match_is_queued_with_the_new_state(service, repo):
+    await service.capture()
+    assert repo.save_state.await_args.args[1].data_id == 101
+    assert repo.add_event.await_args.args[2].result is MatchOutcome.WIN
+
+
+async def test_a_first_save_is_the_baseline_and_no_match(service, repo):
+    repo.lock_state.return_value = None
+    await service.capture()
+    repo.save_state.assert_awaited_once()
+    repo.add_event.assert_not_awaited()
+
+
+async def test_a_save_with_no_change_moves_the_state_only(service, repo, saves):
+    saves.read_changed.return_value = [_answer(wins=10)]
+    await service.capture()
+    repo.save_state.assert_awaited_once()
+    repo.add_event.assert_not_awaited()
+
+
+async def test_a_save_already_compared_is_skipped(service, repo, saves):
+    saves.read_changed.return_value = [_answer(data_id=100)]
+    await service.capture()
+    repo.save_state.assert_not_awaited()
+    repo.add_event.assert_not_awaited()
+
+
+async def test_a_jump_is_counted_and_queues_nothing(service, repo, saves):
+    saves.read_changed.return_value = [_answer(wins=13)]
+    await service.capture()
+    assert repo.save_state.await_args.args[2] is True
+    repo.add_event.assert_not_awaited()
+
+
+async def test_one_bad_save_holds_up_no_other(service, repo, saves):
+    saves.read_changed.return_value = [{"data_id": 101}, _answer(data_id=102)]
+    await service.capture()
+    assert repo.save_state.await_args.args[1].data_id == 102
+
+
+# --- queue ----------------------------------------------------------------------
+
+
+async def test_an_empty_queue_says_so(service, repo):
+    repo.claim_event.return_value = None
+    assert await service.process_next() is False
+
+
+async def test_an_event_becomes_a_result_with_its_opponent(service, repo):
+    assert await service.process_next() is True
+    repo.lock_room.assert_awaited_once()
+    assert repo.add_result.await_args.args[2] == RankOpponent("bob", 42)
+    repo.finish_event.assert_awaited_once()
+
+
+async def test_a_win_looks_for_the_opponents_loss(service, repo):
+    await service.process_next()
+    assert repo.link_counterpart.await_args.args[3] is MatchOutcome.LOSS
+
+
+async def test_a_match_outside_any_known_room_keeps_its_result(service, repo, history):
+    history.rank_opponent.return_value = None
+    await service.process_next()
+    assert repo.add_result.await_args.args[2] is None
+    repo.lock_room.assert_not_awaited()
+    repo.link_counterpart.assert_not_awaited()
+    repo.finish_event.assert_awaited_once()
+
+
+async def test_a_failure_schedules_a_retry_instead_of_finishing(service, repo, history):
+    history.rank_opponent.side_effect = RuntimeError("database hiccup")
+    assert await service.process_next() is True
+    repo.finish_event.assert_not_awaited()
+    repo.fail_event.assert_awaited_once()
+    assert repo.fail_event.await_args.args[2] == "database hiccup"

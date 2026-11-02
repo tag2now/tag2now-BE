@@ -17,6 +17,14 @@ class RankMatchSnapshotRecord:
     created_dt: datetime
 
 
+@dataclass(frozen=True)
+class RankOpponent:
+    """Who a player shared a rank-match room with, and the row that says so."""
+
+    npid: str
+    room_snapshot_id: int
+
+
 @dataclass
 class HourlyActivity:
     """Average and peak player counts for a single KST hour."""

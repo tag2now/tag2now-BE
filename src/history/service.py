@@ -13,6 +13,7 @@ from history.models import (
     HourlyActivity,
     PlayerStats,
     RankMatchSnapshotRecord,
+    RankOpponent,
     TopPlayer,
 )
 from history.ports import HistoryPort
@@ -31,6 +32,12 @@ class HistoryService:
         async with self._sessions() as session, session.begin():
             await self._repo.record_snapshot(session, rooms)
 
+    async def touch_rank_matches(self, rooms: list[RankMatchSnapshotRecord], observed_at: datetime) -> None:
+        if not rooms:
+            return
+        async with self._sessions() as session, session.begin():
+            await self._repo.touch_rank_matches(session, rooms, observed_at)
+
     async def record_daily_matched_players(self, npids: set[str], observed_at: datetime) -> None:
         """Record participants, then invalidate summaries only after commit."""
         if not any(npids):
@@ -43,6 +50,12 @@ class HistoryService:
         async with self._sessions() as session, session.begin():
             await self._repo.record_activity_snapshot(session, snapshot)
         cache_delete_pattern("history:daily:*")
+
+    # -- Read: rank-match rooms ----------------------------------------------
+
+    async def rank_opponent(self, npid: str, at: datetime) -> RankOpponent | None:
+        async with self._sessions() as session:
+            return await self._repo.find_rank_opponent(session, npid, at)
 
     # -- Read: global stats --------------------------------------------------
 

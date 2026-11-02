@@ -13,6 +13,7 @@ from history.models import (
     HourlyActivity,
     PlayerStats,
     RankMatchSnapshotRecord,
+    RankOpponent,
     TopPlayer,
 )
 
@@ -27,12 +28,24 @@ class HistoryPort(ABC):
         """Persist newly started rank matches."""
 
     @abstractmethod
+    async def touch_rank_matches(
+        self, session: AsyncSession, rooms: list[RankMatchSnapshotRecord], observed_at: datetime
+    ) -> None:
+        """Mark these rooms as still there at `observed_at`."""
+
+    @abstractmethod
     async def record_daily_matched_players(self, session: AsyncSession, npids: set[str], observed_at: datetime) -> None:
         """Persist unique completed-rank-match participants for the KST day."""
 
     @abstractmethod
     async def record_activity_snapshot(self, session: AsyncSession, snapshot: ActivitySnapshot) -> None:
         """Persist one observed concurrent-player snapshot."""
+
+    # -- Read: rank-match rooms ----------------------------------------------
+
+    @abstractmethod
+    async def find_rank_opponent(self, session: AsyncSession, npid: str, at: datetime) -> RankOpponent | None:
+        """Return who `npid` shared a rank-match room with at that moment, if anyone."""
 
     # -- Read: global stats --------------------------------------------------
 

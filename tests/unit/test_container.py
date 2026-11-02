@@ -12,6 +12,7 @@ from community.service import CommunityService
 from history.collector import Collector
 from history.service import HistoryService
 from matching.service import MatchingService
+from records.workers import EventConsumer, SaveCapture
 from reservation.service import ReservationService
 from saves.service import SavesService
 from streaming.service import StreamingService
@@ -61,6 +62,8 @@ async def test_every_service_is_built_and_resources_close_in_reverse(closed):
     assert isinstance(built.community, CommunityService)
     assert isinstance(built.matching, MatchingService)
     assert isinstance(built.collector, Collector)
+    assert isinstance(built.save_capture, SaveCapture)
+    assert isinstance(built.event_consumer, EventConsumer)
     assert isinstance(built.history, HistoryService)
     assert isinstance(built.reservations, ReservationService)
     assert isinstance(built.saves, SavesService)

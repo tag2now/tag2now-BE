@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Date, DateTime, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, Date, DateTime, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.database import Base
@@ -20,6 +20,8 @@ class RankMatchSnapshotRow(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     room_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_dt: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    # A room can hold several matches of the same two players, so this row is who met, not one match.
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     match_date: Mapped[date] = mapped_column(Date, nullable=False)
     rank_id: Mapped[int] = mapped_column(Integer, nullable=False)
     user1_npid: Mapped[str] = mapped_column(String, nullable=False, index=True)

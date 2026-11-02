@@ -18,6 +18,11 @@ class SaveServer(AsyncResource):
         leaderboard and its holders. SavesUnavailableError when the server cannot answer."""
 
     @abstractmethod
+    async def read_changed(self, after: int, limit: int) -> list[dict]:
+        """The first `limit` saves past data_id `after`, each with its cumulative record,
+        for match records. SavesUnavailableError when the server cannot answer."""
+
+    @abstractmethod
     async def call(self, action: str, admin_username: str, admin_password: str, payload: dict) -> dict:
         """Run one admin action (show, backups, log, set-rank, set-account-rank,
         floor, restore) as this admin and return its answer, or raise

@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     cache_ttl_event: int = 300
     matchmaking_ttl: int = 60
     match_history_collection_interval_seconds: int = 30
+    # Short enough to catch a start save before a rematch's next one replaces it.
+    save_capture_interval_seconds: int = 10
+    match_event_idle_seconds: int = 5
     # RPCN usernames (= npid) kept off every ranking, e.g. test accounts.
     ranking_excluded_npids: list[str] = []
 

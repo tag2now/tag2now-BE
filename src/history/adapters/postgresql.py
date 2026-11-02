@@ -4,7 +4,7 @@ import logging
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import Date, Integer, case, delete, func, or_, select, text, union_all
+from sqlalchemy import Date, Integer, case, delete, func, or_, select, text, tuple_, union_all, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +16,7 @@ from history.models import (
     HourlyActivity,
     PlayerStats,
     RankMatchSnapshotRecord,
+    RankOpponent,
     TopPlayer,
 )
 from history.ports import HistoryPort
@@ -23,6 +24,11 @@ from history.ports import HistoryPort
 logger = logging.getLogger(__name__)
 
 _ACTIVITY_RETENTION_DAYS = 90
+
+# RPCN reuses room ids after a restart; an older row of the same two players is another room.
+_LIVE_ROOM_WINDOW = timedelta(days=1)
+# The result save can land after the room's last sighting, which is up to a cycle old.
+_ROOM_END_SLACK = timedelta(seconds=90)
 
 # A statistics day runs 06:00 KST to 06:00 KST the next day, so a late-night
 # session stays on the day it started instead of splitting across midnight.
@@ -72,6 +78,7 @@ class PostgresHistoryAdapter(HistoryPort):
                     dict(
                         room_id=room.room_id,
                         created_dt=room.created_dt,
+                        last_seen_at=room.created_dt,
                         match_date=stat_day(room.created_dt),
                         rank_id=room.rank_id,
                         user1_npid=room.user1_npid,
@@ -86,6 +93,39 @@ class PostgresHistoryAdapter(HistoryPort):
         )
         await session.execute(stmt)
         await session.flush()
+
+    async def touch_rank_matches(
+        self, session: AsyncSession, rooms: list[RankMatchSnapshotRecord], observed_at: datetime
+    ) -> None:
+        room_key = tuple_(
+            RankMatchSnapshotRow.room_id, RankMatchSnapshotRow.user1_npid, RankMatchSnapshotRow.user2_npid
+        )
+        await session.execute(
+            update(RankMatchSnapshotRow)
+            .where(
+                room_key.in_([(room.room_id, room.user1_npid, room.user2_npid) for room in rooms]),
+                RankMatchSnapshotRow.created_dt >= observed_at - _LIVE_ROOM_WINDOW,
+            )
+            .values(last_seen_at=observed_at)
+        )
+
+    async def find_rank_opponent(self, session: AsyncSession, npid: str, at: datetime) -> RankOpponent | None:
+        room = (
+            await session.execute(
+                select(RankMatchSnapshotRow)
+                .where(
+                    or_(RankMatchSnapshotRow.user1_npid == npid, RankMatchSnapshotRow.user2_npid == npid),
+                    RankMatchSnapshotRow.created_dt <= at,
+                    RankMatchSnapshotRow.last_seen_at >= at - _ROOM_END_SLACK,
+                )
+                .order_by(RankMatchSnapshotRow.created_dt.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if room is None:
+            return None
+        opponent = room.user2_npid if room.user1_npid == npid else room.user1_npid
+        return RankOpponent(npid=opponent, room_snapshot_id=room.id)
 
     async def record_daily_matched_players(self, session: AsyncSession, npids: set[str], observed_at: datetime) -> None:
         """Use the database unique key as the durable per-day participant set."""

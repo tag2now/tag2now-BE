@@ -45,9 +45,14 @@ except Exception:
 async def lifespan(app: FastAPI):
     async with AsyncExitStack() as stack:
         app.state.container = container = await build_container(stack)
-        collector_task = asyncio.create_task(container.collector.run(), name="match-history-collector")
-        # Registered last, so it is cancelled before anything it reads from closes.
-        stack.push_async_callback(stop_collector, collector_task)
+        # Registered last, so they are cancelled before anything they read from closes.
+        workers = {
+            "match-history-collector": container.collector.run(),
+            "save-capture": container.save_capture.run(),
+            "match-event-consumer": container.event_consumer.run(),
+        }
+        for name, work in workers.items():
+            stack.push_async_callback(stop_collector, asyncio.create_task(work, name=name))
         yield
 
 

@@ -113,6 +113,25 @@ async def test_a_refusal_is_unavailable(response):
     await adapter.close()
 
 
+async def test_reads_changed_saves_past_a_data_id_with_the_api_key_only():
+    seen = []
+    saves = [{"npid": "Alice", "data_id": 7}]
+    adapter = await _adapter(_server(body={"saves": saves}, seen=seen))
+    assert await adapter.read_changed(5, 200) == saves
+    request = seen[0]
+    assert (request.method, request.url.path) == ("GET", "/players/saves")
+    assert dict(request.url.params) == {"after": "5", "limit": "200"}
+    assert request.headers["X-API-Key"] == "key"
+    await adapter.close()
+
+
+async def test_a_refusal_of_changed_saves_is_unavailable():
+    adapter = await _adapter(_server(500, {"error": "internal_error", "message": "x"}))
+    with pytest.raises(SavesUnavailableError):
+        await adapter.read_changed(0, 200)
+    await adapter.close()
+
+
 # --- ordering -------------------------------------------------------------------
 
 

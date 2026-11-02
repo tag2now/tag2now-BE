@@ -4,6 +4,8 @@ These tests require a running PostgreSQL instance.
 Run with: pytest tests/integration/history/ -v
 """
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 import pytest_asyncio
 
@@ -46,6 +48,72 @@ def _make_record(**overrides):
     )
     defaults.update(overrides)
     return RankMatchSnapshotRecord(**defaults)
+
+
+_ROOM_START = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc)
+_ROOM_LAST_SEEN = _ROOM_START + timedelta(minutes=10)
+
+
+async def _room(adapter, session, room_id=7001, npid1="opp-a", npid2="opp-b", start=_ROOM_START, until=_ROOM_LAST_SEEN):
+    record = _make_record(room_id=room_id, user1_npid=npid1, user2_npid=npid2, created_dt=start)
+    await adapter.record_snapshot(session, [record])
+    await adapter.touch_rank_matches(session, [record], until)
+    session.expire_all()
+    return record
+
+
+@pytest.mark.asyncio
+async def test_finds_the_other_player_whichever_side_they_sat(adapter, db_session):
+    await _room(adapter, db_session)
+    at = _ROOM_START + timedelta(minutes=5)
+
+    assert (await adapter.find_rank_opponent(db_session, "opp-a", at)).npid == "opp-b"
+    assert (await adapter.find_rank_opponent(db_session, "opp-b", at)).npid == "opp-a"
+
+
+@pytest.mark.asyncio
+async def test_a_result_saved_just_after_the_last_sighting_is_still_in_the_room(adapter, db_session):
+    await _room(adapter, db_session)
+
+    opponent = await adapter.find_rank_opponent(db_session, "opp-a", _ROOM_LAST_SEEN + timedelta(seconds=90))
+
+    assert opponent.npid == "opp-b"
+
+
+@pytest.mark.asyncio
+async def test_no_opponent_once_the_room_is_long_gone(adapter, db_session):
+    await _room(adapter, db_session)
+
+    assert await adapter.find_rank_opponent(db_session, "opp-a", _ROOM_LAST_SEEN + timedelta(seconds=91)) is None
+
+
+@pytest.mark.asyncio
+async def test_no_opponent_before_the_room_was_seen(adapter, db_session):
+    await _room(adapter, db_session)
+
+    assert await adapter.find_rank_opponent(db_session, "opp-a", _ROOM_START - timedelta(seconds=1)) is None
+
+
+@pytest.mark.asyncio
+async def test_the_latest_room_wins_when_a_new_one_opened_within_the_slack(adapter, db_session):
+    await _room(adapter, db_session)
+    await _room(adapter, db_session, room_id=7002, npid2="opp-c", start=_ROOM_LAST_SEEN + timedelta(seconds=30))
+
+    opponent = await adapter.find_rank_opponent(db_session, "opp-a", _ROOM_LAST_SEEN + timedelta(seconds=60))
+
+    assert opponent.npid == "opp-c"
+
+
+@pytest.mark.asyncio
+async def test_a_stale_row_of_a_reused_room_id_is_left_alone(adapter, db_session):
+    """RPCN hands room ids out again after a restart; an old row must not look alive."""
+    record = await _room(adapter, db_session)
+    later = _ROOM_START + timedelta(days=3)
+
+    await adapter.touch_rank_matches(db_session, [record], later)
+    db_session.expire_all()
+
+    assert await adapter.find_rank_opponent(db_session, "opp-a", later) is None
 
 
 @pytest.mark.asyncio

@@ -24,6 +24,7 @@ Tekken Tag Tournament 2(TTT2)의 RPCN 온라인 현황을 보여주는 웹 서�
 | [08-admin.md](08-admin.md) | 관리자 — RPCN 계정 조회·밴 |
 | [09-save-admin.md](09-save-admin.md) | 관리자 — TTT2 세이브 조회·계급 수정 (tag2now-save-admin) |
 | [10-chat.md](10-chat.md) | 로비 채팅 — SSE 스트림, 작성·삭제, PostgreSQL 저장 |
+| [11-records.md](11-records.md) | 전적 — 세이브 비교, PostgreSQL 큐, 상대 매칭, 정확도 측정 |
 
 ## 시스템 구성
 

@@ -86,6 +86,14 @@ class SaveAdminServer(SaveServer):
             return answer["players"]
         raise _fault(response, path)
 
+    async def read_changed(self, after: int, limit: int) -> list[dict]:
+        path = "/players/saves"
+        response = await self._send("GET", path, params={"after": after, "limit": limit})
+        answer = _json(response)
+        if response.status_code == 200 and answer is not None:
+            return answer["saves"]
+        raise _fault(response, path)
+
     async def call(self, action: str, admin_username: str, admin_password: str, payload: dict) -> dict:
         body = {
             **payload,
