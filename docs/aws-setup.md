@@ -17,6 +17,11 @@ Lightsail single instance — docker compose
     └── postgres
 ```
 
+The instance is on Lightsail's **1 GB RAM, 2 vCPUs, 40 GB SSD** plan: 916 MiB
+usable, no swap. RPCN shares it from its own container (`rpcn-data-rpcn-1`), and
+no container has a memory limit, so a new always-on process comes out of the
+same margin --- 128 MiB available when measured on 2026-11-02.
+
 **Everything is behind CloudFront**, `/api/` included: responses on both the
 SPA and the API carry a `Via: … cloudfront.net` header. API responses come back
 `X-Cache: Error from cloudfront` — uncacheable, forwarded to the origin every
