@@ -559,6 +559,10 @@ org, shared with tag2now-FE; this repo defines only `ECR_REPOSITORY`
 (`tag2-now/be`) and its own `production` environment. See the
 [Actions configuration](docs/aws-setup.md#actions-configuration) table.
 
+**For SSH into the instance by hand, look in this repository's root or the
+folder above it before `~/.ssh`.** The login and key are kept there, outside
+any repository, so they are never committed.
+
 Full infrastructure notes, including the Athena analytics setup, live in [docs/aws-setup.md](docs/aws-setup.md). The RPCN server source (rpcn-narco) is at `D:/project/tag2now/rpcn-narco`.
 
 `/api` traffic passes through CloudFront like the static assets do (responses
