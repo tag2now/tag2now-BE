@@ -9,6 +9,7 @@ from sqlalchemy.orm import aliased
 
 from history.entities import RankMatchSnapshotRow
 from history.models import RankOpponent
+from records.domain import seat
 from records.entities import MatchEventRow, MatchResultRow, SaveStateRow
 from records.models import (
     CharRecord,
@@ -68,7 +69,9 @@ def _room_name(room: RankMatchSnapshotRow | None, npid: str) -> str | None:
 
 
 def _side(row: MatchResultRow, room: RankMatchSnapshotRow | None) -> MatchSide:
-    return MatchSide(row.npid, _room_name(room, row.npid), tuple(row.chars), _optional_tuple(row.ranks))
+    return MatchSide(
+        row.npid, _room_name(room, row.npid), MatchOutcome(row.result), tuple(row.chars), _optional_tuple(row.ranks)
+    )
 
 
 def _opponent_side(
@@ -79,15 +82,16 @@ def _opponent_side(
         return _side(counterpart, room)
     if shown.opponent_npid is None:
         return None
-    return MatchSide(shown.opponent_npid, _room_name(room, shown.opponent_npid), None, None)
+    result = MatchOutcome(shown.result).opposite
+    return MatchSide(shown.opponent_npid, _room_name(room, shown.opponent_npid), result, None, None)
 
 
 def _to_match(
     shown: MatchResultRow, counterpart: MatchResultRow | None, room: RankMatchSnapshotRow | None
 ) -> RecordedMatch:
     own, other = _side(shown, room), _opponent_side(shown, counterpart, room)
-    winner, loser = (own, other) if shown.result == MatchOutcome.WIN else (other, own)
-    return RecordedMatch(id=shown.id, played_at=shown.played_at, winner=winner, loser=loser)
+    p1, p2 = seat(own, other, room.user1_npid if room else None)
+    return RecordedMatch(id=shown.id, played_at=shown.played_at, p1=p1, p2=p2)
 
 
 def _escape_like(text: str) -> str:

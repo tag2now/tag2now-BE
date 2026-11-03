@@ -361,11 +361,11 @@ async def _played_match(records, saves, history):
 
 
 def _side(side):
-    """(npid, name, [(character, rank)]) — characters None when that save was not seen."""
+    """(npid, name, result, [(character, rank)]) — characters None when that save was not seen."""
     if side is None:
         return None
     chars = None if side.chars is None else [(char.name, char.rank and char.rank.name) for char in side.chars]
-    return side.npid, side.online_name, chars
+    return side.npid, side.online_name, side.result, chars
 
 
 async def test_a_match_seen_from_both_sides_is_listed_once(world):
@@ -375,9 +375,22 @@ async def test_a_match_seen_from_both_sides_is_listed_once(world):
     page = await records.list_matches(None, "records-", None, 20)
 
     [match] = page.matches
-    assert _side(match.winner) == (ALICE, ALICE, [("Paul", "Berserker")])
-    assert _side(match.loser) == (BOB, BOB, [("Law", "Marauder"), ("Jin", "Marauder")])
+    assert _side(match.p1) == (ALICE, ALICE, "win", [("Paul", "Berserker")])
+    assert _side(match.p2) == (BOB, BOB, "loss", [("Law", "Marauder"), ("Jin", "Marauder")])
     assert page.next_before is None
+
+
+async def test_1p_is_the_room_s_first_member_even_when_they_lost(world):
+    records, saves, history, _ = world
+    await _open_room(history, npid1=BOB, npid2=ALICE)
+    await _capture(records, saves, _save(ALICE, 1), _save(BOB, 2))
+    await _capture(records, saves, _save(ALICE, 3, wins=1, at=_at(3)))
+    await _capture(records, saves, _save(BOB, 4, losses=1, at=_at(3, 4)))
+    await _drain(records)
+
+    [match] = (await records.list_matches(None, "records-", None, 20)).matches
+
+    assert (match.p1.npid, match.p1.result, match.p2.npid, match.p2.result) == (BOB, "loss", ALICE, "win")
 
 
 async def test_a_quitter_is_listed_without_characters_and_a_roomless_match_without_an_opponent(world):
@@ -390,8 +403,8 @@ async def test_a_quitter_is_listed_without_characters_and_a_roomless_match_witho
 
     roomless, quitter = (await records.list_matches(None, "records-", None, 20)).matches
 
-    assert _side(quitter.loser) == (BOB, BOB, None)
-    assert (_side(roomless.winner), roomless.loser.npid) == (None, CAROL)
+    assert _side(quitter.p2) == (BOB, BOB, "loss", None)
+    assert (roomless.p1.npid, roomless.p1.result, roomless.p2) == (CAROL, "loss", None)
 
 
 async def test_a_player_s_matches_include_those_only_the_opponent_s_save_showed(world):
@@ -403,7 +416,7 @@ async def test_a_player_s_matches_include_those_only_the_opponent_s_save_showed(
 
     [match] = (await records.list_matches(BOB, None, None, 20)).matches
 
-    assert (match.winner.npid, match.loser.npid) == (ALICE, BOB)
+    assert (match.p1.npid, match.p2.npid) == (ALICE, BOB)
     assert (await records.list_matches(CAROL, None, None, 20)).matches == []
 
 

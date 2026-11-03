@@ -444,7 +444,9 @@ state kept before ranks). It rides on the event and is copied to the result.
 
 `GET /records/matches` lists one row per match --- the lower id of a joined
 pair --- newest first, paged by `before` id, filtered by `npid` or a name `q`.
-No per-player totals: the lifetime record is the save's.
+Sides are `p1`/`p2` as the game seated them: the room snapshot's `user1`, since
+RPCN lists members by slot (`records.domain.seat`). No per-player totals: the
+lifetime record is the save's.
 
 ### RPCN client lifecycle
 

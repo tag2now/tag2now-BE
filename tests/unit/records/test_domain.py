@@ -2,8 +2,8 @@
 
 from datetime import datetime, timezone
 
-from records.domain import compare
-from records.models import CharRecord, Comparison, FinishedMatch, MatchOutcome, PlayerSave
+from records.domain import compare, seat
+from records.models import CharRecord, Comparison, FinishedMatch, MatchOutcome, MatchSide, PlayerSave
 
 _AT = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc)
 PAUL, JIN, LAW = 0, 9, 1
@@ -138,3 +138,21 @@ def test_a_save_read_from_save_admin_carries_each_character_s_rank():
         }
     )
     assert save.chars == {9: CharRecord(1, 2, 18)}
+
+
+# Seats: 1P is the room's first member.
+
+_ALICE = MatchSide("alice", "Alice", MatchOutcome.WIN, (PAUL,), (20,))
+_BOB = MatchSide("bob", "Bob", MatchOutcome.LOSS, (JIN,), (18,))
+
+
+def test_the_player_first_in_the_room_is_1p():
+    assert seat(_ALICE, _BOB, "alice") == (_ALICE, _BOB)
+
+
+def test_the_opponent_first_in_the_room_is_1p_whoever_was_seen():
+    assert seat(_ALICE, _BOB, "bob") == (_BOB, _ALICE)
+
+
+def test_with_no_room_the_side_seen_is_1p():
+    assert seat(_ALICE, None, None) == (_ALICE, None)

@@ -94,18 +94,20 @@ class MatchSide:
 
     npid: str
     online_name: str | None
+    result: MatchOutcome
     chars: tuple[int, ...] | None
     ranks: tuple[int | None, ...] | None
 
 
 @dataclass(frozen=True)
 class RecordedMatch:
-    """A match as the records list shows it. A side is None when no room named the opponent."""
+    """A match as the records list shows it, 1P and 2P as the game seated them.
+    `p2` is None when no room named the opponent."""
 
     id: int
     played_at: datetime
-    winner: MatchSide | None
-    loser: MatchSide | None
+    p1: MatchSide
+    p2: MatchSide | None
 
 
 # -- Responses -----------------------------------------------------------------
@@ -134,12 +136,13 @@ class RecordSideOut(BaseModel):
     npid: str
     # From the room the match was played in.
     online_name: str | None
+    result: MatchOutcome
     # Null when this side's save was not seen.
     chars: list[RecordCharOut] | None
 
     @classmethod
     def of(cls, side: MatchSide) -> "RecordSideOut":
-        return cls(npid=side.npid, online_name=side.online_name, chars=_chars_out(side))
+        return cls(npid=side.npid, online_name=side.online_name, result=side.result, chars=_chars_out(side))
 
 
 def _chars_out(side: MatchSide) -> list[RecordCharOut] | None:
@@ -152,22 +155,18 @@ def _chars_out(side: MatchSide) -> list[RecordCharOut] | None:
 class MatchRecordOut(BaseModel):
     id: int
     played_at: datetime
+    p1: RecordSideOut
     # Null when no room named the opponent.
-    winner: RecordSideOut | None
-    loser: RecordSideOut | None
+    p2: RecordSideOut | None
 
     @classmethod
     def of(cls, match: RecordedMatch) -> "MatchRecordOut":
         return cls(
             id=match.id,
             played_at=match.played_at,
-            winner=_side_out(match.winner),
-            loser=_side_out(match.loser),
+            p1=RecordSideOut.of(match.p1),
+            p2=None if match.p2 is None else RecordSideOut.of(match.p2),
         )
-
-
-def _side_out(side: MatchSide | None) -> RecordSideOut | None:
-    return None if side is None else RecordSideOut.of(side)
 
 
 class MatchRecordPageOut(BaseModel):

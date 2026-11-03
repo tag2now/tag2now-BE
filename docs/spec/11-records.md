@@ -98,10 +98,14 @@ id가 작은 행이 대표한다.
 
 ```
 { matches: [{ id, played_at,
-              winner: { npid, online_name, chars: [{ name, rank: { name, tier } | null }] | null } | null,
-              loser:  (같은 모양) }],
+              p1: { npid, online_name, result: win | loss, chars: [{ name, rank: { name, tier } | null }] | null },
+              p2: (같은 모양) | null }],
   next_before: id | null }
 ```
+
+**1P/2P:** 그 판 방 스냅샷의 `user1`이 1P다. RPCN은 방 멤버를 슬롯 순서로 내보내고(`member_id`는 슬롯이
+상위 비트), 수집기는 그 순서 그대로 `user1`/`user2`에 쓴다. 방을 못 찾은 판은 세이브가 보인 쪽이 1P, `p2`는
+null이다. 규칙은 `records.domain.seat`.
 
 | 쿼리 | 의미 |
 |---|---|
@@ -110,7 +114,7 @@ id가 작은 행이 대표한다.
 | `before`, `limit` (기본 20, 최대 100) | 번호 대신 id로 넘긴다. 판이 계속 들어와도 다음 페이지가 밀리지 않는다 |
 
 - `online_name`은 그 판의 방 스냅샷에서 읽는다. 방이 없으면 null이고 FE는 npid를 보여준다.
-- 한쪽 `chars`가 null이면 그 사람의 세이브를 못 본 판이고, 한쪽 전체가 null이면 방을 못 찾은 판이다.
+- 한쪽 `chars`가 null이면 그 사람의 세이브를 못 본 판이고, `p2`가 null이면 방을 못 찾은 판이다.
 - 플레이어별 승패 합계는 내지 않는다. 통산 전적은 세이브(`GET /saves/players/{npid}`)에 있다.
 - 캐시는 없다. 판이 10초마다 들어오고 FE는 화면을 열 때와 새로고침 때만 부른다.
 

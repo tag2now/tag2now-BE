@@ -4,7 +4,7 @@ Saves are cumulative, so a missed save costs the split between matches and never
 the record. Spec: docs/spec/11-records.md.
 """
 
-from records.models import CharRecord, Comparison, FinishedMatch, MatchOutcome, PlayerSave
+from records.models import CharRecord, Comparison, FinishedMatch, MatchOutcome, MatchSide, PlayerSave
 
 _NO_RECORD = CharRecord(0, 0)
 _ONE_MATCH = {(1, 0): MatchOutcome.WIN, (0, 1): MatchOutcome.LOSS}
@@ -42,3 +42,11 @@ def compare(before: PlayerSave, after: PlayerSave) -> Comparison:
     played = _played(before, after, result)
     ranks = tuple(_rank_going_in(before, after, char_id) for char_id in played)
     return Comparison(match=FinishedMatch(result, played, ranks))
+
+
+def seat(own: MatchSide, other: MatchSide | None, room_first: str | None) -> tuple[MatchSide, MatchSide | None]:
+    """1P and 2P, as the game seated them: RPCN lists a room's members by slot, so its first is 1P.
+    With no room there is no seat to read, and the side whose save was seen is 1P."""
+    if other is not None and other.npid == room_first:
+        return other, own
+    return own, other
