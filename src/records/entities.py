@@ -30,7 +30,7 @@ class SaveStateRow(Base):
     saved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     wins: Mapped[int] = mapped_column(Integer, nullable=False)
     losses: Mapped[int] = mapped_column(Integer, nullable=False)
-    # {character id: [wins, losses]}
+    # {character id: [wins, losses, rank]}; states kept before ranks have two.
     chars: Mapped[dict] = mapped_column(JSONB, nullable=False)
     start_chars: Mapped[list[int]] = mapped_column(ARRAY(Integer), nullable=False)
     merged_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
@@ -52,6 +52,8 @@ class MatchEventRow(Base):
     data_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     result: Mapped[str] = mapped_column(Text, nullable=False)
     chars: Mapped[list[int]] = mapped_column(ARRAY(Integer), nullable=False)
+    # Rank going in, per character of `chars`; null on events queued before ranks were kept.
+    ranks: Mapped[list[int | None] | None] = mapped_column(ARRAY(Integer))
     saved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="pending")
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
@@ -75,6 +77,7 @@ class MatchResultRow(Base):
     npid: Mapped[str] = mapped_column(Text, nullable=False)
     result: Mapped[str] = mapped_column(Text, nullable=False)
     chars: Mapped[list[int]] = mapped_column(ARRAY(Integer), nullable=False)
+    ranks: Mapped[list[int | None] | None] = mapped_column(ARRAY(Integer))
     played_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     opponent_npid: Mapped[str | None] = mapped_column(Text)
     room_snapshot_id: Mapped[int | None] = mapped_column(BigInteger)

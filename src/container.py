@@ -57,6 +57,7 @@ class Container:
     event: EventService
     history: HistoryService
     matching: MatchingService
+    records: RecordsService
     reservations: ReservationService
     saves: SavesService
     streaming: StreamingService
@@ -89,6 +90,7 @@ async def build_container(stack: AsyncExitStack) -> Container:
         event=EventService(load_baselines(settings.event_baseline_path), save_server),
         history=history,
         matching=matching,
+        records=records,
         reservations=ReservationService(PostgresReservationRepository(sessions)),
         saves=SavesService(save_server),
         streaming=StreamingService(PostgresStreamChannelRepository(), chzzk, sessions),

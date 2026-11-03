@@ -58,7 +58,9 @@ async def world():
     await close_database()
 
 
-def _save(npid: str, data_id: int, wins: int = 0, losses: int = 0, at: datetime = _START, chars=(0,)) -> dict:
+def _save(
+    npid: str, data_id: int, wins: int = 0, losses: int = 0, at: datetime = _START, chars=(0,), rank: int = 20
+) -> dict:
     return {
         "npid": npid,
         "data_id": data_id,
@@ -66,7 +68,7 @@ def _save(npid: str, data_id: int, wins: int = 0, losses: int = 0, at: datetime 
         "wins": wins,
         "losses": losses,
         "own_chars": [],
-        "chars": [{"id": char, "wins": wins, "losses": losses} for char in chars],
+        "chars": [{"id": char, "rank": rank, "wins": wins, "losses": losses} for char in chars],
     }
 
 
@@ -326,3 +328,104 @@ async def test_two_consumers_at_once_still_join_both_sides(world):
     results = await _rows(MatchResultRow, MatchResultRow.npid.in_([ALICE, BOB]))
     assert len(results) == 2
     assert all(result.counterpart_id is not None for result in results)
+
+
+# --- ranks ----------------------------------------------------------------------
+
+
+async def test_a_match_keeps_the_rank_each_character_went_in_at(world):
+    records, saves, history, _ = world
+    await _open_room(history)
+    await _capture(records, saves, _save(ALICE, 1, rank=20))
+    await _capture(records, saves, _save(ALICE, 2, wins=1, at=_at(3), rank=21))
+
+    await _drain(records)
+
+    [event] = await _rows(MatchEventRow, MatchEventRow.npid == ALICE)
+    [result] = await _rows(MatchResultRow, MatchResultRow.npid == ALICE)
+    assert event.ranks == result.ranks == [20]
+
+
+# --- reading --------------------------------------------------------------------
+
+_PAUL, _JIN, _LAW = 0, 9, 1
+
+
+async def _played_match(records, saves, history):
+    """Alice (Paul, Berserker) beats Bob (Jin and Law, Marauder), both sides seen."""
+    await _open_room(history)
+    await _capture(records, saves, _save(ALICE, 1, chars=(_PAUL,)), _save(BOB, 2, chars=(_JIN, _LAW), rank=18))
+    await _capture(records, saves, _save(ALICE, 3, wins=1, at=_at(3), chars=(_PAUL,)))
+    await _capture(records, saves, _save(BOB, 4, losses=1, at=_at(3, 4), chars=(_JIN, _LAW), rank=18))
+    await _drain(records)
+
+
+def _side(side):
+    """(npid, name, [(character, rank)]) — characters None when that save was not seen."""
+    if side is None:
+        return None
+    chars = None if side.chars is None else [(char.name, char.rank and char.rank.name) for char in side.chars]
+    return side.npid, side.online_name, chars
+
+
+async def test_a_match_seen_from_both_sides_is_listed_once(world):
+    records, saves, history, _ = world
+    await _played_match(records, saves, history)
+
+    page = await records.list_matches(None, "records-", None, 20)
+
+    [match] = page.matches
+    assert _side(match.winner) == (ALICE, ALICE, [("Paul", "Berserker")])
+    assert _side(match.loser) == (BOB, BOB, [("Law", "Marauder"), ("Jin", "Marauder")])
+    assert page.next_before is None
+
+
+async def test_a_quitter_is_listed_without_characters_and_a_roomless_match_without_an_opponent(world):
+    records, saves, history, _ = world
+    await _open_room(history, until=_at(5))
+    await _capture(records, saves, _save(ALICE, 1), _save(CAROL, 2))
+    await _capture(records, saves, _save(ALICE, 3, wins=1, at=_at(3)))
+    await _capture(records, saves, _save(CAROL, 4, losses=1, at=_at(40)))
+    await _drain(records)
+
+    roomless, quitter = (await records.list_matches(None, "records-", None, 20)).matches
+
+    assert _side(quitter.loser) == (BOB, BOB, None)
+    assert (_side(roomless.winner), roomless.loser.npid) == (None, CAROL)
+
+
+async def test_a_player_s_matches_include_those_only_the_opponent_s_save_showed(world):
+    records, saves, history, _ = world
+    await _open_room(history)
+    await _capture(records, saves, _save(ALICE, 1))
+    await _capture(records, saves, _save(ALICE, 2, wins=1, at=_at(3)))
+    await _drain(records)
+
+    [match] = (await records.list_matches(BOB, None, None, 20)).matches
+
+    assert (match.winner.npid, match.loser.npid) == (ALICE, BOB)
+    assert (await records.list_matches(CAROL, None, None, 20)).matches == []
+
+
+async def test_a_search_matches_a_name_in_part_and_takes_wildcards_literally(world):
+    records, saves, history, _ = world
+    await _played_match(records, saves, history)
+
+    assert len((await records.list_matches(None, "RECORDS-BO", None, 20)).matches) == 1
+    assert (await records.list_matches(None, "records-%", None, 20)).matches == []
+
+
+async def test_pages_follow_on_from_the_last_match_shown(world):
+    records, saves, history, _ = world
+    await _open_room(history)
+    await _capture(records, saves, _save(ALICE, 1))
+    for game in range(3):
+        await _capture(records, saves, _save(ALICE, 2 + game, wins=game + 1, at=_at(3 * (game + 1))))
+    await _drain(records)
+
+    first = await records.list_matches(ALICE, None, None, 2)
+    second = await records.list_matches(ALICE, None, first.next_before, 2)
+
+    assert len(first.matches) == 2 and first.next_before == first.matches[-1].id
+    assert len(second.matches) == 1 and second.next_before is None
+    assert second.matches[0].id < first.matches[-1].id

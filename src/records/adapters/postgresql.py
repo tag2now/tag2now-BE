@@ -2,13 +2,24 @@
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
+from history.entities import RankMatchSnapshotRow
 from history.models import RankOpponent
 from records.entities import MatchEventRow, MatchResultRow, SaveStateRow
-from records.models import CharRecord, EventStatus, FinishedMatch, MatchEvent, MatchOutcome, PlayerSave
+from records.models import (
+    CharRecord,
+    EventStatus,
+    FinishedMatch,
+    MatchEvent,
+    MatchOutcome,
+    MatchSide,
+    PlayerSave,
+    RecordedMatch,
+)
 from records.ports import RecordsPort
 
 _MAX_ATTEMPTS = 5
@@ -29,6 +40,15 @@ def _to_save(row: SaveStateRow) -> PlayerSave:
     )
 
 
+def _optional_tuple(values: list | None) -> tuple | None:
+    return None if values is None else tuple(values)
+
+
+def _optional_list(values: tuple | None) -> list | None:
+    """psycopg sends a tuple as a record, so an array column needs a list."""
+    return None if values is None else list(values)
+
+
 def _to_event(row: MatchEventRow) -> MatchEvent:
     return MatchEvent(
         id=row.id,
@@ -36,8 +56,42 @@ def _to_event(row: MatchEventRow) -> MatchEvent:
         result=MatchOutcome(row.result),
         chars=tuple(row.chars),
         saved_at=row.saved_at,
+        ranks=_optional_tuple(row.ranks),
         attempts=row.attempts,
     )
+
+
+def _room_name(room: RankMatchSnapshotRow | None, npid: str) -> str | None:
+    if room is None:
+        return None
+    return {room.user1_npid: room.user1_online_name, room.user2_npid: room.user2_online_name}.get(npid)
+
+
+def _side(row: MatchResultRow, room: RankMatchSnapshotRow | None) -> MatchSide:
+    return MatchSide(row.npid, _room_name(room, row.npid), tuple(row.chars), _optional_tuple(row.ranks))
+
+
+def _opponent_side(
+    shown: MatchResultRow, counterpart: MatchResultRow | None, room: RankMatchSnapshotRow | None
+) -> MatchSide | None:
+    """The other player: their own row when their save was seen, else only who the room says they were."""
+    if counterpart is not None:
+        return _side(counterpart, room)
+    if shown.opponent_npid is None:
+        return None
+    return MatchSide(shown.opponent_npid, _room_name(room, shown.opponent_npid), None, None)
+
+
+def _to_match(
+    shown: MatchResultRow, counterpart: MatchResultRow | None, room: RankMatchSnapshotRow | None
+) -> RecordedMatch:
+    own, other = _side(shown, room), _opponent_side(shown, counterpart, room)
+    winner, loser = (own, other) if shown.result == MatchOutcome.WIN else (other, own)
+    return RecordedMatch(id=shown.id, played_at=shown.played_at, winner=winner, loser=loser)
+
+
+def _escape_like(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 class PostgresRecordsAdapter(RecordsPort):
@@ -77,6 +131,7 @@ class PostgresRecordsAdapter(RecordsPort):
                 data_id=save.data_id,
                 result=match.result,
                 chars=list(match.chars),
+                ranks=list(match.ranks),
                 saved_at=save.saved_at,
                 available_at=now,
             )
@@ -123,6 +178,7 @@ class PostgresRecordsAdapter(RecordsPort):
             npid=event.npid,
             result=event.result,
             chars=list(event.chars),
+            ranks=_optional_list(event.ranks),
             played_at=event.saved_at,
             opponent_npid=opponent.npid if opponent else None,
             room_snapshot_id=opponent.room_snapshot_id if opponent else None,
@@ -166,3 +222,29 @@ class PostgresRecordsAdapter(RecordsPort):
             update(MatchResultRow).where(MatchResultRow.id == counterpart_id).values(counterpart_id=result_id)
         )
         return True
+
+    # -- Reading -------------------------------------------------------------
+
+    async def list_matches(
+        self, session: AsyncSession, npid: str | None, query: str | None, before: int | None, limit: int
+    ) -> list[RecordedMatch]:
+        shown, counterpart, room = MatchResultRow, aliased(MatchResultRow), RankMatchSnapshotRow
+        # A match whose both sides were seen is two rows; the lower id stands for it.
+        conditions = [or_(shown.counterpart_id.is_(None), shown.id < shown.counterpart_id)]
+        if before is not None:
+            conditions.append(shown.id < before)
+        if npid is not None:
+            conditions.append(or_(shown.npid == npid, shown.opponent_npid == npid))
+        if query:
+            pattern = f"%{_escape_like(query)}%"
+            names = (shown.npid, shown.opponent_npid, room.user1_online_name, room.user2_online_name)
+            conditions.append(or_(*(name.ilike(pattern, escape="\\") for name in names)))
+        rows = await session.execute(
+            select(shown, counterpart, room)
+            .outerjoin(counterpart, counterpart.id == shown.counterpart_id)
+            .outerjoin(room, room.id == shown.room_snapshot_id)
+            .where(*conditions)
+            .order_by(shown.id.desc())
+            .limit(limit)
+        )
+        return [_to_match(*row) for row in rows]

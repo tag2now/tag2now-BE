@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from history.models import RankOpponent
-from records.models import FinishedMatch, MatchEvent, MatchOutcome, PlayerSave
+from records.models import FinishedMatch, MatchEvent, MatchOutcome, PlayerSave, RecordedMatch
 
 
 class RecordsPort(ABC):
@@ -64,3 +64,12 @@ class RecordsPort(ABC):
         played_at: datetime,
     ) -> bool:
         """Join a result to the opponent's side of the same match, when it has arrived."""
+
+    # -- Reading -------------------------------------------------------------
+
+    @abstractmethod
+    async def list_matches(
+        self, session: AsyncSession, npid: str | None, query: str | None, before: int | None, limit: int
+    ) -> list[RecordedMatch]:
+        """Return up to `limit` matches older than `before`, newest first: one each, whoever was seen.
+        `npid` keeps that player's; `query` those with a player whose id or name contains it."""

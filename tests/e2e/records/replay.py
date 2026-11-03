@@ -49,7 +49,7 @@ def build_save(player, own=()):
     b = bytearray(ta.REC)
     for char_id, (wins, losses) in player["chars"].items():
         o = ta.CHAR_BASE + int(char_id) * ta.CHAR_STRIDE
-        b[o + ta.SLOT_RANK] = 12
+        b[o + ta.SLOT_RANK] = player.get("ranks", {}).get(char_id, 12)
         b[o + ta.SLOT_WIN : o + ta.SLOT_WIN + 4] = wins.to_bytes(4, "big")
         b[o + ta.SLOT_LOSS : o + ta.SLOT_LOSS + 4] = losses.to_bytes(4, "big")
     total = player["wins"] + player["losses"]
@@ -147,6 +147,10 @@ def open_room(room_id, first, second, opened, last_seen):
         )
 
 
+def ranks_of(npid):
+    return [row[0] for row in rows("SELECT ranks FROM match_results WHERE npid = %s ORDER BY played_at", npid)]
+
+
 def results(*npids):
     return rows(
         "SELECT r.npid, r.result, r.chars, r.opponent_npid, c.npid, c.result, c.chars FROM match_results r "
@@ -177,6 +181,11 @@ def side(npid, result, chars, opponent, confirmed_chars):
     return (npid, result, chars, opponent, *joined)
 
 
+def seeded(npid):
+    """A player as the seed saved them: Paul only, at the default rank."""
+    return {"npid": npid, "wins": 10, "losses": 10, "chars": {str(PAUL): [10, 10]}}
+
+
 def seed(state):
     os.makedirs(f"{ROOT}/db", exist_ok=True)
     os.makedirs(TUS_DIR, exist_ok=True)
@@ -193,7 +202,7 @@ def seed(state):
         con.executemany("INSERT INTO account (user_id, username) VALUES (?, ?)", list(enumerate(names, 1)))
     con.close()
     for npid in names:
-        player = {"npid": npid, "wins": 10, "losses": 10, "chars": {str(PAUL): [10, 10]}}
+        player = seeded(npid)
         game_save(player, at(0), wait=False)
         if npid in NAMES:
             state[npid] = player
@@ -325,6 +334,22 @@ def scenarios(state, report):
     game_save(pete, at(10, 0, 1), data_id=late)
     wait_for_queue()
     report.check(11, "a lower data_id committed later", [row[:2] for row in results("pete")], [("pete", "win")])
+
+    # The named players are all taken; bulk ones are still as the seed left them.
+    promoted = seeded("bulk0")
+    open_room(114, "bulk0", "bulk1", at(13), at(13, 4))
+    promoted["ranks"] = {str(PAUL): 20}
+    game_save(promoted, at(13, 0, 5), own=(PAUL, PAUL))
+    promoted["ranks"] = {str(PAUL): 21}
+    play(promoted, True, (PAUL,), at(13, 3))
+    wait_for_queue()
+    report.check(14, "the rank a match was entered at, not the one it earned", ranks_of("bulk0"), [[20]])
+
+    newcomer = seeded("bulk2")
+    newcomer["ranks"] = {str(LAW): 14}
+    play(newcomer, True, (LAW,), at(14))
+    wait_for_queue()
+    report.check(15, "a character's first match takes the rank after it", ranks_of("bulk2"), [[14]])
 
 
 def during_outage(state):

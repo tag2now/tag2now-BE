@@ -185,7 +185,7 @@ Eleven modules under `src/` --- nine domains plus `auth/` and `admin/` --- a `sh
 |--------|----------------|
 | `matching/` | Live rooms, leaderboard, matchmaking detection |
 | `history/` | Persisted snapshots, time-series statistics, the match collector |
-| `records/` | Who played whom: finished matches found in saves, queued in PostgreSQL, resolved to rooms |
+| `records/` | Who played whom: finished matches found in saves, queued in PostgreSQL, resolved to rooms, listed at `/records` |
 | `event/` | The rank event: every save against the baseline it began with |
 | `community/` | Message board — posts, comments, thumbs |
 | `reservation/` | Appointments — create, join, edit, cancel |
@@ -438,6 +438,14 @@ player was in at that moment, stores a `match_results` row and joins it to the
 opponent's side through `counterpart_id`, which is how the opponent's characters
 are read. Saves themselves are not kept. Spec: `docs/spec/11-records.md`.
 
+Each character's rank is the one it **went into** the match at: the previous
+state's, or the result save's when that state has none (a first match, or a
+state kept before ranks). It rides on the event and is copied to the result.
+
+`GET /records/matches` lists one row per match --- the lower id of a joined
+pair --- newest first, paged by `before` id, filtered by `npid` or a name `q`.
+No per-player totals: the lifetime record is the save's.
+
 ### RPCN client lifecycle
 
 `matching/rpcn_lifecycle.py`'s `SharedRpcnClient` holds one `RpcnClient` behind a `threading.Lock`, since the underlying socket is not concurrency-safe. The container builds one and hands it to `RpcnGameServerAdapter`; use its `api_client()` context manager rather than constructing a client:
@@ -485,6 +493,7 @@ error array. A new user-facing request field belongs in that map.
 | *(none)* | `matching/router.py` — `/game-data`, `/servers`, `/rooms/all`, `/leaderboard` |
 | `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/stats/weekly-top`, `/players/{npid}` |
 | `/community` | `community/router.py` — posts, comments, thumbs |
+| `/records` | `records/router.py` — `GET /matches`, public |
 | `/reservations` | `reservation/router.py` — list, create, read one (`GET /{id}`), edit (`PATCH`), join, cancel |
 | `/chat` | `chat/router.py` — `GET /stream` (SSE, public), `POST /messages`, `DELETE /messages/{id}` |
 | *(none)* | `/health` in `app.py`, excluded from the schema |

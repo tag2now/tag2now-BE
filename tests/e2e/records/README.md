@@ -25,6 +25,6 @@ up in time. Those are checked against production.
 | Phase | Scenarios |
 |-------|-----------|
 | `seed` | 470 saves already there, before be starts |
-| `scenarios` | 1 baseline, 2 tag match, 3 solo, 4 a reused room, 5 a result on the rematch's start save, 6 a re-upload, 7 an opponent who quit, 8 no room, 9 two wins in one save, 10 an unreadable save, 11 a lower `data_id` committed later |
+| `scenarios` | 1 baseline, 2 tag match, 3 solo, 4 a reused room, 5 a result on the rematch's start save, 6 a re-upload, 7 an opponent who quit, 8 no room, 9 two wins in one save, 10 an unreadable save, 11 a lower `data_id` committed later, 14 the rank a match was entered at, 15 a character's first match |
 | `during-outage`, `after-outage` | 12 a match played while save-admin is down |
 | `before-restart`, `after-restart` | 13 a be restart, and no event left dead |
