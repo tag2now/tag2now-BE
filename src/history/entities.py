@@ -29,6 +29,10 @@ class RankMatchSnapshotRow(Base):
     user2_npid: Mapped[str] = mapped_column(String, nullable=False, index=True)
     user2_online_name: Mapped[str] = mapped_column(String, nullable=False)
 
+    def online_name_of(self, npid: str) -> str | None:
+        """The name this room showed for a member, or None for someone not in it."""
+        return {self.user1_npid: self.user1_online_name, self.user2_npid: self.user2_online_name}.get(npid)
+
 
 class DailyMatchedPlayerRow(Base):
     """A player observed in a completed rank match on a KST calendar day."""

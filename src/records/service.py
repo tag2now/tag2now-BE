@@ -93,16 +93,16 @@ class RecordsService:
             return
         await self._repo.lock_room(session, opponent.room_snapshot_id)
         result_id = await self._repo.add_result(session, event, opponent)
-        await self._repo.link_counterpart(session, result_id, opponent, event.result.opposite, event.saved_at)
+        await self._repo.link_counterpart(session, result_id, opponent, event.outcome.opposite, event.saved_at)
 
     # -- Reading -------------------------------------------------------------
 
     async def list_matches(
-        self, npid: str | None, query: str | None, before: int | None, limit: int
+        self, npid: str | None, name_query: str | None, before: int | None, limit: int
     ) -> MatchRecordPageOut:
         """Paged by id rather than by page number, so matches recorded meanwhile do not shift the next page."""
         async with self._sessions() as session:
-            found = await self._repo.list_matches(session, npid, query, before, limit + 1)
+            found = await self._repo.list_matches(session, npid, name_query, before, limit + 1)
         next_before = found[limit - 1].id if len(found) > limit else None
         shown = found[:limit]
         return MatchRecordPageOut(matches=[MatchRecordOut.of(match) for match in shown], next_before=next_before)

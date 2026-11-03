@@ -25,7 +25,7 @@ class EventStatus(StrEnum):
     DEAD = "dead"
 
 
-class CharRecord(NamedTuple):
+class CharTally(NamedTuple):
     wins: int
     losses: int
     # None in a state kept before saves carried ranks.
@@ -34,16 +34,16 @@ class CharRecord(NamedTuple):
 
 @dataclass(frozen=True)
 class PlayerSave:
-    """One save's cumulative record."""
+    """One save's cumulative tally."""
 
     npid: str
     data_id: int
     saved_at: datetime
     wins: int
     losses: int
-    chars: dict[int, CharRecord]
+    tallies: dict[int, CharTally]
     # Set on a start save only: who entered the match, in tag order.
-    own_chars: tuple[int, ...] = ()
+    entered_chars: tuple[int, ...] = ()
 
     @classmethod
     def from_answer(cls, answer: dict) -> "PlayerSave":
@@ -55,14 +55,16 @@ class PlayerSave:
             wins=answer["wins"],
             losses=answer["losses"],
             # .get: a save-admin older than ranks answers none.
-            chars={char["id"]: CharRecord(char["wins"], char["losses"], char.get("rank")) for char in answer["chars"]},
-            own_chars=tuple(answer["own_chars"]),
+            tallies={char["id"]: CharTally(char["wins"], char["losses"], char.get("rank")) for char in answer["chars"]},
+            entered_chars=tuple(answer["own_chars"]),
         )
 
 
 @dataclass(frozen=True)
-class FinishedMatch:
-    result: MatchOutcome
+class PlayerMatch:
+    """One player's side of a finished match, as their saves showed it."""
+
+    outcome: MatchOutcome
     chars: tuple[int, ...]
     # Each character's rank going into the match, in the order of `chars`.
     ranks: tuple[int | None, ...]
@@ -72,7 +74,7 @@ class FinishedMatch:
 class Comparison:
     """What changed between two saves: a match, or a jump that cannot be split into matches."""
 
-    match: FinishedMatch | None = None
+    match: PlayerMatch | None = None
     merged: bool = False
 
 
@@ -80,7 +82,7 @@ class Comparison:
 class MatchEvent:
     id: int
     npid: str
-    result: MatchOutcome
+    outcome: MatchOutcome
     chars: tuple[int, ...]
     saved_at: datetime
     # None on an event queued before ranks were kept.
@@ -89,12 +91,12 @@ class MatchEvent:
 
 
 @dataclass(frozen=True)
-class MatchSide:
+class MatchPlayer:
     """One player in a recorded match. `chars` and `ranks` are None when their save was not seen."""
 
     npid: str
     online_name: str | None
-    result: MatchOutcome
+    outcome: MatchOutcome
     chars: tuple[int, ...] | None
     ranks: tuple[int | None, ...] | None
 
@@ -106,8 +108,8 @@ class RecordedMatch:
 
     id: int
     played_at: datetime
-    p1: MatchSide
-    p2: MatchSide | None
+    p1: MatchPlayer
+    p2: MatchPlayer | None
 
 
 # -- Responses -----------------------------------------------------------------
@@ -132,40 +134,41 @@ class RecordCharOut(BaseModel):
         )
 
 
-class RecordSideOut(BaseModel):
+class RecordPlayerOut(BaseModel):
     npid: str
     # From the room the match was played in.
     online_name: str | None
+    # The JSON key the frontend reads; `outcome` everywhere else.
     result: MatchOutcome
-    # Null when this side's save was not seen.
+    # Null when this player's save was not seen.
     chars: list[RecordCharOut] | None
 
     @classmethod
-    def of(cls, side: MatchSide) -> "RecordSideOut":
-        return cls(npid=side.npid, online_name=side.online_name, result=side.result, chars=_chars_out(side))
+    def of(cls, player: MatchPlayer) -> "RecordPlayerOut":
+        return cls(npid=player.npid, online_name=player.online_name, result=player.outcome, chars=_chars_out(player))
 
 
-def _chars_out(side: MatchSide) -> list[RecordCharOut] | None:
-    if side.chars is None:
+def _chars_out(player: MatchPlayer) -> list[RecordCharOut] | None:
+    if player.chars is None:
         return None
-    ranks = side.ranks or (None,) * len(side.chars)
-    return [RecordCharOut.of(char_id, rank) for char_id, rank in zip(side.chars, ranks)]
+    ranks = player.ranks or (None,) * len(player.chars)
+    return [RecordCharOut.of(char_id, rank) for char_id, rank in zip(player.chars, ranks)]
 
 
 class MatchRecordOut(BaseModel):
     id: int
     played_at: datetime
-    p1: RecordSideOut
+    p1: RecordPlayerOut
     # Null when no room named the opponent.
-    p2: RecordSideOut | None
+    p2: RecordPlayerOut | None
 
     @classmethod
     def of(cls, match: RecordedMatch) -> "MatchRecordOut":
         return cls(
             id=match.id,
             played_at=match.played_at,
-            p1=RecordSideOut.of(match.p1),
-            p2=None if match.p2 is None else RecordSideOut.of(match.p2),
+            p1=RecordPlayerOut.of(match.p1),
+            p2=None if match.p2 is None else RecordPlayerOut.of(match.p2),
         )
 
 

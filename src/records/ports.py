@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from history.models import RankOpponent
-from records.models import FinishedMatch, MatchEvent, MatchOutcome, PlayerSave, RecordedMatch
+from records.models import MatchEvent, MatchOutcome, PlayerMatch, PlayerSave, RecordedMatch
 
 
 class RecordsPort(ABC):
@@ -27,7 +27,7 @@ class RecordsPort(ABC):
         """Replace the player's last compared save, counting a merged change."""
 
     @abstractmethod
-    async def add_event(self, session: AsyncSession, save: PlayerSave, match: FinishedMatch, now: datetime) -> None:
+    async def add_event(self, session: AsyncSession, save: PlayerSave, match: PlayerMatch, now: datetime) -> None:
         """Queue the match this save finished."""
 
     # -- Queue ---------------------------------------------------------------
@@ -69,7 +69,7 @@ class RecordsPort(ABC):
 
     @abstractmethod
     async def list_matches(
-        self, session: AsyncSession, npid: str | None, query: str | None, before: int | None, limit: int
+        self, session: AsyncSession, npid: str | None, name_query: str | None, before: int | None, limit: int
     ) -> list[RecordedMatch]:
         """Return up to `limit` matches older than `before`, newest first: one each, whoever was seen.
-        `npid` keeps that player's; `query` those with a player whose id or name contains it."""
+        `npid` keeps that player's; `name_query` those with a player whose id or name contains it."""

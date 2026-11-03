@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from history.models import RankOpponent
-from records.models import CharRecord, MatchEvent, MatchOutcome, PlayerSave
+from records.models import CharTally, MatchEvent, MatchOutcome, PlayerSave
 from records.ports import RecordsPort
 from records.service import RecordsService
 from shared.clock import Clock
@@ -33,7 +33,7 @@ def _answer(data_id=101, wins=11, npid="alice") -> dict:
 
 
 def _state(data_id=100, wins=10) -> PlayerSave:
-    return PlayerSave("alice", data_id, _NOW, wins, 5, {0: CharRecord(wins, 5)})
+    return PlayerSave("alice", data_id, _NOW, wins, 5, {0: CharTally(wins, 5)})
 
 
 def _event() -> MatchEvent:
@@ -99,7 +99,7 @@ async def test_capture_starts_from_the_beginning(service, repo, saves):
 async def test_a_finished_match_is_queued_with_the_new_state(service, repo):
     await service.capture()
     assert repo.save_state.await_args.args[1].data_id == 101
-    assert repo.add_event.await_args.args[2].result is MatchOutcome.WIN
+    assert repo.add_event.await_args.args[2].outcome is MatchOutcome.WIN
 
 
 async def test_a_first_save_is_the_baseline_and_no_match(service, repo):

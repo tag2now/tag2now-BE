@@ -428,7 +428,7 @@ tasks beside the collector do it, so a save-admin outage stops only them.
 
 `SaveCapture` (10 s) reads saves past a `data_id` from save-admin, which decodes
 them, and compares each with `save_states`. **A finished match is a change in the
-cumulative record, not a room and not a save:** a room is reused and half of all
+cumulative tally, not a room and not a save:** a room is reused and half of all
 saves change nothing. The new state and the `match_events` row commit together.
 A missed save loses only the split between matches, since the next one still
 carries the totals.

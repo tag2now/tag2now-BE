@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from records.dependencies import records_service
-from records.models import MatchOutcome, MatchRecordOut, MatchRecordPageOut, MatchSide, RecordedMatch
+from records.models import MatchOutcome, MatchRecordOut, MatchRecordPageOut, MatchPlayer, RecordedMatch
 
 _AT = datetime(2026, 11, 3, 0, 41, tzinfo=timezone.utc)
 
@@ -44,8 +44,8 @@ def test_refuses_a_page_or_search_out_of_range(client_and_service, params):
 
 
 def test_a_match_answers_names_and_ranks_and_says_what_was_not_seen():
-    p1 = MatchSide("alice", "Alice", MatchOutcome.WIN, (0, 9), (20, 99))
-    p2 = MatchSide("bob", None, MatchOutcome.LOSS, None, None)
+    p1 = MatchPlayer("alice", "Alice", MatchOutcome.WIN, (0, 9), (20, 99))
+    p2 = MatchPlayer("bob", None, MatchOutcome.LOSS, None, None)
     out = MatchRecordOut.of(RecordedMatch(7, _AT, p1, p2)).model_dump()
 
     assert out["p1"]["result"] == "win"
@@ -58,7 +58,7 @@ def test_a_match_answers_names_and_ranks_and_says_what_was_not_seen():
 
 
 def test_a_match_recorded_before_ranks_answers_characters_without_them():
-    side = MatchSide("alice", "Alice", MatchOutcome.WIN, (0,), None)
+    side = MatchPlayer("alice", "Alice", MatchOutcome.WIN, (0,), None)
     out = MatchRecordOut.of(RecordedMatch(7, _AT, side, None)).model_dump()
 
     assert out["p1"]["chars"] == [{"name": "Paul", "rank": None}]
