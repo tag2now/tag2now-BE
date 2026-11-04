@@ -448,7 +448,7 @@ Sides are `p1`/`p2` as the game seated them: the room snapshot's `user1`, since
 RPCN lists members by slot (`records.domain.seat`). No per-player totals: the
 lifetime record is the save's.
 
-`GET /records/weekly-top` (the FE's 주간 철악귀) counts each player's matches of
+`GET /records/weekly-top` (the FE's 주간 철찌) counts each player's matches of
 the last 7 days with wins and losses, **only those both sides' saves confirmed**
 (`counterpart_id` set), so each player is counted once from their own row.
 

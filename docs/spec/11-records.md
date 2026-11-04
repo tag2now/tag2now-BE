@@ -120,7 +120,7 @@ null이다. 규칙은 `records.domain.seat`.
 
 ## 주간 top
 
-`GET /records/weekly-top?limit=` (1~50, 기본 10), 공개. 화면 이름은 '주간 철악귀'다.
+`GET /records/weekly-top?limit=` (1~50, 기본 10), 공개. 화면 이름은 '주간 철찌'다.
 
 ```
 [{ npid, online_name, match_count, wins, losses }]
