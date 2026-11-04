@@ -86,7 +86,7 @@ async def delete_comment(
     user: AuthUser = Depends(current_user),
     service: ReservationService = Depends(reservation_service),
 ):
-    await service.delete_comment(reservation_id, comment_id, user.username)
+    await service.delete_comment(reservation_id, comment_id, user.username, admin=user.admin)
     return Response(status_code=204)
 
 

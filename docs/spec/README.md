@@ -24,7 +24,8 @@ Tekken Tag Tournament 2(TTT2)의 RPCN 온라인 현황을 보여주는 웹 서�
 | [08-admin.md](08-admin.md) | 관리자 — RPCN 계정 조회·밴 |
 | [09-save-admin.md](09-save-admin.md) | 관리자 — TTT2 세이브 조회·계급 수정 (tag2now-save-admin) |
 | [10-chat.md](10-chat.md) | 로비 채팅 — SSE 스트림, 작성·삭제, PostgreSQL 저장 |
-| [11-popup.md](11-popup.md) | 사이트 팝업 — 관리자 작성, 이미지 업로드, 브라우저별 닫기 기록 |
+| [11-records.md](11-records.md) | 전적 — 세이브 비교, PostgreSQL 큐, 상대 매칭, 정확도 측정 |
+| [12-popup.md](12-popup.md) | 사이트 팝업 — 관리자 작성, 이미지 업로드, 브라우저별 닫기 기록 |
 
 ## 시스템 구성
 
@@ -54,8 +55,8 @@ RPCS3 유저 ──▶ RPCN 서버 (바이너리 프로토콜, TLS)
 |---|------|----------|--------------|
 | 1 | 실시간 방 목록 | `/match/:group` | `GET /rooms/all` |
 | 2 | 리더보드 | `/leaderboard` | `GET /leaderboard` |
-| 3 | 플레이어 조회 | 리더보드/통계 내 패널 | `GET /history/players/{npid}`, `GET /saves/players/{npid}` |
-| 4 | 통계 | `/stats` | `GET /history/stats`, `/stats/daily`, `/stats/weekly-top` |
+| 3 | 플레이어 조회 | 리더보드/통계 내 패널 | `GET /history/players/{npid}`, `GET /records/opponents`, `GET /saves/players/{npid}` |
+| 4 | 통계 | `/stats` | `GET /history/stats`, `/stats/daily`, `GET /records/weekly-top` |
 | 5 | 예약 | `/reservation`, `/reservation/:id` | `/reservations` CRUD |
 | 6 | 커뮤니티 | `/community`, `/community/:postId` | `/community/posts` 등 |
 | 7 | 개요 | `/` | 위 항목들의 요약 조합 |

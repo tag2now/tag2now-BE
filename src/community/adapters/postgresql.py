@@ -1,6 +1,6 @@
 """SQLAlchemy ORM adapter for the community repository."""
 
-from sqlalchemy import case, func, select
+from sqlalchemy import and_, case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from community.entities import Comment, Post, Thumb
@@ -31,7 +31,7 @@ class PostgresCommunityRepository(CommunityRepository):
         comment_count = func.count(Comment.id).label("comment_count")
         page_query = (
             select(Post, comment_count)
-            .outerjoin(Comment, Comment.post_id == Post.id)
+            .outerjoin(Comment, and_(Comment.post_id == Post.id, Comment.deleted_at.is_(None)))
             .where(*filters)
             .group_by(Post.id)
             .order_by(Post.created_at.desc())
@@ -83,7 +83,9 @@ class PostgresCommunityRepository(CommunityRepository):
             post.youtube_video_id = youtube_video_id
             await session.flush()
             comment_count = await session.scalar(
-                select(func.count()).select_from(Comment).where(Comment.post_id == post_id)
+                select(func.count())
+                .select_from(Comment)
+                .where(Comment.post_id == post_id, Comment.deleted_at.is_(None))
             )
             return {**_as_dict(post), "comment_count": comment_count}
 
@@ -108,10 +110,21 @@ class PostgresCommunityRepository(CommunityRepository):
             await session.refresh(comment)
             return _as_dict(comment)
 
+    async def get_comment(self, post_id, comment_id):
+        async with self._sessions() as session:
+            comment = await session.get(Comment, comment_id)
+            if not _is_live_on(comment, post_id):
+                raise CommentNotFoundError("Comment not found")
+            return _as_dict(comment)
+
+    async def delete_comment(self, comment_id):
+        async with self._sessions() as session, session.begin():
+            await session.execute(update(Comment).where(Comment.id == comment_id).values(deleted_at=func.now()))
+
     @staticmethod
     async def _ensure_repliable(session: AsyncSession, post_id: int, parent_id: int) -> None:
         parent = await session.get(Comment, parent_id)
-        if parent is None or parent.post_id != post_id:
+        if not _is_live_on(parent, post_id):
             raise CommentNotFoundError("Parent comment not found")
         if parent.parent_id is not None:
             raise NestingDepthError("Cannot reply to a reply (max 1-depth nesting)")
@@ -136,6 +149,10 @@ class PostgresCommunityRepository(CommunityRepository):
             up, down = (await session.execute(_thumb_counts(post_id))).one()
             post.thumbs_up, post.thumbs_down = up, down
             return {"thumbs_up": up, "thumbs_down": down}
+
+
+def _is_live_on(comment: Comment | None, post_id: int) -> bool:
+    return comment is not None and comment.post_id == post_id and comment.deleted_at is None
 
 
 def _thumb_counts(post_id: int):

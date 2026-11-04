@@ -58,6 +58,22 @@ def ensure_can_manage_post(post: dict, user: AuthUser) -> None:
         raise OwnershipError("Not your post")
 
 
+def ensure_can_delete_comment(comment: dict, user: AuthUser) -> None:
+    """A comment is its author's to delete, and any admin's, to moderate the board."""
+    if comment["author"] != user.username and not user.admin:
+        raise OwnershipError("Not your comment")
+
+
+def _hide_deleted(comments: list[dict]) -> list[dict]:
+    # A deleted comment stays only as the head of a live reply, and without its words.
+    heads = {c["parent_id"] for c in comments if c["deleted_at"] is None and c["parent_id"]}
+    return [_tombstone(c) if c["deleted_at"] else c for c in comments if c["deleted_at"] is None or c["id"] in heads]
+
+
+def _tombstone(comment: dict) -> dict:
+    return {**comment, "body": "", "deleted": True}
+
+
 def _nest_replies(comments: list[dict]) -> list[dict]:
     # A reply whose parent is missing is shown as a top-level comment.
     by_id = {c["id"]: {**c, "replies": []} for c in comments}
@@ -96,7 +112,7 @@ class CommunityService:
         if cached := cache_get(key):
             return cached
         post, comments = await asyncio.gather(self._repo.get_post(post_id), self._repo.get_post_comments(post_id))
-        post["comments"] = _nest_replies(comments)
+        post["comments"] = _nest_replies(_hide_deleted(comments))
         cache_set(key, post, _ttl())
         return post
 
@@ -143,6 +159,11 @@ class CommunityService:
         comment = await self._repo.create_comment(post_id, author.username, body, parent_id)
         _invalidate_post(post_id)
         return comment
+
+    async def delete_comment(self, post_id: int, comment_id: int, user: AuthUser) -> None:
+        ensure_can_delete_comment(await self._repo.get_comment(post_id, comment_id), user)
+        await self._repo.delete_comment(comment_id)
+        _invalidate_post(post_id)
 
     # -- Thumbs (posts only) -------------------------------------------------
 

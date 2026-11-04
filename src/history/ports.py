@@ -1,7 +1,6 @@
 """Port interface for the history module."""
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +12,7 @@ from history.models import (
     HourlyActivity,
     PlayerStats,
     RankMatchSnapshotRecord,
-    TopPlayer,
+    RankRoom,
 )
 
 
@@ -27,12 +26,24 @@ class HistoryPort(ABC):
         """Persist newly started rank matches."""
 
     @abstractmethod
+    async def touch_rank_matches(
+        self, session: AsyncSession, rooms: list[RankMatchSnapshotRecord], observed_at: datetime
+    ) -> None:
+        """Mark these rooms as still there at `observed_at`."""
+
+    @abstractmethod
     async def record_daily_matched_players(self, session: AsyncSession, npids: set[str], observed_at: datetime) -> None:
         """Persist unique completed-rank-match participants for the KST day."""
 
     @abstractmethod
     async def record_activity_snapshot(self, session: AsyncSession, snapshot: ActivitySnapshot) -> None:
         """Persist one observed concurrent-player snapshot."""
+
+    # -- Read: rank-match rooms ----------------------------------------------
+
+    @abstractmethod
+    async def find_rank_room(self, session: AsyncSession, npid: str, at: datetime) -> RankRoom | None:
+        """Return the rank-match room `npid` was in at that moment, if any."""
 
     # -- Read: global stats --------------------------------------------------
 
@@ -49,12 +60,3 @@ class HistoryPort(ABC):
     @abstractmethod
     async def get_player_stats(self, session: AsyncSession, npid: str, days: int = 30) -> PlayerStats:
         """Return aggregated stats for a single player."""
-
-    @abstractmethod
-    async def get_weekly_top_players(
-        self,
-        session: AsyncSession,
-        limit: int = 10,
-        excluded_npids: Sequence[str] = (),
-    ) -> list[TopPlayer]:
-        """Return the top N most frequently seen players in the last 7 days, skipping excluded npids."""

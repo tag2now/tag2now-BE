@@ -75,6 +75,20 @@ async def test_a_match_in_progress_across_cycles_is_stored_once(collector):
 
 
 @pytest.mark.asyncio
+async def test_a_room_in_view_keeps_its_last_sighting_current(collector):
+    await collector.collect_once()
+    async with get_session_factory()() as session:
+        first = (await session.execute(select(RankMatchSnapshotRow).where(_in_test_rows()))).scalar_one()
+
+    await collector.collect_once()
+    async with get_session_factory()() as session:
+        second = (await session.execute(select(RankMatchSnapshotRow).where(_in_test_rows()))).scalar_one()
+
+    assert second.created_dt == first.created_dt
+    assert second.last_seen_at > first.last_seen_at
+
+
+@pytest.mark.asyncio
 async def test_a_match_seen_again_after_a_restart_is_stored_once(collector, monkeypatch):
     """A restart empties the in-memory diff; the table's unique key must still hold."""
     await collector.collect_once()

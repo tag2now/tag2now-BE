@@ -1,0 +1,74 @@
+# The match-records replay: real be and save-admin images over a reproduced RPCN.
+# Run through run.sh, which sets SAVE_ADMIN_DIR and drives the phases.
+name: tag2now-e2e-records
+
+x-be-env: &be-env
+  FAST_API_PROFILE: prod
+  RPCN_USER: replay
+  RPCN_PASSWORD: replay
+  RPCN_TOKEN: replay
+  # Nothing listens here, so the collector fails and the replay owns every room row.
+  RPCN_HOST: 127.0.0.1
+  RPCN_PORT: "1"
+  DB_URL: postgres:5432
+  DB_USER: tag2now
+  DB_PASSWORD: tag2now
+  DB_NAME: tag2now
+  SAVE_ADMIN_URL: http://save-admin:8000
+  SAVE_ADMIN_KEY: replay-key
+  SAVE_CAPTURE_INTERVAL_SECONDS: "1"
+  MATCH_EVENT_IDLE_SECONDS: "1"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tag2now
+      POSTGRES_PASSWORD: tag2now
+      POSTGRES_DB: tag2now
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tag2now"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  save-admin:
+    build: ${SAVE_ADMIN_DIR:?set SAVE_ADMIN_DIR to a tag2now-save-admin checkout}
+    image: tag2now-e2e-records/save-admin
+    environment:
+      SAVE_ADMIN_KEY: replay-key
+      TAG2NOW_API_URL: http://be:8000
+    # A volume, not a host folder: SQLite's locking is only dependable on the Linux side.
+    volumes:
+      - rpcn:/home/ec2-user/rpcn-data
+      - backup:/home/ec2-user/backup/tdt
+
+  be:
+    build: ../../..
+    image: tag2now-e2e-records/be
+    environment: *be-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:8000/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  driver:
+    profiles: [driver]
+    image: tag2now-e2e-records/be
+    environment:
+      <<: *be-env
+      PYTHONPATH: /save-admin
+      PYTHONDONTWRITEBYTECODE: "1"
+    entrypoint: ["python", "/replay/replay.py"]
+    volumes:
+      - ./replay.py:/replay/replay.py:ro
+      - ${SAVE_ADMIN_DIR:?set SAVE_ADMIN_DIR to a tag2now-save-admin checkout}/script:/save-admin:ro
+      - rpcn:/home/ec2-user/rpcn-data
+
+volumes:
+  rpcn:
+  backup:

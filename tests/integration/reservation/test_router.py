@@ -473,6 +473,18 @@ def test_someone_else_cannot_delete_a_comment(client, as_user):
     assert len(client.get(f"/reservations/{reservation['id']}/comments").json()) == 1
 
 
+def test_an_admin_can_delete_anyones_comment(client, as_user, auth_headers):
+    reservation = _create(client, as_user("host"))
+    comment = _comment(client, reservation["id"], as_user("commenter"))
+
+    response = client.delete(
+        f"/reservations/{reservation['id']}/comments/{comment['id']}", headers=auth_headers("root", admin=True)
+    )
+
+    assert response.status_code == 204
+    assert client.get(f"/reservations/{reservation['id']}/comments").json() == []
+
+
 def test_a_deleted_comment_cannot_be_deleted_twice(client, as_user):
     reservation = _create(client, as_user("host"))
     comment = _comment(client, reservation["id"], as_user("commenter"))

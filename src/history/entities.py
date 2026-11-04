@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Date, DateTime, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, Date, DateTime, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.database import Base
@@ -20,12 +20,18 @@ class RankMatchSnapshotRow(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     room_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_dt: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    # A room can hold several matches of the same two players, so this row is who met, not one match.
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     match_date: Mapped[date] = mapped_column(Date, nullable=False)
     rank_id: Mapped[int] = mapped_column(Integer, nullable=False)
     user1_npid: Mapped[str] = mapped_column(String, nullable=False, index=True)
     user1_online_name: Mapped[str] = mapped_column(String, nullable=False)
     user2_npid: Mapped[str] = mapped_column(String, nullable=False, index=True)
     user2_online_name: Mapped[str] = mapped_column(String, nullable=False)
+
+    def online_name_of(self, npid: str) -> str | None:
+        """The name this room showed for a member, or None for someone not in it."""
+        return {self.user1_npid: self.user1_online_name, self.user2_npid: self.user2_online_name}.get(npid)
 
 
 class DailyMatchedPlayerRow(Base):

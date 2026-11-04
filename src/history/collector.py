@@ -64,6 +64,9 @@ class Collector:
             )
         )
         await self._record_new_rank_matches(observation.rank_matches, observed_at)
+        await self._history.touch_rank_matches(
+            [_to_snapshot_record(room, observed_at) for room in observation.rank_matches], observed_at
+        )
 
     async def run(self) -> None:
         """Run immediately, then at the configured interval until cancelled."""

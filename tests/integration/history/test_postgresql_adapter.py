@@ -4,6 +4,8 @@ These tests require a running PostgreSQL instance.
 Run with: pytest tests/integration/history/ -v
 """
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 import pytest_asyncio
 
@@ -46,6 +48,75 @@ def _make_record(**overrides):
     )
     defaults.update(overrides)
     return RankMatchSnapshotRecord(**defaults)
+
+
+_ROOM_START = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc)
+_ROOM_LAST_SEEN = _ROOM_START + timedelta(minutes=10)
+
+
+async def _room(adapter, session, room_id=7001, npid1="opp-a", npid2="opp-b", start=_ROOM_START, until=_ROOM_LAST_SEEN):
+    record = _make_record(room_id=room_id, user1_npid=npid1, user2_npid=npid2, created_dt=start)
+    await adapter.record_snapshot(session, [record])
+    await adapter.touch_rank_matches(session, [record], until)
+    session.expire_all()
+    return record
+
+
+@pytest.mark.asyncio
+async def test_finds_the_room_from_either_member_with_its_members_in_slot_order(adapter, db_session):
+    await _room(adapter, db_session)
+    at = _ROOM_START + timedelta(minutes=5)
+
+    from_first = await adapter.find_rank_room(db_session, "opp-a", at)
+    from_second = await adapter.find_rank_room(db_session, "opp-b", at)
+
+    assert (from_first.user1_npid, from_first.user2_npid) == ("opp-a", "opp-b")
+    assert from_second == from_first
+
+
+@pytest.mark.asyncio
+async def test_a_result_saved_just_after_the_last_sighting_is_still_in_the_room(adapter, db_session):
+    await _room(adapter, db_session)
+
+    room = await adapter.find_rank_room(db_session, "opp-a", _ROOM_LAST_SEEN + timedelta(seconds=90))
+
+    assert room.user2_npid == "opp-b"
+
+
+@pytest.mark.asyncio
+async def test_no_room_once_it_is_long_gone(adapter, db_session):
+    await _room(adapter, db_session)
+
+    assert await adapter.find_rank_room(db_session, "opp-a", _ROOM_LAST_SEEN + timedelta(seconds=91)) is None
+
+
+@pytest.mark.asyncio
+async def test_no_room_before_it_was_seen(adapter, db_session):
+    await _room(adapter, db_session)
+
+    assert await adapter.find_rank_room(db_session, "opp-a", _ROOM_START - timedelta(seconds=1)) is None
+
+
+@pytest.mark.asyncio
+async def test_the_latest_room_wins_when_a_new_one_opened_within_the_slack(adapter, db_session):
+    await _room(adapter, db_session)
+    await _room(adapter, db_session, room_id=7002, npid2="opp-c", start=_ROOM_LAST_SEEN + timedelta(seconds=30))
+
+    room = await adapter.find_rank_room(db_session, "opp-a", _ROOM_LAST_SEEN + timedelta(seconds=60))
+
+    assert room.user2_npid == "opp-c"
+
+
+@pytest.mark.asyncio
+async def test_a_stale_row_of_a_reused_room_id_is_left_alone(adapter, db_session):
+    """RPCN hands room ids out again after a restart; an old row must not look alive."""
+    record = await _room(adapter, db_session)
+    later = _ROOM_START + timedelta(days=3)
+
+    await adapter.touch_rank_matches(db_session, [record], later)
+    db_session.expire_all()
+
+    assert await adapter.find_rank_room(db_session, "opp-a", later) is None
 
 
 @pytest.mark.asyncio
@@ -444,45 +515,20 @@ async def test_active_hours_requires_two_distinct_days(adapter, db_session):
     assert 15 not in stats.active_hours
 
 
-async def _record_weekly_matches(adapter, db_session):
-    """Two test accounts sparring 100 times, and a regular with 90 matches."""
+@pytest.mark.asyncio
+async def test_active_hours_cover_every_hour_a_room_stays_open(adapter, db_session):
+    """Rematches in one room from 21:10 to 23:20 on two days are 21, 22 and 23, not 21 alone."""
     from datetime import datetime, timedelta, timezone
 
-    now = datetime.now(timezone(timedelta(hours=9)))
-    spar = [
-        _make_record(
-            room_id=9300 + i, user1_npid="tester_a", user2_npid="tester_b", created_dt=now - timedelta(minutes=i)
-        )
-        for i in range(100)
+    KST = timezone(timedelta(hours=9))
+    base = (datetime.now(KST) - timedelta(days=1)).replace(hour=21, minute=10, second=0, microsecond=0)
+    rooms = [
+        _make_record(room_id=9301, user1_npid="longroom", created_dt=base),
+        _make_record(room_id=9302, user1_npid="longroom", created_dt=base - timedelta(days=1)),
     ]
-    regular = [
-        _make_record(
-            room_id=9500 + i, user1_npid="regular", user2_npid=f"guest{i}", created_dt=now - timedelta(minutes=i)
-        )
-        for i in range(90)
-    ]
-    await adapter.record_snapshot(db_session, spar + regular)
+    await adapter.record_snapshot(db_session, rooms)
+    for room in rooms:
+        await adapter.touch_rank_matches(db_session, [room], room.created_dt + timedelta(hours=2, minutes=10))
 
-
-@pytest.mark.asyncio
-async def test_weekly_top_ranks_by_match_count(adapter, db_session):
-    await _record_weekly_matches(adapter, db_session)
-
-    top = await adapter.get_weekly_top_players(db_session, limit=3)
-
-    # The two testers tie, and a tie has no defined order.
-    assert {(p.npid, p.match_count) for p in top[:2]} == {("tester_a", 100), ("tester_b", 100)}
-    assert (top[2].npid, top[2].match_count) == ("regular", 90)
-
-
-@pytest.mark.asyncio
-async def test_weekly_top_skips_excluded_npids_before_the_limit(adapter, db_session):
-    """Excluded accounts leave no gap: the next player moves up into the limit.
-
-    Matched case-insensitively, as RPCN usernames are.
-    """
-    await _record_weekly_matches(adapter, db_session)
-
-    top = await adapter.get_weekly_top_players(db_session, limit=1, excluded_npids=["TESTER_A", "tester_b"])
-
-    assert [p.npid for p in top] == ["regular"]
+    stats = await adapter.get_player_stats(db_session, "longroom", days=7)
+    assert stats.active_hours == [21, 22, 23]

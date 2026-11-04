@@ -329,7 +329,7 @@ async def test_a_deleted_comment_is_kept_but_stops_being_listed(repository):
         author_subject="author",
     )
 
-    await repository.delete_comment(reservation.id, comment.id, "author", datetime.now(timezone.utc))
+    await repository.delete_comment(reservation.id, comment.id, "author", datetime.now(timezone.utc), admin=False)
 
     assert await repository.list_comments(reservation.id) == []
     async with get_session_factory()() as session:
@@ -357,7 +357,7 @@ async def test_a_comment_id_from_another_reservation_is_not_found(repository):
     )
 
     with pytest.raises(ReservationNotFoundError):
-        await repository.delete_comment(mine.id, comment.id, "author", datetime.now(timezone.utc))
+        await repository.delete_comment(mine.id, comment.id, "author", datetime.now(timezone.utc), admin=False)
 
     assert [c.id for c in await repository.list_comments(theirs.id)] == [comment.id]
 

@@ -17,18 +17,21 @@ def app_module(monkeypatch):
     return importlib.import_module("app")
 
 
-async def test_lifespan_runs_the_collector_between_startup_and_shutdown(app_module, monkeypatch):
+async def test_lifespan_runs_the_workers_between_startup_and_shutdown(app_module, monkeypatch):
     events = []
-    started = asyncio.Event()
+    started = {name: asyncio.Event() for name in ("collector", "save_capture", "event_consumer")}
 
-    async def run():
-        started.set()
-        try:
-            await asyncio.Event().wait()
-        finally:
-            events.append("collector stopped")
+    def worker(name):
+        async def run():
+            started[name].set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                events.append(f"{name} stopped")
 
-    container = SimpleNamespace(collector=SimpleNamespace(run=run))
+        return SimpleNamespace(run=run)
+
+    container = SimpleNamespace(**{name: worker(name) for name in started})
 
     async def build_container(stack):
         events.append("built")
@@ -38,11 +41,12 @@ async def test_lifespan_runs_the_collector_between_startup_and_shutdown(app_modu
     monkeypatch.setattr(app_module, "build_container", build_container)
 
     async with app_module.lifespan(app_module.app):
-        await asyncio.wait_for(started.wait(), timeout=0.1)
+        await asyncio.wait_for(asyncio.gather(*(event.wait() for event in started.values())), timeout=0.1)
         assert app_module.app.state.container is container
 
-    # The collector reads through services, so it stops before they close.
-    assert events == ["built", "collector stopped", "closed"]
+    # The workers read through services, so all of them stop before those close.
+    assert events[0] == "built" and events[-1] == "closed"
+    assert sorted(events[1:-1]) == sorted(f"{name} stopped" for name in started)
 
 
 async def test_a_failing_startup_closes_what_it_had_opened(app_module, monkeypatch):

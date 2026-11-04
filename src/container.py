@@ -30,6 +30,9 @@ from matching.rpcn_lifecycle import SharedRpcnClient, create_client
 from matching.service import MatchingService
 from popup.adapters.postgresql import PostgresPopupRepository
 from popup.service import PopupService
+from records.adapters.postgresql import PostgresRecordsAdapter
+from records.service import RecordsService
+from records.workers import EventConsumer, SaveCapture
 from reservation.adapters.postgresql import PostgresReservationRepository
 from reservation.service import ReservationService
 from saves.adapters.save_admin_server import SaveAdminServer
@@ -47,6 +50,8 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Container:
     collector: Collector
+    save_capture: SaveCapture
+    event_consumer: EventConsumer
     auth: AuthService
     admin: AdminService
     chat: ChatService
@@ -55,6 +60,7 @@ class Container:
     history: HistoryService
     matching: MatchingService
     popups: PopupService
+    records: RecordsService
     reservations: ReservationService
     saves: SavesService
     streaming: StreamingService
@@ -74,8 +80,11 @@ async def build_container(stack: AsyncExitStack) -> Container:
 
     matching = MatchingService(game_server)
     history = HistoryService(PostgresHistoryAdapter(), sessions)
+    records = RecordsService(PostgresRecordsAdapter(), sessions, save_server, history)
     return Container(
         collector=Collector(matching, history),
+        save_capture=SaveCapture(records),
+        event_consumer=EventConsumer(records),
         auth=AuthService(RpcnApiServerAccountVerifier(rpcn_api)),
         admin=AdminService(RpcnApiServerAccountAdmin(rpcn_api)),
         # The bus is memory and goes with the process; nothing to close.
@@ -85,6 +94,7 @@ async def build_container(stack: AsyncExitStack) -> Container:
         history=history,
         matching=matching,
         popups=PopupService(PostgresPopupRepository(), sessions),
+        records=records,
         reservations=ReservationService(PostgresReservationRepository(sessions)),
         saves=SavesService(save_server),
         streaming=StreamingService(PostgresStreamChannelRepository(), chzzk, sessions),

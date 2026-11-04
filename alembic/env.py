@@ -8,6 +8,7 @@ import chat.entities  # noqa
 import community.entities  # noqa
 import history.entities  # noqa
 import popup.entities  # noqa
+import records.entities  # noqa
 import reservation.entities  # noqa
 import streaming.entities  # noqa
 

@@ -265,8 +265,14 @@ are the wire surface only.
 |--------|------|-------------|
 | GET | `/history/stats` | Hourly player activity (KST) |
 | GET | `/history/stats/daily` | Daily summary |
-| GET | `/history/stats/weekly-top` | Weekly top players |
 | GET | `/history/players/{npid}` | Per-player history |
+
+### Match records
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/records/matches` | Rank matches, newest first |
+| GET | `/records/weekly-top` | Players with the most matches in the last 7 days, with wins and losses |
 
 ### Community board
 

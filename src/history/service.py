@@ -13,7 +13,7 @@ from history.models import (
     HourlyActivity,
     PlayerStats,
     RankMatchSnapshotRecord,
-    TopPlayer,
+    RankRoom,
 )
 from history.ports import HistoryPort
 from shared.cache import cache_delete_pattern, cache_get, cache_set
@@ -31,6 +31,12 @@ class HistoryService:
         async with self._sessions() as session, session.begin():
             await self._repo.record_snapshot(session, rooms)
 
+    async def touch_rank_matches(self, rooms: list[RankMatchSnapshotRecord], observed_at: datetime) -> None:
+        if not rooms:
+            return
+        async with self._sessions() as session, session.begin():
+            await self._repo.touch_rank_matches(session, rooms, observed_at)
+
     async def record_daily_matched_players(self, npids: set[str], observed_at: datetime) -> None:
         """Record participants, then invalidate summaries only after commit."""
         if not any(npids):
@@ -43,6 +49,12 @@ class HistoryService:
         async with self._sessions() as session, session.begin():
             await self._repo.record_activity_snapshot(session, snapshot)
         cache_delete_pattern("history:daily:*")
+
+    # -- Read: rank-match rooms ----------------------------------------------
+
+    async def rank_room(self, npid: str, at: datetime) -> RankRoom | None:
+        async with self._sessions() as session:
+            return await self._repo.find_rank_room(session, npid, at)
 
     # -- Read: global stats --------------------------------------------------
 
@@ -61,18 +73,6 @@ class HistoryService:
             return cached
         async with self._sessions() as session:
             result = await self._repo.get_daily_summary(session, days)
-        cache_set(key, result, get_settings().cache_ttl_activity)
-        return result
-
-    # -- Read: weekly top players --------------------------------------------
-
-    async def get_weekly_top_players(self, limit: int = 10) -> list[TopPlayer]:
-        key = f"history:weekly_top:{limit}"
-        if cached := cache_get(key):
-            return cached
-        excluded = get_settings().ranking_excluded_npids
-        async with self._sessions() as session:
-            result = await self._repo.get_weekly_top_players(session, limit, excluded)
         cache_set(key, result, get_settings().cache_ttl_activity)
         return result
 

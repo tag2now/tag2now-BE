@@ -88,6 +88,7 @@ _FIELD_LABELS = {
     "allow_dismiss_forever": "다시 보지 않기",
     "allow_dismiss_day": "하루 동안 보지 않기",
     "active": "활성",
+    "q": "검색어",
 }
 
 

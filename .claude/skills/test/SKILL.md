@@ -111,7 +111,7 @@ fails them with `LoginAlreadyLoggedIn`. `docker ps` does not show a venv uvicorn
 powershell "Get-CimInstance Win32_Process -Filter \"Name like '%python%'\" | Where-Object { $_.CommandLine -match 'uvicorn' } | Select-Object ProcessId, CommandLine"
 ```
 
-Stop every match (the reloader's worker goes with its parent), then run all 147:
+Stop every match (the reloader's worker goes with its parent), then run all 170:
 
 ```bash
 .venv/Scripts/python.exe -m pytest tests/integration/ -v > test-results/integration.log 2>&1; echo "exit=$?"

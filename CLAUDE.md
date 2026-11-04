@@ -90,8 +90,8 @@ empty, so every deploy or restart starts with an empty cache.
 .venv/Scripts/python.exe -m pytest tests/unit/ -v                        # no external services needed
 docker compose -f compose.test.yml up -d --wait                          # Redis + PostgreSQL
 DATABASE_URL=postgresql+psycopg://tag2now:tag2now@127.0.0.1:5433/tag2now .venv/Scripts/python.exe -m alembic upgrade head
-.venv/Scripts/python.exe -m pytest tests/integration/ -v                 # all 147; stop any local backend first
-.venv/Scripts/python.exe -m pytest tests/integration/ -v -m "not rpcn"   # 134, what CI runs
+.venv/Scripts/python.exe -m pytest tests/integration/ -v                 # all 170; stop any local backend first
+.venv/Scripts/python.exe -m pytest tests/integration/ -v -m "not rpcn"   # 157, what CI runs
 ```
 
 - `tests/unit/` — pure logic; no network, no database.
@@ -106,7 +106,7 @@ community tests' `TRUNCATE` wiped the dev server's posts. Startup creates no
 tables, hence the `alembic` line above, once per fresh container.
 
 **The `rpcn` marker separates the live-RPCN modules from the rest.** Both live-RPCN modules carry a
-module-level `pytestmark = pytest.mark.rpcn`, so `-m "not rpcn"` leaves 134 tests
+module-level `pytestmark = pytest.mark.rpcn`, so `-m "not rpcn"` leaves 157 tests
 that need nothing but the two containers. CI runs exactly that, since it has no
 RPCN account. Locally the 13 marked tests run with the rest, as `.env.local`'s
 account, once every local backend is stopped.
@@ -181,19 +181,21 @@ Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leade
 
 ## Architecture
 
-Ten modules under `src/` --- eight domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
+Twelve modules under `src/` --- ten domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
 
 | Module | Responsibility |
 |--------|----------------|
 | `matching/` | Live rooms, leaderboard, matchmaking detection |
 | `history/` | Persisted snapshots, time-series statistics, the match collector |
+| `records/` | Who played whom: finished matches found in saves, queued in PostgreSQL, resolved to rooms, listed at `/records` |
+| `event/` | The rank event: every save against the baseline it began with |
 | `community/` | Message board — posts, comments, thumbs |
 | `reservation/` | Appointments — create, join, edit, cancel |
 | `chat/` | Two-day lobby chat, stored in PostgreSQL, pushed over SSE |
 | `auth/` | RPCN account login; stateless bearer tokens other routers depend on |
 | `saves/` | TTT2 saves through tag2now-save-admin: anyone's ranks for the profile, and admins' reads and edits |
 | `streaming/` | Players' own Chzzk channels, and who in a room is live — carried on `/rooms/all` as each user's `stream` |
-| `popup/` | Popups admins write and every visitor sees on opening the site, images stored in PostgreSQL. Spec: `docs/spec/11-popup.md` |
+| `popup/` | Popups admins write and every visitor sees on opening the site, images stored in PostgreSQL. Spec: `docs/spec/12-popup.md` |
 | `admin/` | RPCN account moderation (lookup, ban) through rpcn-narco's admin API, and the admin gate other routers use |
 | `shared/` | Settings, cache, database, exceptions, TTT2's ids and character/rank tables (`ttt2.py`), and the rpcn-narco API server client `auth/` and `admin/` share (`rpcn_api.py`) |
 | `rpcn_client/` | Standalone RPCN protocol client (no FastAPI dependency) |
@@ -294,8 +296,8 @@ one place adapters and services are constructed, called from `lifespan` with an
 `AsyncExitStack`: each resource is opened with `stack.enter_async_context(...)`,
 which registers its close in the same line, so shutdown runs in reverse and a
 failure part-way closes exactly what was already open. Code outside a request
-(the collector) is handed its services by the lifespan rather than reaching for
-them.
+(the collector, the match-record workers) is handed its services by the lifespan
+rather than reaching for them.
 
 A resource is a `shared.resource.AsyncResource`: `init` (optional) and `close`,
 and the async context manager built on them. The ports of outbound clients
@@ -418,6 +420,46 @@ cycle. A restart empties it, and the unique key
 `(room_id, user1_npid, user2_npid, match_date)` on `rank_match_snapshots`
 absorbs the matches then seen again.
 
+A room can hold several matches of the same two players, so a row is a room and
+not a match; every cycle moves its `last_seen_at`.
+
+### Match records
+
+`records/` works out who played whom from two sources that each lack half of it:
+saves have the result and the characters, rooms have the opponent. Two asyncio
+tasks beside the collector do it, so a save-admin outage stops only them.
+
+`SaveCapture` (10 s) reads saves past a `data_id` from save-admin, which decodes
+them, and compares each with `save_states`. **A finished match is a change in the
+cumulative tally, not a room and not a save:** a room is reused and half of all
+saves change nothing. The new state and the `match_events` row commit together.
+A missed save loses only the split between matches, since the next one still
+carries the totals.
+
+`EventConsumer` takes events with `FOR UPDATE SKIP LOCKED` and finds the room
+the player was in at that moment. **A match is one `matches` row**: each
+player is on a *side*, 1P or 2P --- the room snapshot's `user1` is 1P, since
+RPCN lists members by slot (`records.domain.side_of`) --- and `winner` is the
+winning side. The first player's event records the match; the second's only
+**fills** its side's `event_id`. Saves themselves are not kept. Spec:
+`docs/spec/11-records.md`.
+
+**`match_events` is the only record of what a player did in a match** ---
+characters, ranks, save time --- and `matches` points at it rather than
+copying it. Done events are never deleted, and reprocessing relies on it.
+
+Each character's rank is the one it **went into** the match at: the previous
+state's, or the result save's when that state has none (a first match, or a
+state kept before ranks). It rides on the event.
+
+`GET /records/matches` lists the `matches` rows newest first, paged by `before`
+id, filtered by `npid` (either side) or a name `q`. No per-player totals: the
+lifetime record is the save's.
+
+`GET /records/weekly-top` (the FE's 주간 철찌) and `GET /records/opponents`
+count a match for a player **only when their own save showed it against an
+opponent a room named** --- one rule, `_counted` in the adapter.
+
 ### RPCN client lifecycle
 
 `matching/rpcn_lifecycle.py`'s `SharedRpcnClient` holds one `RpcnClient` behind a `threading.Lock`, since the underlying socket is not concurrency-safe. The container builds one and hands it to `RpcnGameServerAdapter`; use its `api_client()` context manager rather than constructing a client:
@@ -465,8 +507,9 @@ error array. A new user-facing request field belongs in that map.
 | `/popups` | `popup/router.py` — `GET /active`, `GET /{id}/image`, public |
 | `/admin/popups` | `popup/router.py` (`admin_router`) — `GET`, `POST`, `PUT /{id}`, `DELETE /{id}`; admins only, no password, writes are multipart |
 | *(none)* | `matching/router.py` — `/game-data`, `/servers`, `/rooms/all`, `/leaderboard` |
-| `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/stats/weekly-top`, `/players/{npid}` |
+| `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/players/{npid}` |
 | `/community` | `community/router.py` — posts, comments, thumbs |
+| `/records` | `records/router.py` — `GET /matches`, `GET /weekly-top`, `GET /opponents`, public |
 | `/reservations` | `reservation/router.py` — list, create, read one (`GET /{id}`), edit (`PATCH`), join, cancel |
 | `/chat` | `chat/router.py` — `GET /stream` (SSE, public), `POST /messages`, `DELETE /messages/{id}` |
 | *(none)* | `/health` in `app.py`, excluded from the schema |
@@ -540,6 +583,10 @@ The SSH and ECR settings are **org-level** secrets/variables on the `tag2now`
 org, shared with tag2now-FE; this repo defines only `ECR_REPOSITORY`
 (`tag2-now/be`) and its own `production` environment. See the
 [Actions configuration](docs/aws-setup.md#actions-configuration) table.
+
+**For SSH into the instance by hand, look in this repository's root or the
+folder above it before `~/.ssh`.** The login and key are kept there, outside
+any repository, so they are never committed.
 
 Full infrastructure notes, including the Athena analytics setup, live in [docs/aws-setup.md](docs/aws-setup.md). The RPCN server source (rpcn-narco) is at `D:/project/tag2now/rpcn-narco`.
 

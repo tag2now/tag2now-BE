@@ -29,6 +29,9 @@
 
 관측 간격이 30초이므로, 인원 2명 상태가 30초보다 짧게 끝난 방은 놓칠 수 있다.
 
+방은 같은 두 사람의 여러 판에 재사용되므로 행 하나는 한 판이 아니라 **방 하나**다. 매 사이클 현재 방의
+`last_seen_at`을 갱신하고, 전적(11-records.md)이 이 구간으로 그 시각의 상대를 찾는다.
+
 ## 저장 스키마 (PostgreSQL)
 
 | 대상 | 내용 |
@@ -45,12 +48,14 @@
 |-----------|----------|------|
 | `GET /history/stats` | `days` 1~90 (기본 7) | KST 시간대(0~23)별 평균/최대 접속자 |
 | `GET /history/stats/daily` | `days` 1~90 (기본 30) | 일자별 최대/평균 접속자, 최대 방 수, 유니크 대전 참가자 수 |
-| `GET /history/stats/weekly-top` | `limit` 1~50 (기본 10) | 최근 7일 관측 빈도 상위 플레이어 (`npid`, `online_name`, `match_count`) |
-| `GET /history/players/{npid}` | `days` 1~90 (기본 30) | 활동 일수, 관측 횟수, 최초/최종 목격, 방 종류별 횟수, 자주 만난 상대, 활동 시간대 |
+| `GET /history/players/{npid}` | `days` 1~90 (기본 30) | 활동 일수, 관측 횟수, 최초/최종 목격, 방 종류별 횟수, 활동 시간대 |
 
-주간 top은 `RANKING_EXCLUDED_NPIDS`(JSON 목록, 대소문자 무시)에 든 RPCN username을 빼고 센다.
-테스트 계정용이며, RPCN 리더보드(02-leaderboard.md)와 현재 계급 리더보드(09-save-admin.md)에서도 같은 목록을 뺀다. `LIMIT` 전에 SQL에서 거르므로 빠진 자리는 다음 순위가 채운다.
-online_name은 중복·변경될 수 있어 기준으로 쓰지 않는다.
+주간 top(주간 철찌)은 전적에서 센다: `GET /records/weekly-top`, [11-records.md](11-records.md#주간-top).
+프로필의 '자주 함께한 플레이어'도 전적에서 센다: `GET /records/opponents`, [11-records.md](11-records.md#자주-만난-상대).
+
+**활동 시간대**는 최근 7일(`days`와 무관) 동안 그 플레이어의 랭크 매치 방이 열려 있던 KST 시간 가운데, 서로 다른
+통계일 이틀 이상에 나온 시간이다. 방 하나는 `created_dt`부터 `last_seen_at`까지 걸친 모든 시간으로 센다. 재대결은
+같은 방에서 이어지므로 생성 시각만 보면 그 뒤 시간이 빠진다. `last_seen_at`이 생기기 전의 방은 생성 시각 한 칸이다.
 
 모든 읽기는 read-through 캐시(TTL 300s)를 거친다. 쓰기 경로는 **커밋 이후에** `history:daily:*` 패턴을 무효화한다.
 
@@ -61,7 +66,7 @@ online_name은 중복·변경될 수 있어 기준으로 쓰지 않는다.
 ### 통계 탭 (`/stats`)
 
 - 시간대별 접속 곡선, 일별 요약 차트(recharts), 주간 상위 플레이어 표.
-- 주간 top 응답에는 캐릭터 정보가 없다. 리더보드 데이터를 npid로 조인해 초상화를 채우고,
+- 주간 top 응답에는 캐릭터 정보가 없다(판수와 승/패만 있다). 리더보드 데이터를 npid로 조인해 초상화를 채우고,
   리더보드에 없는 플레이어는 열을 지우지 않고 대시(`—`)로 표시한다.
 - recharts는 SVG 속성을 그리므로 CSS 변수를 못 읽는다. `chartTheme.ts`가 `@theme` 토큰을 JS 상수로 미러링한다.
 

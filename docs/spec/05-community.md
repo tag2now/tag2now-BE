@@ -63,6 +63,24 @@ TTT2는 2인 태그 팀으로 싸우므로 글 하나에 **캐릭터를 최대 2
   부모가 없거나 목록에 없으면 최상위로 승격된다(고아 댓글이 사라지지 않는다).
 - 상세 조회는 글과 댓글을 `asyncio.gather`로 동시에 읽는다.
 
+### 댓글 삭제
+
+`DELETE /community/posts/{post_id}/comments/{comment_id}` — 작성자 본인 또는 관리자(204).
+규칙은 `community/service.py`의 `ensure_can_delete_comment`이고, 토큰의 `admin` claim을 믿는다.
+
+| 경우 | 결과 |
+|------|------|
+| 남의 댓글, 관리자 아님 | 403 |
+| 없는 댓글, 이미 삭제된 댓글, 경로의 글에 달리지 않은 댓글 | 404 |
+| 삭제된 댓글에 답글 | 404 |
+
+삭제는 **소프트 삭제**(`comments.deleted_at`)다. 행을 지우면 FK `ON DELETE CASCADE`가 답글까지 지우기 때문이다.
+상세 조회의 트리 조립이 삭제분을 정리한다.
+
+- 살아있는 답글이 달린 삭제 댓글은 `deleted: true`, `body: ""`로 남아 답글의 자리를 지킨다. 화면은 "삭제된 댓글입니다."를 보인다.
+- 그 밖의 삭제 댓글(답글, 답글이 없거나 모두 삭제된 최상위 댓글)은 응답에서 빠진다.
+- 목록의 `comment_count`는 삭제분을 세지 않는다.
+
 ## 추천 (게시글 한정)
 
 `POST /community/posts/{post_id}/thumb` — `{"direction": "up" | "down"}`.
@@ -80,7 +98,7 @@ TTT2는 2인 태그 팀으로 싸우므로 글 하나에 **캐릭터를 최대 2
 ## 캐싱
 
 - 목록: `community:posts:p{page}:s{size}:t{type}:c{정렬된 캐릭터}`, 상세: `community:post:{id}`. TTL 30초.
-- **무효화는 서비스가 쓰기 직후에 한다**. 글 작성 시 목록(`community:posts:*`), 수정·삭제 시 목록과 해당 상세, 댓글·추천 시 상세(`community:post:{id}`).
+- **무효화는 서비스가 쓰기 직후에 한다**. 글 작성 시 목록(`community:posts:*`), 수정·삭제 시 목록과 해당 상세, 댓글 작성·삭제와 추천 시 상세(`community:post:{id}`).
 
 ## 저장소
 

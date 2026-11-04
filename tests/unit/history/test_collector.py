@@ -38,12 +38,14 @@ def collector_io():
     io.record_players = AsyncMock()
     io.record_activity = AsyncMock()
     io.record_matches = AsyncMock()
+    io.touch_matches = AsyncMock()
     io.collector = collector.Collector(
         MagicMock(collect_activity_observation=io.observe),
         MagicMock(
             record_daily_matched_players=io.record_players,
             record_activity_snapshot=io.record_activity,
             record_snapshot=io.record_matches,
+            touch_rank_matches=io.touch_matches,
         ),
     )
     return io
@@ -113,6 +115,18 @@ async def test_collect_once_records_a_match_only_on_the_cycle_it_first_appears(c
         await collector_io.collector.collect_once()
 
     assert _recorded_room_ids(collector_io.record_matches) == [[1], [2]]
+
+
+@pytest.mark.asyncio
+async def test_collect_once_keeps_every_room_in_view_marked_as_seen(collector_io):
+    first, second = _rank_match(1, "a", "b"), _rank_match(2, "c", "d")
+    collector_io.observe.side_effect = [_observation([first, second]), _observation([second])]
+
+    for _ in range(2):
+        await collector_io.collector.collect_once()
+
+    touched = [[room.room_id for room in call.args[0]] for call in collector_io.touch_matches.await_args_list]
+    assert touched == [[1, 2], [2]]
 
 
 @pytest.mark.asyncio
