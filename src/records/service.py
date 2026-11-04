@@ -11,7 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from history.service import HistoryService
 from records import domain
-from records.models import MatchEvent, MatchRecordOut, MatchRecordPageOut, PlayerSave, WeeklyPlayer
+from records.models import (
+    MatchEvent,
+    MatchRecordOut,
+    MatchRecordPageOut,
+    OpponentRecord,
+    PlayerSave,
+    WeeklyPlayer,
+)
 from records.ports import RecordsPort
 from saves.ports import SaveServer
 from shared.cache import cache_get, cache_set
@@ -24,6 +31,8 @@ _CAPTURE_LIMIT = 200
 # data_ids are handed out before their row commits, so a lower id can appear after a higher one.
 _CAPTURE_OVERLAP = 16
 _WEEK = timedelta(days=7)
+# The player card has room for four.
+_OPPONENT_LIMIT = 4
 
 
 class RecordsService:
@@ -120,4 +129,15 @@ class RecordsService:
                 session, self._clock.now() - _WEEK, limit, settings.ranking_excluded_npids
             )
         cache_set(key, result, settings.cache_ttl_activity)
+        return result
+
+    async def frequent_opponents(self, npid: str, days: int) -> list[OpponentRecord]:
+        key = f"records:opponents:{npid}:{days}"
+        if cached := cache_get(key):
+            return cached
+        async with self._sessions() as session:
+            result = await self._repo.frequent_opponents(
+                session, npid, self._clock.now() - timedelta(days=days), _OPPONENT_LIMIT
+            )
+        cache_set(key, result, get_settings().cache_ttl_player_hours)
         return result

@@ -123,6 +123,17 @@ class WeeklyPlayer:
     losses: int
 
 
+@dataclass(frozen=True)
+class OpponentRecord:
+    """One opponent of a player, with that player's wins and losses against them."""
+
+    npid: str
+    online_name: str
+    match_count: int
+    wins: int
+    losses: int
+
+
 # -- Responses -----------------------------------------------------------------
 
 

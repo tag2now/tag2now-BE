@@ -135,6 +135,20 @@ null이다. 규칙은 `records.domain.seat`.
   거르므로 빠진 자리는 다음 순위가 채운다.
 - read-through 캐시(`records:weekly_top:{limit}`, `cache_ttl_activity` 300초).
 
+## 자주 만난 상대
+
+`GET /records/opponents?npid=&days=` (`days` 1~90, 기본 30), 공개. 프로필의 '자주 함께한 플레이어'다.
+
+```
+[{ npid, online_name, match_count, wins, losses }]
+```
+
+- 그 플레이어의 최근 `days`일 판을 상대별로 세어 판수 내림차순(같으면 npid 순) 4명을 낸다. 승패는 그 플레이어 기준이다.
+- **자기 세이브가 확인된 판만 센다**(`npid`가 그 플레이어이고 `opponent_npid`가 있는 행). 상대 세이브가 없어도 결과는 자기
+  행에 있으므로 센다. 상대 세이브로만 기록된 판은 빠진다.
+- `online_name`은 그 판들의 방 스냅샷에서 상대 쪽 이름을 읽는다.
+- read-through 캐시(`records:opponents:{npid}:{days}`, `cache_ttl_player_hours` 300초).
+
 ## 재처리
 
 상대 매칭 규칙을 바꾼 뒤에는 SQL로 다시 돌린다. 소비자가 그대로 처리한다.
@@ -183,6 +197,3 @@ SELECT count(*) FROM match_results a JOIN match_results b
 ## 하지 않는 것
 
 세이브 원본 보관, 비랭크 매치, RPCN 수정, 플레이어별 승패 합계.
-
-자주 만난 상대(`GET /history/players/{npid}`)는 아직 `rank_match_snapshots` 기준이라 방 재사용 때문에 실제 판수보다
-적다. 옮기는 것은 따로 검토한다.

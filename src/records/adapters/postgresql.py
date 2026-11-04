@@ -18,6 +18,7 @@ from records.models import (
     MatchEvent,
     MatchOutcome,
     MatchPlayer,
+    OpponentRecord,
     PlayerMatch,
     PlayerSave,
     RecordedMatch,
@@ -285,3 +286,28 @@ class PostgresRecordsAdapter(RecordsPort):
             .limit(limit)
         )
         return [WeeklyPlayer(row.npid, row.online_name, row.match_count, row.wins, row.losses) for row in rows]
+
+    async def frequent_opponents(
+        self, session: AsyncSession, npid: str, since: datetime, limit: int
+    ) -> list[OpponentRecord]:
+        own, room = MatchResultRow, RankMatchSnapshotRow
+        online_name = case((room.user1_npid == own.opponent_npid, room.user1_online_name), else_=room.user2_online_name)
+        match_count = func.count()
+        rows = await session.execute(
+            select(
+                own.opponent_npid,
+                func.max(online_name).label("online_name"),
+                match_count.label("match_count"),
+                func.count().filter(own.result == MatchOutcome.WIN).label("wins"),
+                func.count().filter(own.result == MatchOutcome.LOSS).label("losses"),
+            )
+            # A result with an opponent always has its room.
+            .join(room, room.id == own.room_snapshot_id)
+            .where(own.npid == npid, own.opponent_npid.is_not(None), own.played_at >= since)
+            .group_by(own.opponent_npid)
+            .order_by(match_count.desc(), own.opponent_npid)
+            .limit(limit)
+        )
+        return [
+            OpponentRecord(row.opponent_npid, row.online_name, row.match_count, row.wins, row.losses) for row in rows
+        ]

@@ -51,6 +51,8 @@
 | `GET /history/players/{npid}` | `days` 1~90 (기본 30) | 활동 일수, 관측 횟수, 최초/최종 목격, 방 종류별 횟수, 자주 만난 상대, 활동 시간대 |
 
 주간 top(주간 철찌)은 전적에서 센다: `GET /records/weekly-top`, [11-records.md](11-records.md#주간-top).
+프로필의 '자주 함께한 플레이어'도 전적에서 센다: `GET /records/opponents`, [11-records.md](11-records.md#자주-만난-상대).
+위 표의 '자주 만난 상대'는 방 수를 센 이전 값으로, FE가 옮겨 간 뒤 지운다.
 
 모든 읽기는 read-through 캐시(TTL 300s)를 거친다. 쓰기 경로는 **커밋 이후에** `history:daily:*` 패턴을 무효화한다.
 

@@ -499,7 +499,7 @@ error array. A new user-facing request field belongs in that map.
 | *(none)* | `matching/router.py` — `/game-data`, `/servers`, `/rooms/all`, `/leaderboard` |
 | `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/players/{npid}` |
 | `/community` | `community/router.py` — posts, comments, thumbs |
-| `/records` | `records/router.py` — `GET /matches`, `GET /weekly-top`, public |
+| `/records` | `records/router.py` — `GET /matches`, `GET /weekly-top`, `GET /opponents`, public |
 | `/reservations` | `reservation/router.py` — list, create, read one (`GET /{id}`), edit (`PATCH`), join, cancel |
 | `/chat` | `chat/router.py` — `GET /stream` (SSE, public), `POST /messages`, `DELETE /messages/{id}` |
 | *(none)* | `/health` in `app.py`, excluded from the schema |

@@ -494,3 +494,64 @@ async def test_weekly_top_skips_excluded_npids_before_the_limit(world):
     await _played_match(records, saves, history)
 
     assert await _weekly(limit=1, excluded=[ALICE.upper()]) == [(BOB, BOB, 1, 0, 1)]
+
+
+# --- frequent opponents ---------------------------------------------------------
+
+
+async def _opponents(npid, since=_START, limit=4):
+    """(npid, name, matches, wins, losses) per opponent, read straight from the adapter past the cache."""
+    async with get_session_factory()() as session:
+        found = await PostgresRecordsAdapter().frequent_opponents(session, npid, since, limit)
+    return [(o.npid, o.online_name, o.match_count, o.wins, o.losses) for o in found]
+
+
+async def test_frequent_opponents_count_every_match_in_a_reused_room_once(world):
+    records, saves, history, _ = world
+    await _open_room(history)
+    await _capture(records, saves, _save(ALICE, 1), _save(BOB, 2))
+    await _capture(records, saves, _save(ALICE, 3, wins=1, at=_at(3)), _save(BOB, 4, losses=1, at=_at(3, 4)))
+    await _capture(
+        records, saves, _save(ALICE, 5, wins=1, losses=1, at=_at(6)), _save(BOB, 6, wins=1, losses=1, at=_at(6, 2))
+    )
+    await _capture(
+        records, saves, _save(ALICE, 7, wins=2, losses=1, at=_at(9)), _save(BOB, 8, wins=1, losses=2, at=_at(9, 3))
+    )
+    await _drain(records)
+
+    assert await _opponents(ALICE) == [(BOB, BOB, 3, 2, 1)]
+    assert await _opponents(BOB) == [(ALICE, ALICE, 3, 1, 2)]
+
+
+async def test_frequent_opponents_count_only_matches_the_player_s_own_save_showed(world):
+    records, saves, history, _ = world
+    await _open_room(history)
+    await _capture(records, saves, _save(ALICE, 1))
+    await _capture(records, saves, _save(ALICE, 2, wins=1, at=_at(3)))
+    await _drain(records)
+
+    assert await _opponents(ALICE) == [(BOB, BOB, 1, 1, 0)]
+    assert await _opponents(BOB) == []
+
+
+async def test_frequent_opponents_leave_out_matches_before_their_window(world):
+    records, saves, history, _ = world
+    await _played_match(records, saves, history)
+
+    assert await _opponents(ALICE, since=_at(4)) == []
+
+
+async def test_frequent_opponents_put_the_most_met_first_and_stop_at_the_limit(world):
+    records, saves, history, _ = world
+    await _open_room(history, until=_at(10))
+    carol_room = RankMatchSnapshotRecord(_ROOM_ID + 1, 10, ALICE, ALICE, CAROL, CAROL, _at(20))
+    await history.record_snapshot([carol_room])
+    await history.touch_rank_matches([carol_room], _at(40))
+    await _capture(records, saves, _save(ALICE, 1))
+    await _capture(records, saves, _save(ALICE, 2, wins=1, at=_at(3)))
+    await _capture(records, saves, _save(ALICE, 3, wins=2, at=_at(6)))
+    await _capture(records, saves, _save(ALICE, 4, wins=2, losses=1, at=_at(25)))
+    await _drain(records)
+
+    assert await _opponents(ALICE) == [(BOB, BOB, 2, 2, 0), (CAROL, CAROL, 1, 0, 1)]
+    assert await _opponents(ALICE, limit=1) == [(BOB, BOB, 2, 2, 0)]

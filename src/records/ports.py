@@ -7,7 +7,15 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from history.models import RankOpponent
-from records.models import MatchEvent, MatchOutcome, PlayerMatch, PlayerSave, RecordedMatch, WeeklyPlayer
+from records.models import (
+    MatchEvent,
+    MatchOutcome,
+    OpponentRecord,
+    PlayerMatch,
+    PlayerSave,
+    RecordedMatch,
+    WeeklyPlayer,
+)
 
 
 class RecordsPort(ABC):
@@ -81,3 +89,10 @@ class RecordsPort(ABC):
     ) -> list[WeeklyPlayer]:
         """Return the `limit` players with the most matches since `since`, counting only matches
         both sides' saves confirmed and skipping excluded npids."""
+
+    @abstractmethod
+    async def frequent_opponents(
+        self, session: AsyncSession, npid: str, since: datetime, limit: int
+    ) -> list[OpponentRecord]:
+        """Return the `limit` opponents the player met most since `since`, counting only matches
+        the player's own save showed."""

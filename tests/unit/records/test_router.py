@@ -1,4 +1,4 @@
-"""GET /records/matches and /records/weekly-top: their queries, and the shapes they answer in."""
+"""GET /records/matches, /records/weekly-top and /records/opponents: their queries, and the shapes they answer in."""
 
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock
@@ -7,7 +7,15 @@ import pytest
 from fastapi.testclient import TestClient
 
 from records.dependencies import records_service
-from records.models import MatchOutcome, MatchRecordOut, MatchRecordPageOut, MatchPlayer, RecordedMatch, WeeklyPlayer
+from records.models import (
+    MatchOutcome,
+    MatchPlayer,
+    MatchRecordOut,
+    MatchRecordPageOut,
+    OpponentRecord,
+    RecordedMatch,
+    WeeklyPlayer,
+)
 
 _AT = datetime(2026, 11, 3, 0, 41, tzinfo=timezone.utc)
 
@@ -19,6 +27,7 @@ def client_and_service():
     service = AsyncMock()
     service.list_matches.return_value = MatchRecordPageOut(matches=[], next_before=None)
     service.weekly_top_players.return_value = [WeeklyPlayer("alice", "Alice", 3, 2, 1)]
+    service.frequent_opponents.return_value = [OpponentRecord("bob", "Bob", 3, 2, 1)]
     app.dependency_overrides[records_service] = lambda: service
     yield TestClient(app), service  # no `with`: lifespan stays off, the service is ours
     app.dependency_overrides.pop(records_service)
@@ -78,3 +87,17 @@ def test_refuses_a_weekly_top_out_of_range(client_and_service, limit):
     client, service = client_and_service
     assert client.get("/records/weekly-top", params={"limit": limit}).status_code == 422
     service.weekly_top_players.assert_not_awaited()
+
+
+def test_frequent_opponents_answer_each_opponent_with_the_player_s_wins_and_losses(client_and_service):
+    client, service = client_and_service
+    response = client.get("/records/opponents", params={"npid": "alice"})
+    assert response.json() == [{"npid": "bob", "online_name": "Bob", "match_count": 3, "wins": 2, "losses": 1}]
+    service.frequent_opponents.assert_awaited_once_with("alice", 30)
+
+
+@pytest.mark.parametrize("params", [{}, {"npid": ""}, {"npid": "alice", "days": 0}, {"npid": "alice", "days": 91}])
+def test_refuses_frequent_opponents_without_a_player_or_out_of_range(client_and_service, params):
+    client, service = client_and_service
+    assert client.get("/records/opponents", params=params).status_code == 422
+    service.frequent_opponents.assert_not_awaited()

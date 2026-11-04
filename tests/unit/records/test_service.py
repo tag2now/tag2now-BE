@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from history.models import RankOpponent
-from records.models import CharTally, MatchEvent, MatchOutcome, PlayerSave, WeeklyPlayer
+from records.models import CharTally, MatchEvent, MatchOutcome, OpponentRecord, PlayerSave, WeeklyPlayer
 from records.ports import RecordsPort
 from records.service import RecordsService
 from shared.clock import Clock
@@ -184,7 +184,7 @@ def cache(monkeypatch):
     monkeypatch.setattr("records.service.cache_set", lambda key, value, ttl: store.__setitem__(key, value))
     monkeypatch.setattr(
         "records.service.get_settings",
-        lambda: SimpleNamespace(ranking_excluded_npids=["tester"], cache_ttl_activity=300),
+        lambda: SimpleNamespace(ranking_excluded_npids=["tester"], cache_ttl_activity=300, cache_ttl_player_hours=300),
     )
     return store
 
@@ -205,3 +205,24 @@ async def test_a_cached_weekly_top_reads_nothing(service, repo, cache):
 
     assert await service.weekly_top_players(10) == [{"npid": "alice"}]
     repo.weekly_top_players.assert_not_awaited()
+
+
+# --- frequent opponents ---------------------------------------------------------
+
+
+async def test_frequent_opponents_count_the_days_asked_for_and_keep_four(service, repo, cache):
+    repo.frequent_opponents.return_value = [OpponentRecord("bob", "Bob", 3, 2, 1)]
+
+    opponents = await service.frequent_opponents("alice", 30)
+
+    assert opponents == repo.frequent_opponents.return_value
+    _, npid, since, limit = repo.frequent_opponents.await_args.args
+    assert (npid, since, limit) == ("alice", _NOW - timedelta(days=30), 4)
+    assert cache["records:opponents:alice:30"] == opponents
+
+
+async def test_cached_frequent_opponents_read_nothing(service, repo, cache):
+    cache["records:opponents:alice:7"] = [{"npid": "bob"}]
+
+    assert await service.frequent_opponents("alice", 7) == [{"npid": "bob"}]
+    repo.frequent_opponents.assert_not_awaited()

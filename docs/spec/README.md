@@ -54,7 +54,7 @@ RPCS3 유저 ──▶ RPCN 서버 (바이너리 프로토콜, TLS)
 |---|------|----------|--------------|
 | 1 | 실시간 방 목록 | `/match/:group` | `GET /rooms/all` |
 | 2 | 리더보드 | `/leaderboard` | `GET /leaderboard` |
-| 3 | 플레이어 조회 | 리더보드/통계 내 패널 | `GET /history/players/{npid}`, `GET /saves/players/{npid}` |
+| 3 | 플레이어 조회 | 리더보드/통계 내 패널 | `GET /history/players/{npid}`, `GET /records/opponents`, `GET /saves/players/{npid}` |
 | 4 | 통계 | `/stats` | `GET /history/stats`, `/stats/daily`, `GET /records/weekly-top` |
 | 5 | 예약 | `/reservation`, `/reservation/:id` | `/reservations` CRUD |
 | 6 | 커뮤니티 | `/community`, `/community/:postId` | `/community/posts` 등 |

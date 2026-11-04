@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, Query
 
 from records.dependencies import records_service
-from records.models import MatchRecordPageOut, WeeklyPlayer
+from records.models import MatchRecordPageOut, OpponentRecord, WeeklyPlayer
 from records.service import RecordsService
 
 router = APIRouter(prefix="/records", tags=["Records"])
@@ -31,3 +31,14 @@ async def weekly_top_players(
     """The players with the most rank matches in the last 7 days, with their wins and losses.
     Only matches both players' saves confirmed are counted."""
     return await service.weekly_top_players(limit)
+
+
+@router.get("/opponents", response_model=list[OpponentRecord])
+async def frequent_opponents(
+    npid: str = Query(min_length=1, max_length=64, description="The player whose opponents to answer"),
+    days: int = Query(30, ge=1, le=90, description="How many days back to count"),
+    service: RecordsService = Depends(records_service),
+):
+    """The four opponents a player met most, with the player's wins and losses against each.
+    Only matches the player's own save showed are counted."""
+    return await service.frequent_opponents(npid, days)
