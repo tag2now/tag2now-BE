@@ -18,11 +18,12 @@ class RankMatchSnapshotRecord:
 
 
 @dataclass(frozen=True)
-class RankOpponent:
-    """Who a player shared a rank-match room with, and the row that says so."""
+class RankRoom:
+    """The rank-match room a player was in, its members in RPCN's slot order."""
 
-    npid: str
     room_snapshot_id: int
+    user1_npid: str
+    user2_npid: str
 
 
 @dataclass

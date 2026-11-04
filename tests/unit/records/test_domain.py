@@ -2,8 +2,9 @@
 
 from datetime import datetime, timezone
 
-from records.domain import compare, seat
-from records.models import CharTally, Comparison, PlayerMatch, MatchOutcome, MatchPlayer, PlayerSave
+from history.models import RankRoom
+from records.domain import compare, outcome_of, side_of, winner
+from records.models import CharTally, Comparison, PlayerMatch, MatchOutcome, PlayerSave, Side
 
 _AT = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc)
 PAUL, JIN, LAW = 0, 9, 1
@@ -140,19 +141,22 @@ def test_a_save_read_from_save_admin_carries_each_character_s_rank():
     assert save.tallies == {9: CharTally(1, 2, 18)}
 
 
-# Seats: 1P is the room's first member.
+# Sides: 1P is the room's first member.
 
-_ALICE = MatchPlayer("alice", "Alice", MatchOutcome.WIN, (PAUL,), (20,))
-_BOB = MatchPlayer("bob", "Bob", MatchOutcome.LOSS, (JIN,), (18,))
-
-
-def test_the_player_first_in_the_room_is_1p():
-    assert seat(_ALICE, _BOB, "alice") == (_ALICE, _BOB)
+_ROOM = RankRoom(room_snapshot_id=1, user1_npid="alice", user2_npid="bob")
 
 
-def test_the_opponent_first_in_the_room_is_1p_whoever_was_seen():
-    assert seat(_ALICE, _BOB, "bob") == (_BOB, _ALICE)
+def test_the_room_s_first_member_is_1p_and_the_second_2p():
+    assert (side_of(_ROOM, "alice"), side_of(_ROOM, "bob")) == (Side.P1, Side.P2)
 
 
-def test_with_no_room_the_side_seen_is_1p():
-    assert seat(_ALICE, None, None) == (_ALICE, None)
+def test_with_no_room_the_player_seen_is_1p():
+    assert side_of(None, "bob") is Side.P1
+
+
+def test_the_winner_is_the_player_s_side_when_they_won_and_the_other_when_they_lost():
+    assert (winner(Side.P2, MatchOutcome.WIN), winner(Side.P2, MatchOutcome.LOSS)) == (Side.P2, Side.P1)
+
+
+def test_each_side_s_outcome_follows_the_winner():
+    assert (outcome_of(Side.P1, Side.P2), outcome_of(Side.P2, Side.P2)) == (MatchOutcome.LOSS, MatchOutcome.WIN)

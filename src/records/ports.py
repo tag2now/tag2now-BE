@@ -6,14 +6,14 @@ from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from history.models import RankOpponent
+from history.models import RankRoom
 from records.models import (
     MatchEvent,
-    MatchOutcome,
     OpponentRecord,
     PlayerMatch,
     PlayerSave,
     RecordedMatch,
+    Side,
     WeeklyPlayer,
 )
 
@@ -53,26 +53,24 @@ class RecordsPort(ABC):
     async def fail_event(self, session: AsyncSession, event: MatchEvent, error: str, now: datetime) -> None:
         """Schedule the event's next attempt, or bury it after the last."""
 
-    # -- Results -------------------------------------------------------------
-
-    @abstractmethod
-    async def add_result(self, session: AsyncSession, event: MatchEvent, opponent: RankOpponent | None) -> int:
-        """Store one player's side of a match and return its id."""
+    # -- Matches -------------------------------------------------------------
 
     @abstractmethod
     async def lock_room(self, session: AsyncSession, room_snapshot_id: int) -> None:
-        """Serialize result writes for one room until the transaction ends."""
+        """Serialize match writes for one room until the transaction ends."""
 
     @abstractmethod
-    async def link_counterpart(
-        self,
-        session: AsyncSession,
-        result_id: int,
-        opponent: RankOpponent,
-        wanted: MatchOutcome,
-        played_at: datetime,
+    async def fill_side(
+        self, session: AsyncSession, event: MatchEvent, room: RankRoom, side: Side, winner: Side
     ) -> bool:
-        """Join a result to the opponent's side of the same match, when it has arrived."""
+        """Put the event on a match of that room, near its save, with the same winner and `side` still unseen.
+        False when there is none."""
+
+    @abstractmethod
+    async def add_match(
+        self, session: AsyncSession, event: MatchEvent, room: RankRoom | None, side: Side, winner: Side
+    ) -> None:
+        """Record a new match with the event on `side`."""
 
     # -- Reading -------------------------------------------------------------
 
@@ -88,7 +86,7 @@ class RecordsPort(ABC):
         self, session: AsyncSession, since: datetime, limit: int, excluded_npids: Sequence[str]
     ) -> list[WeeklyPlayer]:
         """Return the `limit` players with the most matches since `since`, counting only matches
-        both sides' saves confirmed and skipping excluded npids."""
+        their own save showed against a known opponent, and skipping excluded npids."""
 
     @abstractmethod
     async def frequent_opponents(

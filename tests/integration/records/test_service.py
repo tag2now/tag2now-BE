@@ -11,17 +11,18 @@ from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 
 from history.adapters.postgresql import PostgresHistoryAdapter
 from history.entities import RankMatchSnapshotRow
 from history.models import RankMatchSnapshotRecord
 from history.service import HistoryService
 from records.adapters.postgresql import PostgresRecordsAdapter
-from records.entities import MatchEventRow, MatchResultRow, SaveStateRow
+from records.entities import MatchEventRow, MatchRow, SaveStateRow
 from records.service import RecordsService
 from shared.clock import Clock
 from shared.database import close_database, get_session_factory, init_database
+from shared.ttt2 import TEKKEN_RANKS
 
 ALICE, BOB, CAROL = "records-alice", "records-bob", "records-carol"
 _NPIDS = [ALICE, BOB, CAROL]
@@ -39,7 +40,7 @@ class _Clock(Clock):
 
 async def _clean():
     async with get_session_factory()() as session, session.begin():
-        await session.execute(delete(MatchResultRow).where(MatchResultRow.npid.in_(_NPIDS)))
+        await session.execute(delete(MatchRow).where(or_(MatchRow.p1_npid.in_(_NPIDS), MatchRow.p2_npid.in_(_NPIDS))))
         await session.execute(delete(MatchEventRow).where(MatchEventRow.npid.in_(_NPIDS)))
         await session.execute(delete(SaveStateRow).where(SaveStateRow.npid.in_(_NPIDS)))
         await session.execute(delete(RankMatchSnapshotRow).where(RankMatchSnapshotRow.user1_npid.in_(_NPIDS)))
@@ -96,6 +97,17 @@ async def _rows_of_state(npid):
 async def _drain(records):
     while await records.process_next():
         pass
+
+
+async def _matches():
+    async with get_session_factory()() as session:
+        players = or_(MatchRow.p1_npid.in_(_NPIDS), MatchRow.p2_npid.in_(_NPIDS))
+        return list((await session.execute(select(MatchRow).where(players).order_by(MatchRow.id))).scalars())
+
+
+def _shape(match):
+    """(1P, 2P, winning side, 1P's save seen, 2P's save seen)."""
+    return match.p1_npid, match.p2_npid, match.winner, match.p1_event_id is not None, match.p2_event_id is not None
 
 
 # --- outbox ---------------------------------------------------------------------
@@ -185,7 +197,7 @@ async def test_a_crash_while_holding_an_event_leaves_it_pending(world):
 async def test_a_failed_event_waits_for_its_retry(world, monkeypatch):
     records, saves, history, clock = world
     await _queued_wins(records, saves, count=1)
-    monkeypatch.setattr(history, "rank_opponent", AsyncMock(side_effect=RuntimeError("hiccup")))
+    monkeypatch.setattr(history, "rank_room", AsyncMock(side_effect=RuntimeError("hiccup")))
 
     assert await records.process_next() is True
 
@@ -193,24 +205,24 @@ async def test_a_failed_event_waits_for_its_retry(world, monkeypatch):
     assert (event.status, event.attempts, event.last_error) == ("pending", 1, "hiccup")
     assert event.available_at > clock.now()
     assert await records.process_next() is False
-    assert await _rows(MatchResultRow, MatchResultRow.npid == ALICE) == []
+    assert await _matches() == []
 
 
 async def test_a_failed_attempt_leaves_no_partial_result(world, monkeypatch):
     records, saves, history, _ = world
     await _open_room(history)
     await _queued_wins(records, saves, count=1)
-    monkeypatch.setattr(records._repo, "link_counterpart", AsyncMock(side_effect=RuntimeError("hiccup")))
+    monkeypatch.setattr(records._repo, "finish_event", AsyncMock(side_effect=RuntimeError("hiccup")))
 
     await records.process_next()
 
-    assert await _rows(MatchResultRow, MatchResultRow.npid == ALICE) == []
+    assert await _matches() == []
 
 
 async def test_an_event_is_buried_after_its_last_attempt(world, monkeypatch):
     records, saves, history, clock = world
     await _queued_wins(records, saves, count=1)
-    monkeypatch.setattr(history, "rank_opponent", AsyncMock(side_effect=RuntimeError("hiccup")))
+    monkeypatch.setattr(history, "rank_room", AsyncMock(side_effect=RuntimeError("hiccup")))
 
     for _ in range(5):
         clock.at += timedelta(hours=1)
@@ -229,23 +241,23 @@ def _at(minutes: int, seconds: int = 0) -> datetime:
     return _START + timedelta(minutes=minutes, seconds=seconds)
 
 
-async def test_both_sides_of_a_match_are_joined_with_their_characters(world):
+async def test_both_players_of_a_match_share_its_row(world):
     records, saves, history, _ = world
     await _open_room(history)
-    await _capture(records, saves, _save(ALICE, 1, chars=(0,)), _save(BOB, 2, chars=(9, 1)))
-    await _capture(records, saves, _save(ALICE, 3, wins=1, at=_at(3), chars=(0,)))
-    await _capture(records, saves, _save(BOB, 4, losses=1, at=_at(3, 4), chars=(9, 1)))
+    await _capture(records, saves, _save(ALICE, 1), _save(BOB, 2))
+    await _capture(records, saves, _save(ALICE, 3, wins=1, at=_at(3)))
+    await _capture(records, saves, _save(BOB, 4, losses=1, at=_at(3, 4)))
 
     await _drain(records)
 
-    [alice] = await _rows(MatchResultRow, MatchResultRow.npid == ALICE)
-    [bob] = await _rows(MatchResultRow, MatchResultRow.npid == BOB)
-    assert (alice.result, alice.opponent_npid, alice.chars) == ("win", BOB, [0])
-    assert (bob.result, bob.opponent_npid, bob.chars) == ("loss", ALICE, [1, 9])
-    assert (alice.counterpart_id, bob.counterpart_id) == (bob.id, alice.id)
+    [match] = await _matches()
+    [alice] = await _rows(MatchEventRow, MatchEventRow.npid == ALICE)
+    [bob] = await _rows(MatchEventRow, MatchEventRow.npid == BOB)
+    assert (match.p1_npid, match.p2_npid, match.winner) == (ALICE, BOB, 1)
+    assert (match.p1_event_id, match.p2_event_id, match.played_at) == (alice.id, bob.id, _at(3))
 
 
-async def test_every_match_in_a_reused_room_joins_its_own_side(world):
+async def test_every_match_in_a_reused_room_is_a_row_of_its_own(world):
     records, saves, history, _ = world
     await _open_room(history)
     await _capture(records, saves, _save(ALICE, 1), _save(BOB, 2))
@@ -259,17 +271,14 @@ async def test_every_match_in_a_reused_room_joins_its_own_side(world):
 
     await _drain(records)
 
-    results = await _rows(MatchResultRow, MatchResultRow.npid.in_([ALICE, BOB]))
-    by_id = {row.id: row for row in results}
-    assert len(results) == 6
-    for row in results:
-        other = by_id[row.counterpart_id]
-        assert other.npid != row.npid
-        assert other.result != row.result
-        assert abs(other.played_at - row.played_at) < timedelta(seconds=10)
+    assert [_shape(match) for match in await _matches()] == [
+        (ALICE, BOB, 1, True, True),
+        (ALICE, BOB, 2, True, True),
+        (ALICE, BOB, 1, True, True),
+    ]
 
 
-async def test_a_quitter_leaves_the_winners_record_unconfirmed(world):
+async def test_a_quitter_s_side_stays_unseen(world):
     records, saves, history, _ = world
     await _open_room(history)
     await _capture(records, saves, _save(ALICE, 1))
@@ -277,22 +286,35 @@ async def test_a_quitter_leaves_the_winners_record_unconfirmed(world):
 
     await _drain(records)
 
-    [result] = await _rows(MatchResultRow, MatchResultRow.npid == ALICE)
-    assert (result.opponent_npid, result.counterpart_id) == (BOB, None)
+    assert [_shape(match) for match in await _matches()] == [(ALICE, BOB, 1, True, False)]
 
 
-async def test_a_match_outside_any_room_has_no_opponent(world):
+async def test_a_save_that_comes_late_fills_its_side_of_the_match(world):
+    records, saves, history, _ = world
+    await _open_room(history)
+    await _capture(records, saves, _save(ALICE, 1), _save(BOB, 2))
+    await _capture(records, saves, _save(ALICE, 3, wins=1, at=_at(3)))
+    await _drain(records)
+
+    await _capture(records, saves, _save(BOB, 4, losses=1, at=_at(3, 30)))
+    await _drain(records)
+
+    assert [_shape(match) for match in await _matches()] == [(ALICE, BOB, 1, True, True)]
+
+
+async def test_a_match_outside_any_room_puts_its_player_on_1p_and_keeps_a_loss(world):
     records, saves, _, _ = world
     await _capture(records, saves, _save(ALICE, 1))
-    await _capture(records, saves, _save(ALICE, 2, wins=1, at=_at(3)))
+    await _capture(records, saves, _save(ALICE, 2, losses=1, at=_at(3)))
 
     await _drain(records)
 
-    [result] = await _rows(MatchResultRow, MatchResultRow.npid == ALICE)
-    assert (result.opponent_npid, result.room_snapshot_id) == (None, None)
+    [match] = await _matches()
+    assert _shape(match) == (ALICE, None, 2, True, False)
+    assert match.room_snapshot_id is None
 
 
-async def test_two_wins_are_not_joined(world):
+async def test_two_wins_are_two_matches(world):
     records, saves, history, _ = world
     await _open_room(history)
     await _capture(records, saves, _save(ALICE, 1), _save(BOB, 2))
@@ -300,11 +322,10 @@ async def test_two_wins_are_not_joined(world):
 
     await _drain(records)
 
-    results = await _rows(MatchResultRow, MatchResultRow.npid.in_([ALICE, BOB]))
-    assert [result.counterpart_id for result in results] == [None, None]
+    assert [_shape(match) for match in await _matches()] == [(ALICE, BOB, 1, True, False), (ALICE, BOB, 2, False, True)]
 
 
-async def test_sides_too_far_apart_are_not_the_same_match(world):
+async def test_saves_too_far_apart_are_two_matches(world):
     records, saves, history, _ = world
     await _open_room(history)
     await _capture(records, saves, _save(ALICE, 1), _save(BOB, 2))
@@ -313,11 +334,10 @@ async def test_sides_too_far_apart_are_not_the_same_match(world):
 
     await _drain(records)
 
-    results = await _rows(MatchResultRow, MatchResultRow.npid.in_([ALICE, BOB]))
-    assert [result.counterpart_id for result in results] == [None, None]
+    assert [_shape(match) for match in await _matches()] == [(ALICE, BOB, 1, True, False), (ALICE, BOB, 1, False, True)]
 
 
-async def test_two_consumers_at_once_still_join_both_sides(world):
+async def test_two_consumers_at_once_still_record_one_match(world):
     records, saves, history, _ = world
     await _open_room(history)
     await _capture(records, saves, _save(ALICE, 1), _save(BOB, 2))
@@ -325,9 +345,7 @@ async def test_two_consumers_at_once_still_join_both_sides(world):
 
     await asyncio.gather(records.process_next(), records.process_next())
 
-    results = await _rows(MatchResultRow, MatchResultRow.npid.in_([ALICE, BOB]))
-    assert len(results) == 2
-    assert all(result.counterpart_id is not None for result in results)
+    assert [_shape(match) for match in await _matches()] == [(ALICE, BOB, 1, True, True)]
 
 
 # --- ranks ----------------------------------------------------------------------
@@ -342,8 +360,9 @@ async def test_a_match_keeps_the_rank_each_character_went_in_at(world):
     await _drain(records)
 
     [event] = await _rows(MatchEventRow, MatchEventRow.npid == ALICE)
-    [result] = await _rows(MatchResultRow, MatchResultRow.npid == ALICE)
-    assert event.ranks == result.ranks == [20]
+    [match] = (await records.list_matches(ALICE, None, None, 20)).matches
+    assert event.ranks == [20]
+    assert match.p1.chars[0].rank.name == TEKKEN_RANKS[20]["name"]
 
 
 # --- reading --------------------------------------------------------------------
@@ -470,17 +489,6 @@ async def test_weekly_top_counts_every_match_in_a_reused_room(world):
     assert await _weekly() == [(ALICE, ALICE, 3, 2, 1), (BOB, BOB, 3, 1, 2)]
 
 
-async def test_weekly_top_leaves_out_matches_only_one_save_confirmed(world):
-    records, saves, history, _ = world
-    await _open_room(history, until=_at(5))
-    await _capture(records, saves, _save(ALICE, 1), _save(CAROL, 2))
-    await _capture(records, saves, _save(ALICE, 3, wins=1, at=_at(3)))
-    await _capture(records, saves, _save(CAROL, 4, losses=1, at=_at(40)))
-    await _drain(records)
-
-    assert await _weekly() == []
-
-
 async def test_weekly_top_leaves_out_matches_before_its_window(world):
     records, saves, history, _ = world
     await _played_match(records, saves, history)
@@ -523,15 +531,19 @@ async def test_frequent_opponents_count_every_match_in_a_reused_room_once(world)
     assert await _opponents(BOB) == [(ALICE, ALICE, 3, 1, 2)]
 
 
-async def test_frequent_opponents_count_only_matches_the_player_s_own_save_showed(world):
+async def test_both_tallies_count_a_match_only_for_a_player_whose_own_save_showed_it(world):
+    """Bob quits Alice's match, and Carol's has no room: only Alice's win counts, in both."""
     records, saves, history, _ = world
-    await _open_room(history)
-    await _capture(records, saves, _save(ALICE, 1))
-    await _capture(records, saves, _save(ALICE, 2, wins=1, at=_at(3)))
+    await _open_room(history, until=_at(5))
+    await _capture(records, saves, _save(ALICE, 1), _save(CAROL, 2))
+    await _capture(records, saves, _save(ALICE, 3, wins=1, at=_at(3)))
+    await _capture(records, saves, _save(CAROL, 4, losses=1, at=_at(40)))
     await _drain(records)
 
+    assert await _weekly() == [(ALICE, ALICE, 1, 1, 0)]
     assert await _opponents(ALICE) == [(BOB, BOB, 1, 1, 0)]
     assert await _opponents(BOB) == []
+    assert await _opponents(CAROL) == []
 
 
 async def test_frequent_opponents_leave_out_matches_before_their_window(world):

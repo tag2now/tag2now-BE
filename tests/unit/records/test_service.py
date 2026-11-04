@@ -7,13 +7,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from history.models import RankOpponent
-from records.models import CharTally, MatchEvent, MatchOutcome, OpponentRecord, PlayerSave, WeeklyPlayer
+from history.models import RankRoom
+from records.models import CharTally, MatchEvent, MatchOutcome, OpponentRecord, PlayerSave, Side, WeeklyPlayer
 from records.ports import RecordsPort
 from records.service import RecordsService
 from shared.clock import Clock
 
 _NOW = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc)
+# Alice, whose event the queue hands out, sits second.
+_ROOM = RankRoom(42, "bob", "alice")
 
 
 class _Fixed(Clock):
@@ -47,7 +49,7 @@ def repo():
     repo.latest_data_id.return_value = 100
     repo.lock_state.return_value = _state()
     repo.claim_event.return_value = _event()
-    repo.add_result.return_value = 7
+    repo.fill_side.return_value = False
     return repo
 
 
@@ -61,7 +63,7 @@ def saves():
 @pytest.fixture
 def history():
     history = AsyncMock()
-    history.rank_opponent.return_value = RankOpponent("bob", 42)
+    history.rank_room.return_value = _ROOM
     return history
 
 
@@ -145,29 +147,32 @@ async def test_an_empty_queue_says_so(service, repo):
     assert await service.process_next() is False
 
 
-async def test_an_event_becomes_a_result_with_its_opponent(service, repo):
+async def test_the_first_event_of_a_match_records_it_on_the_player_s_side(service, repo):
     assert await service.process_next() is True
-    repo.lock_room.assert_awaited_once()
-    assert repo.add_result.await_args.args[2] == RankOpponent("bob", 42)
+    assert repo.lock_room.await_args.args[1] == 42
+    assert repo.add_match.await_args.args[2:] == (_ROOM, Side.P2, Side.P2)
     repo.finish_event.assert_awaited_once()
 
 
-async def test_a_win_looks_for_the_opponents_loss(service, repo):
+async def test_the_second_event_fills_its_side_and_records_no_new_match(service, repo):
+    repo.fill_side.return_value = True
     await service.process_next()
-    assert repo.link_counterpart.await_args.args[3] is MatchOutcome.LOSS
+    assert repo.fill_side.await_args.args[2:] == (_ROOM, Side.P2, Side.P2)
+    repo.add_match.assert_not_awaited()
+    repo.finish_event.assert_awaited_once()
 
 
-async def test_a_match_outside_any_known_room_keeps_its_result(service, repo, history):
-    history.rank_opponent.return_value = None
+async def test_a_match_outside_any_known_room_puts_the_player_on_1p(service, repo, history):
+    history.rank_room.return_value = None
     await service.process_next()
-    assert repo.add_result.await_args.args[2] is None
+    assert repo.add_match.await_args.args[2:] == (None, Side.P1, Side.P1)
     repo.lock_room.assert_not_awaited()
-    repo.link_counterpart.assert_not_awaited()
+    repo.fill_side.assert_not_awaited()
     repo.finish_event.assert_awaited_once()
 
 
 async def test_a_failure_schedules_a_retry_instead_of_finishing(service, repo, history):
-    history.rank_opponent.side_effect = RuntimeError("database hiccup")
+    history.rank_room.side_effect = RuntimeError("database hiccup")
     assert await service.process_next() is True
     repo.finish_event.assert_not_awaited()
     repo.fail_event.assert_awaited_once()

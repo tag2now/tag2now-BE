@@ -63,35 +63,38 @@ async def _room(adapter, session, room_id=7001, npid1="opp-a", npid2="opp-b", st
 
 
 @pytest.mark.asyncio
-async def test_finds_the_other_player_whichever_side_they_sat(adapter, db_session):
+async def test_finds_the_room_from_either_member_with_its_members_in_slot_order(adapter, db_session):
     await _room(adapter, db_session)
     at = _ROOM_START + timedelta(minutes=5)
 
-    assert (await adapter.find_rank_opponent(db_session, "opp-a", at)).npid == "opp-b"
-    assert (await adapter.find_rank_opponent(db_session, "opp-b", at)).npid == "opp-a"
+    from_first = await adapter.find_rank_room(db_session, "opp-a", at)
+    from_second = await adapter.find_rank_room(db_session, "opp-b", at)
+
+    assert (from_first.user1_npid, from_first.user2_npid) == ("opp-a", "opp-b")
+    assert from_second == from_first
 
 
 @pytest.mark.asyncio
 async def test_a_result_saved_just_after_the_last_sighting_is_still_in_the_room(adapter, db_session):
     await _room(adapter, db_session)
 
-    opponent = await adapter.find_rank_opponent(db_session, "opp-a", _ROOM_LAST_SEEN + timedelta(seconds=90))
+    room = await adapter.find_rank_room(db_session, "opp-a", _ROOM_LAST_SEEN + timedelta(seconds=90))
 
-    assert opponent.npid == "opp-b"
-
-
-@pytest.mark.asyncio
-async def test_no_opponent_once_the_room_is_long_gone(adapter, db_session):
-    await _room(adapter, db_session)
-
-    assert await adapter.find_rank_opponent(db_session, "opp-a", _ROOM_LAST_SEEN + timedelta(seconds=91)) is None
+    assert room.user2_npid == "opp-b"
 
 
 @pytest.mark.asyncio
-async def test_no_opponent_before_the_room_was_seen(adapter, db_session):
+async def test_no_room_once_it_is_long_gone(adapter, db_session):
     await _room(adapter, db_session)
 
-    assert await adapter.find_rank_opponent(db_session, "opp-a", _ROOM_START - timedelta(seconds=1)) is None
+    assert await adapter.find_rank_room(db_session, "opp-a", _ROOM_LAST_SEEN + timedelta(seconds=91)) is None
+
+
+@pytest.mark.asyncio
+async def test_no_room_before_it_was_seen(adapter, db_session):
+    await _room(adapter, db_session)
+
+    assert await adapter.find_rank_room(db_session, "opp-a", _ROOM_START - timedelta(seconds=1)) is None
 
 
 @pytest.mark.asyncio
@@ -99,9 +102,9 @@ async def test_the_latest_room_wins_when_a_new_one_opened_within_the_slack(adapt
     await _room(adapter, db_session)
     await _room(adapter, db_session, room_id=7002, npid2="opp-c", start=_ROOM_LAST_SEEN + timedelta(seconds=30))
 
-    opponent = await adapter.find_rank_opponent(db_session, "opp-a", _ROOM_LAST_SEEN + timedelta(seconds=60))
+    room = await adapter.find_rank_room(db_session, "opp-a", _ROOM_LAST_SEEN + timedelta(seconds=60))
 
-    assert opponent.npid == "opp-c"
+    assert room.user2_npid == "opp-c"
 
 
 @pytest.mark.asyncio
@@ -113,7 +116,7 @@ async def test_a_stale_row_of_a_reused_room_id_is_left_alone(adapter, db_session
     await adapter.touch_rank_matches(db_session, [record], later)
     db_session.expire_all()
 
-    assert await adapter.find_rank_opponent(db_session, "opp-a", later) is None
+    assert await adapter.find_rank_room(db_session, "opp-a", later) is None
 
 
 @pytest.mark.asyncio

@@ -13,7 +13,7 @@ from history.models import (
     HourlyActivity,
     PlayerStats,
     RankMatchSnapshotRecord,
-    RankOpponent,
+    RankRoom,
 )
 from history.ports import HistoryPort
 from shared.cache import cache_delete_pattern, cache_get, cache_set
@@ -52,9 +52,9 @@ class HistoryService:
 
     # -- Read: rank-match rooms ----------------------------------------------
 
-    async def rank_opponent(self, npid: str, at: datetime) -> RankOpponent | None:
+    async def rank_room(self, npid: str, at: datetime) -> RankRoom | None:
         async with self._sessions() as session:
-            return await self._repo.find_rank_opponent(session, npid, at)
+            return await self._repo.find_rank_room(session, npid, at)
 
     # -- Read: global stats --------------------------------------------------
 

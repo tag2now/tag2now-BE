@@ -15,7 +15,7 @@ from history.models import (
     HourlyActivity,
     PlayerStats,
     RankMatchSnapshotRecord,
-    RankOpponent,
+    RankRoom,
 )
 from history.ports import HistoryPort
 
@@ -107,7 +107,7 @@ class PostgresHistoryAdapter(HistoryPort):
             .values(last_seen_at=observed_at)
         )
 
-    async def find_rank_opponent(self, session: AsyncSession, npid: str, at: datetime) -> RankOpponent | None:
+    async def find_rank_room(self, session: AsyncSession, npid: str, at: datetime) -> RankRoom | None:
         room = (
             await session.execute(
                 select(RankMatchSnapshotRow)
@@ -122,8 +122,7 @@ class PostgresHistoryAdapter(HistoryPort):
         ).scalar_one_or_none()
         if room is None:
             return None
-        opponent = room.user2_npid if room.user1_npid == npid else room.user1_npid
-        return RankOpponent(npid=opponent, room_snapshot_id=room.id)
+        return RankRoom(room_snapshot_id=room.id, user1_npid=room.user1_npid, user2_npid=room.user2_npid)
 
     async def record_daily_matched_players(self, session: AsyncSession, npids: set[str], observed_at: datetime) -> None:
         """Use the database unique key as the durable per-day participant set."""

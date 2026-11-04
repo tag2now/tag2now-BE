@@ -10,6 +10,7 @@ from sqlalchemy import (
     Identity,
     Index,
     Integer,
+    SmallInteger,
     Text,
     UniqueConstraint,
     text,
@@ -61,24 +62,29 @@ class MatchEventRow(Base):
     last_error: Mapped[str | None] = mapped_column(Text)
 
 
-class MatchResultRow(Base):
-    """One player's side of a match. Both sides seen means `counterpart_id` joins them."""
+class MatchRow(Base):
+    """One match: who played on which side, which side won, and each side's event once its save is seen."""
 
-    __tablename__ = "match_results"
+    __tablename__ = "matches"
     __table_args__ = (
-        UniqueConstraint("event_id", name="uq_match_results_event"),
-        Index("idx_match_results_player", "npid", text("played_at DESC")),
-        Index("idx_match_results_opponent", "opponent_npid"),
-        Index("idx_match_results_room", "room_snapshot_id"),
+        UniqueConstraint("p1_event_id", name="uq_matches_p1_event"),
+        UniqueConstraint("p2_event_id", name="uq_matches_p2_event"),
+        CheckConstraint("winner IN (1, 2)", name="matches_winner_check"),
+        CheckConstraint("p1_event_id IS NOT NULL OR p2_event_id IS NOT NULL", name="matches_seen_check"),
+        CheckConstraint("(room_snapshot_id IS NULL) = (p2_npid IS NULL)", name="matches_room_check"),
+        Index("idx_matches_p1", "p1_npid", text("id DESC")),
+        Index("idx_matches_p2", "p2_npid", text("id DESC")),
+        Index("idx_matches_room", "room_snapshot_id"),
+        Index("idx_matches_played_at", "played_at"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
-    event_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("match_events.id"), nullable=False)
-    npid: Mapped[str] = mapped_column(Text, nullable=False)
-    result: Mapped[str] = mapped_column(Text, nullable=False)
-    chars: Mapped[list[int]] = mapped_column(ARRAY(Integer), nullable=False)
-    ranks: Mapped[list[int | None] | None] = mapped_column(ARRAY(Integer))
+    # The first event's save; the other side's lands within a minute of it.
     played_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    opponent_npid: Mapped[str | None] = mapped_column(Text)
     room_snapshot_id: Mapped[int | None] = mapped_column(BigInteger)
-    counterpart_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("match_results.id"))
+    p1_npid: Mapped[str] = mapped_column(Text, nullable=False)
+    # None only when no room named the opponent.
+    p2_npid: Mapped[str | None] = mapped_column(Text)
+    winner: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    p1_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("match_events.id"))
+    p2_event_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("match_events.id"))

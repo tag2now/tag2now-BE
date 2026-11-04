@@ -148,13 +148,25 @@ def open_room(room_id, first, second, opened, last_seen):
 
 
 def ranks_of(npid):
-    return [row[0] for row in rows("SELECT ranks FROM match_results WHERE npid = %s ORDER BY played_at", npid)]
+    """The ranks of each match the player's own save showed, oldest first."""
+    return [
+        row[0]
+        for row in rows(
+            "SELECT e.ranks FROM matches m JOIN match_events e ON e.id IN (m.p1_event_id, m.p2_event_id) "
+            "WHERE e.npid = %s ORDER BY m.played_at",
+            npid,
+        )
+    ]
 
 
-def results(*npids):
+def matches(*npids):
+    """Each match the players were in, oldest first: (1P, 2P, winning side, 1P's characters, 2P's characters).
+    A side's characters are None when its save was not seen."""
     return rows(
-        "SELECT r.npid, r.result, r.chars, r.opponent_npid, c.npid, c.result, c.chars FROM match_results r "
-        "LEFT JOIN match_results c ON c.id = r.counterpart_id WHERE r.npid = ANY(%s) ORDER BY r.played_at, r.npid",
+        "SELECT m.p1_npid, m.p2_npid, m.winner, e1.chars, e2.chars FROM matches m "
+        "LEFT JOIN match_events e1 ON e1.id = m.p1_event_id LEFT JOIN match_events e2 ON e2.id = m.p2_event_id "
+        "WHERE m.p1_npid = ANY(%s) OR m.p2_npid = ANY(%s) ORDER BY m.played_at, m.id",
+        list(npids),
         list(npids),
     )
 
@@ -172,13 +184,6 @@ class Report:
         print(f"[{'PASS' if passed else 'FAIL'}] {number:>2} {name}")
         if not passed:
             print(f"       got  {got}\n       want {want}")
-
-
-def side(npid, result, chars, opponent, confirmed_chars):
-    """One expected row. confirmed_chars is the opponent's characters when both sides joined."""
-    opposite = {"win": "loss", "loss": "win"}[result]
-    joined = (opponent, opposite, confirmed_chars) if confirmed_chars is not None else (None, None, None)
-    return (npid, result, chars, opponent, *joined)
 
 
 def seeded(npid):
@@ -224,8 +229,8 @@ def scenarios(state, report):
     report.check(
         2,
         "tag match joined, tag order kept",
-        results("alice", "bob"),
-        [side("alice", "win", [JIN, PAUL], "bob", [NINA, LAW]), side("bob", "loss", [NINA, LAW], "alice", [JIN, PAUL])],
+        matches("alice", "bob"),
+        [("alice", "bob", 1, [JIN, PAUL], [NINA, LAW])],
     )
 
     carol, dave = state["carol"], state["dave"]
@@ -238,8 +243,8 @@ def scenarios(state, report):
     report.check(
         3,
         "solo entry",
-        results("carol", "dave"),
-        [side("carol", "loss", [KING], "dave", [YOSHI]), side("dave", "win", [YOSHI], "carol", [KING])],
+        matches("carol", "dave"),
+        [("carol", "dave", 2, [KING], [YOSHI])],
     )
 
     erin, frank = state["erin"], state["frank"]
@@ -251,11 +256,9 @@ def scenarios(state, report):
         game_save(frank, at(3, begin, 6), own=(LEI, KING))
         play(erin, erin_won, (PAUL, LAW), at(3, begin + 2, 50))
         play(frank, not erin_won, (LEI, KING), at(3, begin + 2, 53))
-        result, other = ("win", "loss") if erin_won else ("loss", "win")
-        want += [side("erin", result, [PAUL, LAW], "frank", [LEI, KING])]
-        want += [side("frank", other, [LEI, KING], "erin", [PAUL, LAW])]
+        want += [("erin", "frank", 1 if erin_won else 2, [PAUL, LAW], [LEI, KING])]
     wait_for_queue()
-    report.check(4, "three matches in one reused room", results("erin", "frank"), want)
+    report.check(4, "three matches in one reused room", matches("erin", "frank"), want)
 
     grace, henry = state["grace"], state["henry"]
     open_room(105, "grace", "henry", at(4), at(4, 8))
@@ -270,13 +273,8 @@ def scenarios(state, report):
     report.check(
         5,
         "a result carried on the rematch's start save",
-        results("grace", "henry"),
-        [
-            side("grace", "win", [JIN, LEI], "henry", [LAW, NINA]),
-            side("henry", "loss", [LAW, NINA], "grace", [JIN, LEI]),
-            side("grace", "loss", [KING, YOSHI], "henry", [PAUL, LEI]),
-            side("henry", "win", [PAUL, LEI], "grace", [KING, YOSHI]),
-        ],
+        matches("grace", "henry"),
+        [("grace", "henry", 1, [JIN, LEI], [LAW, NINA]), ("grace", "henry", 2, [KING, YOSHI], [PAUL, LEI])],
     )
 
     ivan = state["ivan"]
@@ -291,15 +289,15 @@ def scenarios(state, report):
     wait_for_queue()
     report.check(
         7,
-        "the opponent quit: named, unconfirmed",
-        results("judy", "kim"),
-        [side("judy", "win", [PAUL, JIN], "kim", None)],
+        "the opponent quit: named, unseen",
+        matches("judy", "kim"),
+        [("judy", "kim", 1, [PAUL, JIN], None)],
     )
 
     leo = state["leo"]
     play(leo, True, (PAUL,), at(7))
     wait_for_queue()
-    report.check(8, "no room, no opponent", results("leo"), [side("leo", "win", [PAUL], None, None)])
+    report.check(8, "no room, no opponent", matches("leo"), [("leo", None, 1, [PAUL], None)])
 
     mia = state["mia"]
     record(mia, True, (PAUL,))
@@ -309,7 +307,7 @@ def scenarios(state, report):
     report.check(
         9,
         "two wins in one save are counted, not guessed",
-        (rows("SELECT merged_count FROM save_states WHERE npid = 'mia'")[0][0], results("mia")),
+        (rows("SELECT merged_count FROM save_states WHERE npid = 'mia'")[0][0], matches("mia")),
         (1, []),
     )
 
@@ -323,8 +321,8 @@ def scenarios(state, report):
     report.check(
         10,
         "an unreadable save holds up nobody and recovers",
-        [row[:2] for row in results("nick", "olga")],
-        [("olga", "win"), ("nick", "win")],
+        [row[:3] for row in matches("nick", "olga")],
+        [("olga", None, 1), ("nick", None, 1)],
     )
 
     pete, quinn = state["pete"], state["quinn"]
@@ -333,7 +331,7 @@ def scenarios(state, report):
     record(pete, True, (PAUL,))
     game_save(pete, at(10, 0, 1), data_id=late)
     wait_for_queue()
-    report.check(11, "a lower data_id committed later", [row[:2] for row in results("pete")], [("pete", "win")])
+    report.check(11, "a lower data_id committed later", [row[:3] for row in matches("pete")], [("pete", None, 1)])
 
     # The named players are all taken; bulk ones are still as the seed left them.
     promoted = seeded("bulk0")
@@ -363,12 +361,12 @@ def during_outage(state):
 
 def after_outage(state, report):
     wait_for_state("rosa", 0)
-    wait_until(lambda: len(results("rosa", "sam")) == 2, "the match played during the outage", seconds=40)
+    wait_until(lambda: len(matches("rosa", "sam")) == 1, "the match played during the outage", seconds=40)
     report.check(
         12,
         "a match during a save-admin outage is not lost",
-        results("rosa", "sam"),
-        [side("rosa", "win", [PAUL, JIN], "sam", [LAW, NINA]), side("sam", "loss", [LAW, NINA], "rosa", [PAUL, JIN])],
+        matches("rosa", "sam"),
+        [("rosa", "sam", 1, [PAUL, JIN], [LAW, NINA])],
     )
 
 
@@ -388,8 +386,8 @@ def after_restart(state, report):
     report.check(
         13,
         "a be restart repeats nothing and misses nothing",
-        results("tina"),
-        [side("tina", "win", [PAUL], "alice", [PAUL]), side("tina", "loss", [PAUL], "alice", [PAUL])],
+        matches("tina"),
+        [("tina", "alice", 1, [PAUL], [PAUL]), ("tina", "alice", 2, [PAUL], [PAUL])],
     )
     report.check(
         13,

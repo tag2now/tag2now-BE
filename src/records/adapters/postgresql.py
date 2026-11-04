@@ -3,15 +3,15 @@
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 
-from sqlalchemy import case, func, or_, select, update
+from sqlalchemy import and_, case, func, not_, or_, select, union_all, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from history.entities import RankMatchSnapshotRow
-from history.models import RankOpponent
-from records.domain import seat
-from records.entities import MatchEventRow, MatchResultRow, SaveStateRow
+from history.models import RankRoom
+from records.domain import outcome_of
+from records.entities import MatchEventRow, MatchRow, SaveStateRow
 from records.models import (
     CharTally,
     EventStatus,
@@ -22,14 +22,16 @@ from records.models import (
     PlayerMatch,
     PlayerSave,
     RecordedMatch,
+    Side,
     WeeklyPlayer,
 )
 from records.ports import RecordsPort
 
 _MAX_ATTEMPTS = 5
 _RETRY_DELAY = timedelta(seconds=30)
-# Both sides save as the match ends, and the room's next match is further off than this.
+# Both players save as the match ends, and the room's next match is further off than this.
 _SAME_MATCH_WINDOW = timedelta(seconds=60)
+_EVENT_IDS = {Side.P1: MatchRow.p1_event_id, Side.P2: MatchRow.p2_event_id}
 
 
 def _to_save(row: SaveStateRow) -> PlayerSave:
@@ -48,11 +50,6 @@ def _optional_tuple(values: list | None) -> tuple | None:
     return None if values is None else tuple(values)
 
 
-def _optional_list(values: tuple | None) -> list | None:
-    """psycopg sends a tuple as a record, so an array column needs a list."""
-    return None if values is None else list(values)
-
-
 def _to_event(row: MatchEventRow) -> MatchEvent:
     return MatchEvent(
         id=row.id,
@@ -65,31 +62,48 @@ def _to_event(row: MatchEventRow) -> MatchEvent:
     )
 
 
-def _player_from_result_row(row: MatchResultRow, room: RankMatchSnapshotRow | None) -> MatchPlayer:
-    online_name = None if room is None else room.online_name_of(row.npid)
-    return MatchPlayer(row.npid, online_name, MatchOutcome(row.result), tuple(row.chars), _optional_tuple(row.ranks))
-
-
-def _opponent_player(
-    representative_row: MatchResultRow, opponent_row: MatchResultRow | None, room: RankMatchSnapshotRow | None
-) -> MatchPlayer | None:
-    """The other player: their own row when their save was seen, else only who the room says they were."""
-    if opponent_row is not None:
-        return _player_from_result_row(opponent_row, room)
-    npid = representative_row.opponent_npid
-    if npid is None:
-        return None
+def _player(
+    npid: str, side: Side, match: MatchRow, event: MatchEventRow | None, room: RankMatchSnapshotRow | None
+) -> MatchPlayer:
     online_name = None if room is None else room.online_name_of(npid)
-    return MatchPlayer(npid, online_name, MatchOutcome(representative_row.result).opposite, None, None)
+    outcome = outcome_of(side, Side(match.winner))
+    if event is None:
+        return MatchPlayer(npid, online_name, outcome, None, None)
+    return MatchPlayer(npid, online_name, outcome, tuple(event.chars), _optional_tuple(event.ranks))
 
 
-def _match_from_rows(
-    representative_row: MatchResultRow, opponent_row: MatchResultRow | None, room: RankMatchSnapshotRow | None
+def _recorded_match(
+    match: MatchRow,
+    room: RankMatchSnapshotRow | None,
+    p1_event: MatchEventRow | None,
+    p2_event: MatchEventRow | None,
 ) -> RecordedMatch:
-    seen = _player_from_result_row(representative_row, room)
-    opponent = _opponent_player(representative_row, opponent_row, room)
-    p1, p2 = seat(seen, opponent, None if room is None else room.user1_npid)
-    return RecordedMatch(id=representative_row.id, played_at=representative_row.played_at, p1=p1, p2=p2)
+    p1 = _player(match.p1_npid, Side.P1, match, p1_event, room)
+    p2 = None if match.p2_npid is None else _player(match.p2_npid, Side.P2, match, p2_event, room)
+    return RecordedMatch(id=match.id, played_at=match.played_at, p1=p1, p2=p2)
+
+
+def _players():
+    """Every match once per player: against whom, whether they won, and whether their own save was seen."""
+
+    def one(side: Side, npid, opponent_npid):
+        return select(
+            MatchRow.played_at,
+            MatchRow.room_snapshot_id,
+            npid.label("npid"),
+            opponent_npid.label("opponent_npid"),
+            (MatchRow.winner == side).label("won"),
+            _EVENT_IDS[side].is_not(None).label("seen"),
+        )
+
+    return union_all(
+        one(Side.P1, MatchRow.p1_npid, MatchRow.p2_npid), one(Side.P2, MatchRow.p2_npid, MatchRow.p1_npid)
+    ).subquery("players")
+
+
+def _counted(players):
+    """What both player tallies count: matches the player's own save showed, against an opponent a room named."""
+    return and_(players.c.seen, players.c.opponent_npid.is_not(None))
 
 
 def _escape_like(text: str) -> str:
@@ -172,117 +186,99 @@ class PostgresRecordsAdapter(RecordsPort):
             )
         )
 
-    # -- Results -------------------------------------------------------------
-
-    async def add_result(self, session: AsyncSession, event: MatchEvent, opponent: RankOpponent | None) -> int:
-        result = MatchResultRow(
-            event_id=event.id,
-            npid=event.npid,
-            result=event.outcome,
-            chars=list(event.chars),
-            ranks=_optional_list(event.ranks),
-            played_at=event.saved_at,
-            opponent_npid=opponent.npid if opponent else None,
-            room_snapshot_id=opponent.room_snapshot_id if opponent else None,
-        )
-        session.add(result)
-        await session.flush()
-        return result.id
+    # -- Matches -------------------------------------------------------------
 
     async def lock_room(self, session: AsyncSession, room_snapshot_id: int) -> None:
         await session.execute(select(func.pg_advisory_xact_lock(room_snapshot_id)))
 
-    async def link_counterpart(
-        self,
-        session: AsyncSession,
-        result_id: int,
-        opponent: RankOpponent,
-        wanted: MatchOutcome,
-        played_at: datetime,
+    async def fill_side(
+        self, session: AsyncSession, event: MatchEvent, room: RankRoom, side: Side, winner: Side
     ) -> bool:
-        distance = func.abs(func.extract("epoch", MatchResultRow.played_at - played_at))
-        counterpart_id = (
+        event_id = _EVENT_IDS[side]
+        distance = func.abs(func.extract("epoch", MatchRow.played_at - event.saved_at))
+        window = (event.saved_at - _SAME_MATCH_WINDOW, event.saved_at + _SAME_MATCH_WINDOW)
+        match_id = (
             await session.execute(
-                select(MatchResultRow.id)
+                select(MatchRow.id)
                 .where(
-                    MatchResultRow.room_snapshot_id == opponent.room_snapshot_id,
-                    MatchResultRow.npid == opponent.npid,
-                    MatchResultRow.result == wanted,
-                    MatchResultRow.counterpart_id.is_(None),
-                    MatchResultRow.played_at.between(played_at - _SAME_MATCH_WINDOW, played_at + _SAME_MATCH_WINDOW),
+                    MatchRow.room_snapshot_id == room.room_snapshot_id,
+                    MatchRow.winner == winner,
+                    event_id.is_(None),
+                    MatchRow.played_at.between(*window),
                 )
                 .order_by(distance)
                 .limit(1)
             )
         ).scalar_one_or_none()
-        if counterpart_id is None:
+        if match_id is None:
             return False
-        await session.execute(
-            update(MatchResultRow).where(MatchResultRow.id == result_id).values(counterpart_id=counterpart_id)
-        )
-        await session.execute(
-            update(MatchResultRow).where(MatchResultRow.id == counterpart_id).values(counterpart_id=result_id)
-        )
+        await session.execute(update(MatchRow).where(MatchRow.id == match_id).values({event_id: event.id}))
         return True
+
+    async def add_match(
+        self, session: AsyncSession, event: MatchEvent, room: RankRoom | None, side: Side, winner: Side
+    ) -> None:
+        p1_npid, p2_npid = (event.npid, None) if room is None else (room.user1_npid, room.user2_npid)
+        session.add(
+            MatchRow(
+                played_at=event.saved_at,
+                room_snapshot_id=None if room is None else room.room_snapshot_id,
+                p1_npid=p1_npid,
+                p2_npid=p2_npid,
+                winner=winner,
+                **{_EVENT_IDS[side].key: event.id},
+            )
+        )
+        await session.flush()
 
     # -- Reading -------------------------------------------------------------
 
     async def list_matches(
         self, session: AsyncSession, npid: str | None, name_query: str | None, before: int | None, limit: int
     ) -> list[RecordedMatch]:
-        representative_row, opponent_row, room = MatchResultRow, aliased(MatchResultRow), RankMatchSnapshotRow
-        # A match whose both sides were seen is two rows; the lower id stands for it.
-        conditions = [
-            or_(representative_row.counterpart_id.is_(None), representative_row.id < representative_row.counterpart_id)
-        ]
+        match, room = MatchRow, RankMatchSnapshotRow
+        p1_event, p2_event = aliased(MatchEventRow), aliased(MatchEventRow)
+        conditions = []
         if before is not None:
-            conditions.append(representative_row.id < before)
+            conditions.append(match.id < before)
         if npid is not None:
-            conditions.append(or_(representative_row.npid == npid, representative_row.opponent_npid == npid))
+            conditions.append(or_(match.p1_npid == npid, match.p2_npid == npid))
         if name_query:
             pattern = f"%{_escape_like(name_query)}%"
-            names = (
-                representative_row.npid,
-                representative_row.opponent_npid,
-                room.user1_online_name,
-                room.user2_online_name,
-            )
+            names = (match.p1_npid, match.p2_npid, room.user1_online_name, room.user2_online_name)
             conditions.append(or_(*(name.ilike(pattern, escape="\\") for name in names)))
         rows = await session.execute(
-            select(representative_row, opponent_row, room)
-            .outerjoin(opponent_row, opponent_row.id == representative_row.counterpart_id)
-            .outerjoin(room, room.id == representative_row.room_snapshot_id)
+            select(match, room, p1_event, p2_event)
+            .outerjoin(room, room.id == match.room_snapshot_id)
+            .outerjoin(p1_event, p1_event.id == match.p1_event_id)
+            .outerjoin(p2_event, p2_event.id == match.p2_event_id)
             .where(*conditions)
-            .order_by(representative_row.id.desc())
+            .order_by(match.id.desc())
             .limit(limit)
         )
-        return [_match_from_rows(*row) for row in rows]
+        return [_recorded_match(*row) for row in rows]
 
     async def weekly_top_players(
         self, session: AsyncSession, since: datetime, limit: int, excluded_npids: Sequence[str]
     ) -> list[WeeklyPlayer]:
-        own, room = MatchResultRow, RankMatchSnapshotRow
+        players, room = _players(), RankMatchSnapshotRow
         # RPCN usernames are unique case-insensitively, so the list is too.
         excluded = [npid.lower() for npid in excluded_npids]
-        online_name = case((room.user1_npid == own.npid, room.user1_online_name), else_=room.user2_online_name)
+        online_name = case((room.user1_npid == players.c.npid, room.user1_online_name), else_=room.user2_online_name)
         match_count = func.count()
         rows = await session.execute(
             select(
-                own.npid,
+                players.c.npid,
                 func.max(online_name).label("online_name"),
                 match_count.label("match_count"),
-                func.count().filter(own.result == MatchOutcome.WIN).label("wins"),
-                func.count().filter(own.result == MatchOutcome.LOSS).label("losses"),
+                func.count().filter(players.c.won).label("wins"),
+                func.count().filter(not_(players.c.won)).label("losses"),
             )
-            # A linked result always has its room.
-            .join(room, room.id == own.room_snapshot_id)
-            .where(
-                own.counterpart_id.is_not(None),
-                own.played_at >= since,
-                func.lower(own.npid).not_in(excluded),
-            )
-            .group_by(own.npid)
-            .order_by(match_count.desc(), own.npid)
+            # A match with an opponent always has its room.
+            .join(room, room.id == players.c.room_snapshot_id)
+            .where(_counted(players), players.c.played_at >= since, func.lower(players.c.npid).not_in(excluded))
+            .group_by(players.c.npid)
+            .order_by(match_count.desc(), players.c.npid)
             .limit(limit)
         )
         return [WeeklyPlayer(row.npid, row.online_name, row.match_count, row.wins, row.losses) for row in rows]
@@ -290,22 +286,24 @@ class PostgresRecordsAdapter(RecordsPort):
     async def frequent_opponents(
         self, session: AsyncSession, npid: str, since: datetime, limit: int
     ) -> list[OpponentRecord]:
-        own, room = MatchResultRow, RankMatchSnapshotRow
-        online_name = case((room.user1_npid == own.opponent_npid, room.user1_online_name), else_=room.user2_online_name)
+        players, room = _players(), RankMatchSnapshotRow
+        online_name = case(
+            (room.user1_npid == players.c.opponent_npid, room.user1_online_name), else_=room.user2_online_name
+        )
         match_count = func.count()
         rows = await session.execute(
             select(
-                own.opponent_npid,
+                players.c.opponent_npid,
                 func.max(online_name).label("online_name"),
                 match_count.label("match_count"),
-                func.count().filter(own.result == MatchOutcome.WIN).label("wins"),
-                func.count().filter(own.result == MatchOutcome.LOSS).label("losses"),
+                func.count().filter(players.c.won).label("wins"),
+                func.count().filter(not_(players.c.won)).label("losses"),
             )
-            # A result with an opponent always has its room.
-            .join(room, room.id == own.room_snapshot_id)
-            .where(own.npid == npid, own.opponent_npid.is_not(None), own.played_at >= since)
-            .group_by(own.opponent_npid)
-            .order_by(match_count.desc(), own.opponent_npid)
+            # A match with an opponent always has its room.
+            .join(room, room.id == players.c.room_snapshot_id)
+            .where(_counted(players), players.c.npid == npid, players.c.played_at >= since)
+            .group_by(players.c.opponent_npid)
+            .order_by(match_count.desc(), players.c.opponent_npid)
             .limit(limit)
         )
         return [

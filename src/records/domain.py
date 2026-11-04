@@ -4,7 +4,8 @@ Saves are cumulative, so a missed save costs the split between matches and never
 the tally. Spec: docs/spec/11-records.md.
 """
 
-from records.models import CharTally, Comparison, MatchOutcome, MatchPlayer, PlayerMatch, PlayerSave
+from history.models import RankRoom
+from records.models import CharTally, Comparison, MatchOutcome, PlayerMatch, PlayerSave, Side
 
 _NO_TALLY = CharTally(0, 0)
 _ONE_MATCH = {(1, 0): MatchOutcome.WIN, (0, 1): MatchOutcome.LOSS}
@@ -44,11 +45,17 @@ def compare(before: PlayerSave, after: PlayerSave) -> Comparison:
     return Comparison(match=PlayerMatch(outcome, played, ranks))
 
 
-def seat(
-    seen: MatchPlayer, opponent: MatchPlayer | None, first_member_npid: str | None
-) -> tuple[MatchPlayer, MatchPlayer | None]:
-    """1P and 2P, as the game seated them: RPCN lists a room's members by slot, so its first is 1P.
-    With no room there is no seat to read, and the player whose save was seen is 1P."""
-    if opponent is not None and opponent.npid == first_member_npid:
-        return opponent, seen
-    return seen, opponent
+def side_of(room: RankRoom | None, npid: str) -> Side:
+    """RPCN lists a room's members by slot, so its first is 1P. With no room there is no slot to read,
+    and the player whose save was seen is 1P."""
+    if room is None or room.user1_npid == npid:
+        return Side.P1
+    return Side.P2
+
+
+def winner(side: Side, outcome: MatchOutcome) -> Side:
+    return side if outcome is MatchOutcome.WIN else side.other
+
+
+def outcome_of(side: Side, winner: Side) -> MatchOutcome:
+    return MatchOutcome.WIN if side is winner else MatchOutcome.LOSS

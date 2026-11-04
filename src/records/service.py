@@ -99,13 +99,17 @@ class RecordsService:
             await self._repo.fail_event(session, event, str(exc), now)
 
     async def _resolve(self, session: AsyncSession, event: MatchEvent) -> None:
-        opponent = await self._history.rank_opponent(event.npid, event.saved_at)
-        if opponent is None:
-            await self._repo.add_result(session, event, None)
+        """The second player's event fills its side of the match the first one recorded."""
+        room = await self._history.rank_room(event.npid, event.saved_at)
+        side = domain.side_of(room, event.npid)
+        winner = domain.winner(side, event.outcome)
+        if room is None:
+            await self._repo.add_match(session, event, None, side, winner)
             return
-        await self._repo.lock_room(session, opponent.room_snapshot_id)
-        result_id = await self._repo.add_result(session, event, opponent)
-        await self._repo.link_counterpart(session, result_id, opponent, event.outcome.opposite, event.saved_at)
+        await self._repo.lock_room(session, room.room_snapshot_id)
+        if await self._repo.fill_side(session, event, room, side, winner):
+            return
+        await self._repo.add_match(session, event, room, side, winner)
 
     # -- Reading -------------------------------------------------------------
 

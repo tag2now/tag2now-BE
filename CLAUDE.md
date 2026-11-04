@@ -433,24 +433,29 @@ saves change nothing. The new state and the `match_events` row commit together.
 A missed save loses only the split between matches, since the next one still
 carries the totals.
 
-`EventConsumer` takes events with `FOR UPDATE SKIP LOCKED`, finds the room the
-player was in at that moment, stores a `match_results` row and joins it to the
-opponent's side through `counterpart_id`, which is how the opponent's characters
-are read. Saves themselves are not kept. Spec: `docs/spec/11-records.md`.
+`EventConsumer` takes events with `FOR UPDATE SKIP LOCKED` and finds the room
+the player was in at that moment. **A match is one `matches` row**: each
+player is on a *side*, 1P or 2P --- the room snapshot's `user1` is 1P, since
+RPCN lists members by slot (`records.domain.side_of`) --- and `winner` is the
+winning side. The first player's event records the match; the second's only
+**fills** its side's `event_id`. Saves themselves are not kept. Spec:
+`docs/spec/11-records.md`.
+
+**`match_events` is the only record of what a player did in a match** ---
+characters, ranks, save time --- and `matches` points at it rather than
+copying it. Done events are never deleted, and reprocessing relies on it.
 
 Each character's rank is the one it **went into** the match at: the previous
 state's, or the result save's when that state has none (a first match, or a
-state kept before ranks). It rides on the event and is copied to the result.
+state kept before ranks). It rides on the event.
 
-`GET /records/matches` lists one row per match --- the lower id of a joined
-pair --- newest first, paged by `before` id, filtered by `npid` or a name `q`.
-Sides are `p1`/`p2` as the game seated them: the room snapshot's `user1`, since
-RPCN lists members by slot (`records.domain.seat`). No per-player totals: the
+`GET /records/matches` lists the `matches` rows newest first, paged by `before`
+id, filtered by `npid` (either side) or a name `q`. No per-player totals: the
 lifetime record is the save's.
 
-`GET /records/weekly-top` (the FE's 주간 철찌) counts each player's matches of
-the last 7 days with wins and losses, **only those both sides' saves confirmed**
-(`counterpart_id` set), so each player is counted once from their own row.
+`GET /records/weekly-top` (the FE's 주간 철찌) and `GET /records/opponents`
+count a match for a player **only when their own save showed it against an
+opponent a room named** --- one rule, `_counted` in the adapter.
 
 ### RPCN client lifecycle
 

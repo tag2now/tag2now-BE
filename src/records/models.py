@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 from typing import NamedTuple
 
 from pydantic import BaseModel
@@ -14,9 +14,16 @@ class MatchOutcome(StrEnum):
     WIN = "win"
     LOSS = "loss"
 
+
+class Side(IntEnum):
+    """1P or 2P: RPCN's room slot, or 1P for the only player a roomless match has."""
+
+    P1 = 1
+    P2 = 2
+
     @property
-    def opposite(self) -> "MatchOutcome":
-        return MatchOutcome.LOSS if self is MatchOutcome.WIN else MatchOutcome.WIN
+    def other(self) -> "Side":
+        return Side.P2 if self is Side.P1 else Side.P1
 
 
 class EventStatus(StrEnum):
@@ -62,7 +69,7 @@ class PlayerSave:
 
 @dataclass(frozen=True)
 class PlayerMatch:
-    """One player's side of a finished match, as their saves showed it."""
+    """One player's part in a finished match, as their saves showed it."""
 
     outcome: MatchOutcome
     chars: tuple[int, ...]
@@ -103,8 +110,7 @@ class MatchPlayer:
 
 @dataclass(frozen=True)
 class RecordedMatch:
-    """A match as the records list shows it, 1P and 2P as the game seated them.
-    `p2` is None when no room named the opponent."""
+    """A match as the records list shows it, by side. `p2` is None when no room named the opponent."""
 
     id: int
     played_at: datetime
@@ -114,7 +120,7 @@ class RecordedMatch:
 
 @dataclass(frozen=True)
 class WeeklyPlayer:
-    """A player ranked by the matches of theirs both sides' saves confirmed."""
+    """A player ranked by the matches their own save showed."""
 
     npid: str
     online_name: str

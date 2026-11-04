@@ -12,7 +12,7 @@ from history.models import (
     HourlyActivity,
     PlayerStats,
     RankMatchSnapshotRecord,
-    RankOpponent,
+    RankRoom,
 )
 
 
@@ -42,8 +42,8 @@ class HistoryPort(ABC):
     # -- Read: rank-match rooms ----------------------------------------------
 
     @abstractmethod
-    async def find_rank_opponent(self, session: AsyncSession, npid: str, at: datetime) -> RankOpponent | None:
-        """Return who `npid` shared a rank-match room with at that moment, if anyone."""
+    async def find_rank_room(self, session: AsyncSession, npid: str, at: datetime) -> RankRoom | None:
+        """Return the rank-match room `npid` was in at that moment, if any."""
 
     # -- Read: global stats --------------------------------------------------
 

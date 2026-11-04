@@ -1,7 +1,7 @@
 # Match-records replay
 
 Runs the real `be` and `save-admin` images together and reproduces RPCN's saves,
-then checks that `match_results` says who played whom. Spec: `docs/spec/11-records.md`.
+then checks that `matches` says who played whom. Spec: `docs/spec/11-records.md`.
 
 A game save is two steps on the RPCN host --- a new `.tdt` under a new `data_id`,
 then the `tus_data` row pointing at it --- so the replay does exactly those and
