@@ -3,14 +3,13 @@
 import logging
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import Date, Integer, case, delete, func, or_, select, text, tuple_, update
+from sqlalchemy import Date, Integer, delete, func, or_, select, text, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from history.entities import ActivitySnapshotRow, DailyMatchedPlayerRow, RankMatchSnapshotRow
 from history.models import (
     ActivitySnapshot,
-    CoPlayer,
     DailySummary,
     HourlyActivity,
     PlayerStats,
@@ -236,14 +235,7 @@ class PostgresHistoryAdapter(HistoryPort):
         cutoff = func.now() - timedelta(days=days)
 
         player_snapshots = (
-            select(
-                RankMatchSnapshotRow.room_id,
-                RankMatchSnapshotRow.created_dt,
-                RankMatchSnapshotRow.user1_npid,
-                RankMatchSnapshotRow.user2_npid,
-                RankMatchSnapshotRow.user1_online_name,
-                RankMatchSnapshotRow.user2_online_name,
-            )
+            select(RankMatchSnapshotRow.created_dt)
             .where(
                 or_(RankMatchSnapshotRow.user1_npid == npid, RankMatchSnapshotRow.user2_npid == npid),
                 RankMatchSnapshotRow.created_dt >= cutoff,
@@ -258,25 +250,7 @@ class PostgresHistoryAdapter(HistoryPort):
             func.max(player_snapshots.c.created_dt).label("last_seen"),
         )
 
-        co_stmt = (
-            select(
-                case(
-                    (player_snapshots.c.user1_npid == npid, player_snapshots.c.user2_npid),
-                    else_=player_snapshots.c.user1_npid,
-                ).label("npid"),
-                case(
-                    (player_snapshots.c.user1_npid == npid, player_snapshots.c.user2_online_name),
-                    else_=player_snapshots.c.user1_online_name,
-                ).label("online_name"),
-                func.count().label("times_together"),
-            )
-            .group_by("npid", "online_name")
-            .order_by(func.count().desc())
-            .limit(4)
-        )
-
         row = (await session.execute(stats_stmt)).one_or_none()
-        top_rows = (await session.execute(co_stmt)).all()
 
         cutoff_hours = func.now() - timedelta(days=7)
         hours_stmt = (
@@ -302,8 +276,5 @@ class PostgresHistoryAdapter(HistoryPort):
             first_seen=row.first_seen if row else None,
             last_seen=row.last_seen if row else None,
             room_type_counts={},
-            top_played_with=[
-                CoPlayer(npid=r.npid, online_name=r.online_name, times_together=r.times_together) for r in top_rows
-            ],
             active_hours=active_hours,
         )

@@ -58,15 +58,6 @@ class ActivitySnapshot:
 
 
 @dataclass
-class CoPlayer:
-    """A player who frequently shared rooms with the queried player."""
-
-    npid: str
-    online_name: str
-    times_together: int
-
-
-@dataclass
 class PlayerStats:
     """Aggregated history stats for a single player."""
 
@@ -76,5 +67,4 @@ class PlayerStats:
     first_seen: datetime | None
     last_seen: datetime | None
     room_type_counts: dict[str, int] = field(default_factory=dict)
-    top_played_with: list[CoPlayer] = field(default_factory=list)
     active_hours: list[int] = field(default_factory=list)
