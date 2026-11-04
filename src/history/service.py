@@ -14,7 +14,6 @@ from history.models import (
     PlayerStats,
     RankMatchSnapshotRecord,
     RankOpponent,
-    TopPlayer,
 )
 from history.ports import HistoryPort
 from shared.cache import cache_delete_pattern, cache_get, cache_set
@@ -74,18 +73,6 @@ class HistoryService:
             return cached
         async with self._sessions() as session:
             result = await self._repo.get_daily_summary(session, days)
-        cache_set(key, result, get_settings().cache_ttl_activity)
-        return result
-
-    # -- Read: weekly top players --------------------------------------------
-
-    async def get_weekly_top_players(self, limit: int = 10) -> list[TopPlayer]:
-        key = f"history:weekly_top:{limit}"
-        if cached := cache_get(key):
-            return cached
-        excluded = get_settings().ranking_excluded_npids
-        async with self._sessions() as session:
-            result = await self._repo.get_weekly_top_players(session, limit, excluded)
         cache_set(key, result, get_settings().cache_ttl_activity)
         return result
 

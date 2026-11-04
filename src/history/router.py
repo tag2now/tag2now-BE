@@ -26,15 +26,6 @@ async def daily_summary(
     return await service.get_daily_summary(days)
 
 
-@router.get("/stats/weekly-top", summary="Weekly top players")
-async def weekly_top_players(
-    limit: int = Query(default=10, ge=1, le=50, description="Number of top players to return"),
-    service: HistoryService = Depends(history_service),
-):
-    """Return the top N most frequently seen players in the last 7 days."""
-    return await service.get_weekly_top_players(limit)
-
-
 @router.get("/players/{npid}", summary="Player history")
 async def player_history(
     npid: str = Path(description="Player NPID"),

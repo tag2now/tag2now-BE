@@ -1,12 +1,13 @@
 """Port interface for match records."""
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from history.models import RankOpponent
-from records.models import MatchEvent, MatchOutcome, PlayerMatch, PlayerSave, RecordedMatch
+from records.models import MatchEvent, MatchOutcome, PlayerMatch, PlayerSave, RecordedMatch, WeeklyPlayer
 
 
 class RecordsPort(ABC):
@@ -73,3 +74,10 @@ class RecordsPort(ABC):
     ) -> list[RecordedMatch]:
         """Return up to `limit` matches older than `before`, newest first: one each, whoever was seen.
         `npid` keeps that player's; `name_query` those with a player whose id or name contains it."""
+
+    @abstractmethod
+    async def weekly_top_players(
+        self, session: AsyncSession, since: datetime, limit: int, excluded_npids: Sequence[str]
+    ) -> list[WeeklyPlayer]:
+        """Return the `limit` players with the most matches since `since`, counting only matches
+        both sides' saves confirmed and skipping excluded npids."""

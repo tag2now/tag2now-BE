@@ -118,6 +118,23 @@ null이다. 규칙은 `records.domain.seat`.
 - 플레이어별 승패 합계는 내지 않는다. 통산 전적은 세이브(`GET /saves/players/{npid}`)에 있다.
 - 캐시는 없다. 판이 10초마다 들어오고 FE는 화면을 열 때와 새로고침 때만 부른다.
 
+## 주간 top
+
+`GET /records/weekly-top?limit=` (1~50, 기본 10), 공개. 화면 이름은 '주간 철악귀'다.
+
+```
+[{ npid, online_name, match_count, wins, losses }]
+```
+
+- 최근 7일(`played_at`)의 판을 판수 내림차순으로 센다. 방을 세던 이전 집계와 달리 재사용된 방의 판을 모두 센다.
+- **양쪽 세이브가 확인된 판만 센다**(`counterpart_id`가 있는 행). 각 플레이어는 자기 행으로 한 번씩 세어진다. 상대
+  세이브를 못 본 판과 방을 못 찾은 판은 양쪽 모두에서 빠진다.
+- `online_name`은 그 판들의 방 스냅샷에서 읽는다. online_name은 중복·변경될 수 있어 기준으로 쓰지 않는다.
+- `RANKING_EXCLUDED_NPIDS`(JSON 목록, 대소문자 무시)에 든 RPCN username을 뺀다. 테스트 계정용이며 RPCN
+  리더보드(02-leaderboard.md)와 현재 계급 리더보드(09-save-admin.md)에서도 같은 목록을 뺀다. `LIMIT` 전에 SQL에서
+  거르므로 빠진 자리는 다음 순위가 채운다.
+- read-through 캐시(`records:weekly_top:{limit}`, `cache_ttl_activity` 300초).
+
 ## 재처리
 
 상대 매칭 규칙을 바꾼 뒤에는 SQL로 다시 돌린다. 소비자가 그대로 처리한다.
@@ -167,5 +184,5 @@ SELECT count(*) FROM match_results a JOIN match_results b
 
 세이브 원본 보관, 비랭크 매치, RPCN 수정, 플레이어별 승패 합계.
 
-기존 대전 수 통계(주간 top, 자주 만난 상대)는 `rank_match_snapshots` 기준이라 방 재사용 때문에 실제 판수보다 적다.
-이 문서의 전적이 검증되면 옮기는 것을 따로 검토한다.
+자주 만난 상대(`GET /history/players/{npid}`)는 아직 `rank_match_snapshots` 기준이라 방 재사용 때문에 실제 판수보다
+적다. 옮기는 것은 따로 검토한다.

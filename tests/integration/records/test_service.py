@@ -442,3 +442,55 @@ async def test_pages_follow_on_from_the_last_match_shown(world):
     assert len(first.matches) == 2 and first.next_before == first.matches[-1].id
     assert len(second.matches) == 1 and second.next_before is None
     assert second.matches[0].id < first.matches[-1].id
+
+
+# --- weekly top -----------------------------------------------------------------
+
+
+async def _weekly(since=_START, limit=10, excluded=()):
+    """(npid, name, matches, wins, losses) per player, read straight from the adapter past the cache."""
+    async with get_session_factory()() as session:
+        top = await PostgresRecordsAdapter().weekly_top_players(session, since, limit, excluded)
+    return [(p.npid, p.online_name, p.match_count, p.wins, p.losses) for p in top]
+
+
+async def test_weekly_top_counts_every_match_in_a_reused_room(world):
+    records, saves, history, _ = world
+    await _open_room(history)
+    await _capture(records, saves, _save(ALICE, 1), _save(BOB, 2))
+    await _capture(records, saves, _save(ALICE, 3, wins=1, at=_at(3)), _save(BOB, 4, losses=1, at=_at(3, 4)))
+    await _capture(
+        records, saves, _save(ALICE, 5, wins=1, losses=1, at=_at(6)), _save(BOB, 6, wins=1, losses=1, at=_at(6, 2))
+    )
+    await _capture(
+        records, saves, _save(ALICE, 7, wins=2, losses=1, at=_at(9)), _save(BOB, 8, wins=1, losses=2, at=_at(9, 3))
+    )
+    await _drain(records)
+
+    assert await _weekly() == [(ALICE, ALICE, 3, 2, 1), (BOB, BOB, 3, 1, 2)]
+
+
+async def test_weekly_top_leaves_out_matches_only_one_save_confirmed(world):
+    records, saves, history, _ = world
+    await _open_room(history, until=_at(5))
+    await _capture(records, saves, _save(ALICE, 1), _save(CAROL, 2))
+    await _capture(records, saves, _save(ALICE, 3, wins=1, at=_at(3)))
+    await _capture(records, saves, _save(CAROL, 4, losses=1, at=_at(40)))
+    await _drain(records)
+
+    assert await _weekly() == []
+
+
+async def test_weekly_top_leaves_out_matches_before_its_window(world):
+    records, saves, history, _ = world
+    await _played_match(records, saves, history)
+
+    assert await _weekly(since=_at(4)) == []
+
+
+async def test_weekly_top_skips_excluded_npids_before_the_limit(world):
+    """Matched case-insensitively, as RPCN usernames are."""
+    records, saves, history, _ = world
+    await _played_match(records, saves, history)
+
+    assert await _weekly(limit=1, excluded=[ALICE.upper()]) == [(BOB, BOB, 1, 0, 1)]

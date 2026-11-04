@@ -1,4 +1,4 @@
-"""GET /records/matches: its query, and the shape a recorded match answers in."""
+"""GET /records/matches and /records/weekly-top: their queries, and the shapes they answer in."""
 
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock
@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from records.dependencies import records_service
-from records.models import MatchOutcome, MatchRecordOut, MatchRecordPageOut, MatchPlayer, RecordedMatch
+from records.models import MatchOutcome, MatchRecordOut, MatchRecordPageOut, MatchPlayer, RecordedMatch, WeeklyPlayer
 
 _AT = datetime(2026, 11, 3, 0, 41, tzinfo=timezone.utc)
 
@@ -18,6 +18,7 @@ def client_and_service():
 
     service = AsyncMock()
     service.list_matches.return_value = MatchRecordPageOut(matches=[], next_before=None)
+    service.weekly_top_players.return_value = [WeeklyPlayer("alice", "Alice", 3, 2, 1)]
     app.dependency_overrides[records_service] = lambda: service
     yield TestClient(app), service  # no `with`: lifespan stays off, the service is ours
     app.dependency_overrides.pop(records_service)
@@ -63,3 +64,17 @@ def test_a_match_recorded_before_ranks_answers_characters_without_them():
 
     assert out["p1"]["chars"] == [{"name": "Paul", "rank": None}]
     assert out["p2"] is None
+
+
+def test_the_weekly_top_answers_ten_players_with_their_wins_and_losses(client_and_service):
+    client, service = client_and_service
+    response = client.get("/records/weekly-top")
+    assert response.json() == [{"npid": "alice", "online_name": "Alice", "match_count": 3, "wins": 2, "losses": 1}]
+    service.weekly_top_players.assert_awaited_once_with(10)
+
+
+@pytest.mark.parametrize("limit", [0, 51])
+def test_refuses_a_weekly_top_out_of_range(client_and_service, limit):
+    client, service = client_and_service
+    assert client.get("/records/weekly-top", params={"limit": limit}).status_code == 422
+    service.weekly_top_players.assert_not_awaited()

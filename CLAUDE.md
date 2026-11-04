@@ -448,6 +448,10 @@ Sides are `p1`/`p2` as the game seated them: the room snapshot's `user1`, since
 RPCN lists members by slot (`records.domain.seat`). No per-player totals: the
 lifetime record is the save's.
 
+`GET /records/weekly-top` (the FE's 주간 철악귀) counts each player's matches of
+the last 7 days with wins and losses, **only those both sides' saves confirmed**
+(`counterpart_id` set), so each player is counted once from their own row.
+
 ### RPCN client lifecycle
 
 `matching/rpcn_lifecycle.py`'s `SharedRpcnClient` holds one `RpcnClient` behind a `threading.Lock`, since the underlying socket is not concurrency-safe. The container builds one and hands it to `RpcnGameServerAdapter`; use its `api_client()` context manager rather than constructing a client:
@@ -493,9 +497,9 @@ error array. A new user-facing request field belongs in that map.
 | `/streams` | `streaming/router.py` — `GET`/`PUT`/`DELETE /me`, the signed-in account's channel |
 | `/admin/streams` | `streaming/router.py` (`admin_router`) — `GET`, `DELETE /{username}`; admins only, no password |
 | *(none)* | `matching/router.py` — `/game-data`, `/servers`, `/rooms/all`, `/leaderboard` |
-| `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/stats/weekly-top`, `/players/{npid}` |
+| `/history` | `history/router.py` — `/stats`, `/stats/daily`, `/players/{npid}` |
 | `/community` | `community/router.py` — posts, comments, thumbs |
-| `/records` | `records/router.py` — `GET /matches`, public |
+| `/records` | `records/router.py` — `GET /matches`, `GET /weekly-top`, public |
 | `/reservations` | `reservation/router.py` — list, create, read one (`GET /{id}`), edit (`PATCH`), join, cancel |
 | `/chat` | `chat/router.py` — `GET /stream` (SSE, public), `POST /messages`, `DELETE /messages/{id}` |
 | *(none)* | `/health` in `app.py`, excluded from the schema |

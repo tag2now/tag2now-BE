@@ -1,10 +1,9 @@
 """PostgreSQL adapter for the history module using SQLAlchemy ORM."""
 
 import logging
-from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import Date, Integer, case, delete, func, or_, select, text, tuple_, union_all, update
+from sqlalchemy import Date, Integer, case, delete, func, or_, select, text, tuple_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +16,6 @@ from history.models import (
     PlayerStats,
     RankMatchSnapshotRecord,
     RankOpponent,
-    TopPlayer,
 )
 from history.ports import HistoryPort
 
@@ -310,39 +308,3 @@ class PostgresHistoryAdapter(HistoryPort):
             ],
             active_hours=active_hours,
         )
-
-    async def get_weekly_top_players(
-        self,
-        session: AsyncSession,
-        limit: int = 10,
-        excluded_npids: Sequence[str] = (),
-    ) -> list[TopPlayer]:
-        cutoff = func.now() - timedelta(days=7)
-        # RPCN usernames are unique case-insensitively, so the list is too.
-        excluded = [npid.lower() for npid in excluded_npids]
-
-        user1_q = select(
-            RankMatchSnapshotRow.user1_npid.label("npid"),
-            RankMatchSnapshotRow.user1_online_name.label("online_name"),
-        ).where(RankMatchSnapshotRow.created_dt >= cutoff)
-
-        user2_q = select(
-            RankMatchSnapshotRow.user2_npid.label("npid"),
-            RankMatchSnapshotRow.user2_online_name.label("online_name"),
-        ).where(RankMatchSnapshotRow.created_dt >= cutoff)
-
-        sub = union_all(user1_q, user2_q).subquery()
-        stmt = (
-            select(
-                sub.c.npid,
-                func.max(sub.c.online_name).label("online_name"),
-                func.count().label("match_count"),
-            )
-            .where(func.lower(sub.c.npid).not_in(excluded))
-            .group_by(sub.c.npid)
-            .order_by(func.count().desc())
-            .limit(limit)
-        )
-
-        result = await session.execute(stmt)
-        return [TopPlayer(npid=row.npid, online_name=row.online_name, match_count=row.match_count) for row in result]

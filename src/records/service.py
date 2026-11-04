@@ -5,22 +5,25 @@ queued and compared or neither. Resolving one takes the room it was played in.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from history.service import HistoryService
 from records import domain
-from records.models import MatchEvent, MatchRecordOut, MatchRecordPageOut, PlayerSave
+from records.models import MatchEvent, MatchRecordOut, MatchRecordPageOut, PlayerSave, WeeklyPlayer
 from records.ports import RecordsPort
 from saves.ports import SaveServer
+from shared.cache import cache_get, cache_set
 from shared.clock import Clock, SystemClock
+from shared.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
 _CAPTURE_LIMIT = 200
 # data_ids are handed out before their row commits, so a lower id can appear after a higher one.
 _CAPTURE_OVERLAP = 16
+_WEEK = timedelta(days=7)
 
 
 class RecordsService:
@@ -106,3 +109,15 @@ class RecordsService:
         next_before = found[limit - 1].id if len(found) > limit else None
         shown = found[:limit]
         return MatchRecordPageOut(matches=[MatchRecordOut.of(match) for match in shown], next_before=next_before)
+
+    async def weekly_top_players(self, limit: int) -> list[WeeklyPlayer]:
+        key = f"records:weekly_top:{limit}"
+        if cached := cache_get(key):
+            return cached
+        settings = get_settings()
+        async with self._sessions() as session:
+            result = await self._repo.weekly_top_players(
+                session, self._clock.now() - _WEEK, limit, settings.ranking_excluded_npids
+            )
+        cache_set(key, result, settings.cache_ttl_activity)
+        return result

@@ -112,6 +112,17 @@ class RecordedMatch:
     p2: MatchPlayer | None
 
 
+@dataclass(frozen=True)
+class WeeklyPlayer:
+    """A player ranked by the matches of theirs both sides' saves confirmed."""
+
+    npid: str
+    online_name: str
+    match_count: int
+    wins: int
+    losses: int
+
+
 # -- Responses -----------------------------------------------------------------
 
 

@@ -1,8 +1,9 @@
 """PostgreSQL adapter for match records."""
 
+from collections.abc import Sequence
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -20,6 +21,7 @@ from records.models import (
     PlayerMatch,
     PlayerSave,
     RecordedMatch,
+    WeeklyPlayer,
 )
 from records.ports import RecordsPort
 
@@ -254,3 +256,32 @@ class PostgresRecordsAdapter(RecordsPort):
             .limit(limit)
         )
         return [_match_from_rows(*row) for row in rows]
+
+    async def weekly_top_players(
+        self, session: AsyncSession, since: datetime, limit: int, excluded_npids: Sequence[str]
+    ) -> list[WeeklyPlayer]:
+        own, room = MatchResultRow, RankMatchSnapshotRow
+        # RPCN usernames are unique case-insensitively, so the list is too.
+        excluded = [npid.lower() for npid in excluded_npids]
+        online_name = case((room.user1_npid == own.npid, room.user1_online_name), else_=room.user2_online_name)
+        match_count = func.count()
+        rows = await session.execute(
+            select(
+                own.npid,
+                func.max(online_name).label("online_name"),
+                match_count.label("match_count"),
+                func.count().filter(own.result == MatchOutcome.WIN).label("wins"),
+                func.count().filter(own.result == MatchOutcome.LOSS).label("losses"),
+            )
+            # A linked result always has its room.
+            .join(room, room.id == own.room_snapshot_id)
+            .where(
+                own.counterpart_id.is_not(None),
+                own.played_at >= since,
+                func.lower(own.npid).not_in(excluded),
+            )
+            .group_by(own.npid)
+            .order_by(match_count.desc(), own.npid)
+            .limit(limit)
+        )
+        return [WeeklyPlayer(row.npid, row.online_name, row.match_count, row.wins, row.losses) for row in rows]

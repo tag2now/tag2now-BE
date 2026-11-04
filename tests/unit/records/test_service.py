@@ -1,13 +1,14 @@
 """The capture and queue steps of match records, over a stubbed repository."""
 
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from history.models import RankOpponent
-from records.models import CharTally, MatchEvent, MatchOutcome, PlayerSave
+from records.models import CharTally, MatchEvent, MatchOutcome, PlayerSave, WeeklyPlayer
 from records.ports import RecordsPort
 from records.service import RecordsService
 from shared.clock import Clock
@@ -171,3 +172,36 @@ async def test_a_failure_schedules_a_retry_instead_of_finishing(service, repo, h
     repo.finish_event.assert_not_awaited()
     repo.fail_event.assert_awaited_once()
     assert repo.fail_event.await_args.args[2] == "database hiccup"
+
+
+# --- weekly top -----------------------------------------------------------------
+
+
+@pytest.fixture
+def cache(monkeypatch):
+    store = {}
+    monkeypatch.setattr("records.service.cache_get", store.get)
+    monkeypatch.setattr("records.service.cache_set", lambda key, value, ttl: store.__setitem__(key, value))
+    monkeypatch.setattr(
+        "records.service.get_settings",
+        lambda: SimpleNamespace(ranking_excluded_npids=["tester"], cache_ttl_activity=300),
+    )
+    return store
+
+
+async def test_the_weekly_top_counts_the_last_seven_days_without_excluded_players(service, repo, cache):
+    repo.weekly_top_players.return_value = [WeeklyPlayer("alice", "Alice", 3, 2, 1)]
+
+    top = await service.weekly_top_players(10)
+
+    assert top == repo.weekly_top_players.return_value
+    _, since, limit, excluded = repo.weekly_top_players.await_args.args
+    assert (since, limit, excluded) == (_NOW - timedelta(days=7), 10, ["tester"])
+    assert cache["records:weekly_top:10"] == top
+
+
+async def test_a_cached_weekly_top_reads_nothing(service, repo, cache):
+    cache["records:weekly_top:10"] = [{"npid": "alice"}]
+
+    assert await service.weekly_top_players(10) == [{"npid": "alice"}]
+    repo.weekly_top_players.assert_not_awaited()
