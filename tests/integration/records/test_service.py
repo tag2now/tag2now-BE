@@ -383,7 +383,7 @@ def _side(side):
     """(npid, name, result, [(character, rank)]) — characters None when that save was not seen."""
     if side is None:
         return None
-    chars = None if side.chars is None else [(char.name, char.rank and char.rank.name) for char in side.chars]
+    chars = [(char.name, char.rank and char.rank.name) for char in side.chars] if side.chars is not None else None
     return side.npid, side.online_name, side.result, chars
 
 

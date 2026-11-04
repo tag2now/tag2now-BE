@@ -158,7 +158,7 @@ class RecordCharOut(BaseModel):
         known = TEKKEN_RANKS.get(rank)
         return cls(
             name=TTT2_CHARACTERS.get(char_id, str(char_id)),
-            rank=None if known is None else RankOut(**known),
+            rank=RankOut(**known) if known is not None else None,
         )
 
 
@@ -196,7 +196,7 @@ class MatchRecordOut(BaseModel):
             id=match.id,
             played_at=match.played_at,
             p1=RecordPlayerOut.of(match.p1),
-            p2=None if match.p2 is None else RecordPlayerOut.of(match.p2),
+            p2=RecordPlayerOut.of(match.p2) if match.p2 is not None else None,
         )
 
 

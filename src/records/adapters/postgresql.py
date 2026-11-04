@@ -47,7 +47,7 @@ def _to_save(row: SaveStateRow) -> PlayerSave:
 
 
 def _optional_tuple(values: list | None) -> tuple | None:
-    return None if values is None else tuple(values)
+    return tuple(values) if values is not None else None
 
 
 def _to_event(row: MatchEventRow) -> MatchEvent:
@@ -65,7 +65,7 @@ def _to_event(row: MatchEventRow) -> MatchEvent:
 def _player(
     npid: str, side: Side, match: MatchRow, event: MatchEventRow | None, room: RankMatchSnapshotRow | None
 ) -> MatchPlayer:
-    online_name = None if room is None else room.online_name_of(npid)
+    online_name = room.online_name_of(npid) if room is not None else None
     outcome = outcome_of(side, Side(match.winner))
     if event is None:
         return MatchPlayer(npid, online_name, outcome, None, None)
@@ -79,7 +79,7 @@ def _recorded_match(
     p2_event: MatchEventRow | None,
 ) -> RecordedMatch:
     p1 = _player(match.p1_npid, Side.P1, match, p1_event, room)
-    p2 = None if match.p2_npid is None else _player(match.p2_npid, Side.P2, match, p2_event, room)
+    p2 = _player(match.p2_npid, Side.P2, match, p2_event, room) if match.p2_npid is not None else None
     return RecordedMatch(id=match.id, played_at=match.played_at, p1=p1, p2=p2)
 
 
@@ -120,7 +120,7 @@ class PostgresRecordsAdapter(RecordsPort):
         row = (
             await session.execute(select(SaveStateRow).where(SaveStateRow.npid == npid).with_for_update())
         ).scalar_one_or_none()
-        return None if row is None else _to_save(row)
+        return _to_save(row) if row is not None else None
 
     async def save_state(self, session: AsyncSession, save: PlayerSave, merged: bool) -> None:
         values = dict(
@@ -166,7 +166,7 @@ class PostgresRecordsAdapter(RecordsPort):
                 .with_for_update(skip_locked=True)
             )
         ).scalar_one_or_none()
-        return None if row is None else _to_event(row)
+        return _to_event(row) if row is not None else None
 
     async def finish_event(self, session: AsyncSession, event_id: int) -> None:
         await session.execute(
@@ -222,7 +222,7 @@ class PostgresRecordsAdapter(RecordsPort):
         session.add(
             MatchRow(
                 played_at=event.saved_at,
-                room_snapshot_id=None if room is None else room.room_snapshot_id,
+                room_snapshot_id=room.room_snapshot_id if room is not None else None,
                 p1_npid=p1_npid,
                 p2_npid=p2_npid,
                 winner=winner,
