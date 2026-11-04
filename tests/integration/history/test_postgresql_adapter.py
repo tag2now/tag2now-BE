@@ -513,3 +513,22 @@ async def test_active_hours_requires_two_distinct_days(adapter, db_session):
     stats = await adapter.get_player_stats(db_session, "hours", days=7)
     assert 21 in stats.active_hours
     assert 15 not in stats.active_hours
+
+
+@pytest.mark.asyncio
+async def test_active_hours_cover_every_hour_a_room_stays_open(adapter, db_session):
+    """Rematches in one room from 21:10 to 23:20 on two days are 21, 22 and 23, not 21 alone."""
+    from datetime import datetime, timedelta, timezone
+
+    KST = timezone(timedelta(hours=9))
+    base = (datetime.now(KST) - timedelta(days=1)).replace(hour=21, minute=10, second=0, microsecond=0)
+    rooms = [
+        _make_record(room_id=9301, user1_npid="longroom", created_dt=base),
+        _make_record(room_id=9302, user1_npid="longroom", created_dt=base - timedelta(days=1)),
+    ]
+    await adapter.record_snapshot(db_session, rooms)
+    for room in rooms:
+        await adapter.touch_rank_matches(db_session, [room], room.created_dt + timedelta(hours=2, minutes=10))
+
+    stats = await adapter.get_player_stats(db_session, "longroom", days=7)
+    assert stats.active_hours == [21, 22, 23]

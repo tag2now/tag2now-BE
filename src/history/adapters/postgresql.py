@@ -253,19 +253,25 @@ class PostgresHistoryAdapter(HistoryPort):
         row = (await session.execute(stats_stmt)).one_or_none()
 
         cutoff_hours = func.now() - timedelta(days=7)
-        hours_stmt = (
+        # Rematches stay in one room, so a room covers every hour up to its last sighting.
+        room_hours = (
             select(
-                func.extract("hour", func.timezone("Asia/Seoul", RankMatchSnapshotRow.created_dt))
-                .cast(Integer)
-                .label("hour"),
-                func.count(func.distinct(_sql_stat_day(RankMatchSnapshotRow.created_dt))).label("day_count"),
+                func.generate_series(
+                    func.date_trunc("hour", RankMatchSnapshotRow.created_dt),
+                    RankMatchSnapshotRow.last_seen_at,
+                    timedelta(hours=1),
+                ).label("hour_start")
             )
             .where(
                 or_(RankMatchSnapshotRow.user1_npid == npid, RankMatchSnapshotRow.user2_npid == npid),
                 RankMatchSnapshotRow.created_dt >= cutoff_hours,
             )
-            .group_by("hour")
+            .subquery()
         )
+        hours_stmt = select(
+            func.extract("hour", func.timezone("Asia/Seoul", room_hours.c.hour_start)).cast(Integer).label("hour"),
+            func.count(func.distinct(_sql_stat_day(room_hours.c.hour_start))).label("day_count"),
+        ).group_by("hour")
         hours_result = await session.execute(hours_stmt)
         active_hours = sorted(row.hour for row in hours_result if row.day_count >= 2)
 
