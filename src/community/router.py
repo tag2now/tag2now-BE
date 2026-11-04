@@ -77,6 +77,16 @@ async def create_comment(
     return await service.create_comment(post_id, user, req.body, req.parent_id)
 
 
+@router.delete("/posts/{post_id}/comments/{comment_id}", status_code=204)
+async def delete_comment(
+    post_id: int,
+    comment_id: int,
+    user: AuthUser = Depends(current_user),
+    service: CommunityService = Depends(community_service),
+):
+    await service.delete_comment(post_id, comment_id, user)
+
+
 # ---------------------------------------------------------------------------
 # Thumbs (posts only)
 # ---------------------------------------------------------------------------

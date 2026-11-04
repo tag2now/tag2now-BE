@@ -61,6 +61,14 @@ class CommunityRepository(ABC):
     ) -> dict:
         """Add a comment. Raises PostNotFoundError, CommentNotFoundError, NestingDepthError."""
 
+    @abstractmethod
+    async def get_comment(self, post_id: int, comment_id: int) -> dict:
+        """Return a live comment on *post_id*, or raise CommentNotFoundError."""
+
+    @abstractmethod
+    async def delete_comment(self, comment_id: int) -> None:
+        """Soft-delete a comment. Who may is the service's decision."""
+
     # -- Thumbs (posts only) -------------------------------------------------
 
     @abstractmethod

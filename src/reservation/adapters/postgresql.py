@@ -341,7 +341,9 @@ class PostgresReservationRepository(ReservationRepository):
             await session.refresh(row)
             return _comment(row)
 
-    async def delete_comment(self, reservation_id: int, comment_id: int, author_subject: str, now: datetime) -> None:
+    async def delete_comment(
+        self, reservation_id: int, comment_id: int, subject: str, now: datetime, *, admin: bool
+    ) -> None:
         """Soft delete, so a reply reading as an answer to nothing is at least rare.
 
         The row is kept rather than removed because the listing is ordered by
@@ -352,7 +354,7 @@ class PostgresReservationRepository(ReservationRepository):
             row = await session.get(ReservationCommentRow, comment_id)
             if row is None or row.reservation_id != reservation_id or row.deleted_at is not None:
                 raise ReservationNotFoundError("Comment not found")
-            ensure_comment_deletable_by(row.author_subject, author_subject)
+            ensure_comment_deletable_by(row.author_subject, subject, admin=admin)
             row.deleted_at = now
 
     async def cancel(self, reservation_id: int, host_subject: str, now: datetime) -> None:

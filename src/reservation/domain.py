@@ -183,9 +183,9 @@ def ensure_commentable(status: ReservationStatus) -> None:
         raise ReservationStateError("취소된 예약에는 댓글을 쓸 수 없습니다.")
 
 
-def ensure_comment_deletable_by(author_subject: str | None, subject: str) -> None:
-    """A comment from before login has no author, and None equals no one."""
-    if author_subject != subject:
+def ensure_comment_deletable_by(author_subject: str | None, subject: str, *, admin: bool) -> None:
+    """Its author, or any admin. A comment from before login has no author, and None equals no one."""
+    if author_subject != subject and not admin:
         raise ReservationAccessError("작성한 사람만 삭제할 수 있습니다.")
 
 

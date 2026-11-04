@@ -101,8 +101,8 @@ class ReservationService:
             reservation_id, author_subject=subject, author=display_name, body=body.strip()
         )
 
-    async def delete_comment(self, reservation_id: int, comment_id: int, subject: str) -> None:
-        await self._repo.delete_comment(reservation_id, comment_id, subject, self._clock.now())
+    async def delete_comment(self, reservation_id: int, comment_id: int, subject: str, *, admin: bool) -> None:
+        await self._repo.delete_comment(reservation_id, comment_id, subject, self._clock.now(), admin=admin)
 
     async def cancel_reservation(self, reservation_id: int, subject: str) -> None:
         await self._repo.cancel(reservation_id, subject, self._clock.now())

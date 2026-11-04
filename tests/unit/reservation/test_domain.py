@@ -297,10 +297,15 @@ def test_a_started_reservation_cannot_be_cancelled():
 
 
 def test_the_author_deletes_their_comment():
-    ensure_comment_deletable_by("author", "author")
+    ensure_comment_deletable_by("author", "author", admin=False)
+
+
+@pytest.mark.parametrize("author_subject", ["author", None])
+def test_an_admin_deletes_anyones_comment(author_subject):
+    ensure_comment_deletable_by(author_subject, "root", admin=True)
 
 
 @pytest.mark.parametrize("author_subject", ["author", None])
 def test_nobody_else_deletes_it_and_an_authorless_comment_has_no_deleter(author_subject):
     with pytest.raises(ReservationAccessError, match="작성한 사람만 삭제"):
-        ensure_comment_deletable_by(author_subject, "stranger")
+        ensure_comment_deletable_by(author_subject, "stranger", admin=False)

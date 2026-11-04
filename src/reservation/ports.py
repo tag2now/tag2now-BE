@@ -59,5 +59,5 @@ class ReservationRepository(ABC):
 
     @abstractmethod
     async def delete_comment(
-        self, reservation_id: int, comment_id: int, author_subject: str, now: datetime
+        self, reservation_id: int, comment_id: int, subject: str, now: datetime, *, admin: bool
     ) -> None: ...

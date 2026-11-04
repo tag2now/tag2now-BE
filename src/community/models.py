@@ -107,6 +107,8 @@ class CommentOut(BaseModel):
     author: str
     body: str
     created_at: datetime
+    # A deleted comment kept as the head of its replies; its body is empty.
+    deleted: bool = False
     replies: list["CommentOut"] = []
 
 
