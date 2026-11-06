@@ -7,6 +7,7 @@ from auth.models import AuthUser
 from community import models
 from community.dependencies import community_service
 from community.service import CommunityService
+from idempotency.dependencies import idempotency_key
 
 router = APIRouter()
 
@@ -31,9 +32,12 @@ async def list_posts(
 async def create_post(
     req: models.CreatePostRequest,
     user: AuthUser = Depends(current_user),
+    key: str = Depends(idempotency_key),
     service: CommunityService = Depends(community_service),
 ):
-    return await service.create_post(user, req.title, req.body, req.post_type, req.characters, req.youtube_video_id)
+    return await service.create_post(
+        user, req.title, req.body, req.post_type, req.characters, req.youtube_video_id, idempotency_key=key
+    )
 
 
 @router.get("/posts/{post_id}", response_model=models.PostDetail)
@@ -72,9 +76,10 @@ async def create_comment(
     post_id: int,
     req: models.CreateCommentRequest,
     user: AuthUser = Depends(current_user),
+    key: str = Depends(idempotency_key),
     service: CommunityService = Depends(community_service),
 ):
-    return await service.create_comment(post_id, user, req.body, req.parent_id)
+    return await service.create_comment(post_id, user, req.body, req.parent_id, idempotency_key=key)
 
 
 @router.delete("/posts/{post_id}/comments/{comment_id}", status_code=204)

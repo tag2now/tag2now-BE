@@ -46,3 +46,44 @@ def sessions():
         yield session
 
     return open_session
+
+
+class MemoryIdempotencyStore:
+    """The PostgreSQL store's rules over a dict, for services whose session is fake."""
+
+    def __init__(self):
+        self.rows: dict[tuple[str, str], dict] = {}
+
+    async def claim(self, session, subject, key, fingerprint):
+        from idempotency.exceptions import IdempotencyKeyReusedError
+
+        row = self.rows.setdefault((subject, key), {"fingerprint": fingerprint, "response": None})
+        if row["fingerprint"] != fingerprint:
+            raise IdempotencyKeyReusedError("이미 다른 요청에 쓰인 요청 키입니다. 새로고침 후 다시 시도해 주세요.")
+        return row["response"]
+
+    async def complete(self, session, subject, key, response):
+        self.rows[(subject, key)]["response"] = response
+
+
+@pytest.fixture
+def idempotency():
+    from idempotency.service import IdempotencyService
+
+    return IdempotencyService(MemoryIdempotencyStore())
+
+
+@pytest.fixture
+def send_idempotency_keys():
+    """Make a test client give every POST a fresh Idempotency-Key unless the test set one, as the frontend does."""
+    from uuid import uuid4
+
+    def add_key(request):
+        if request.method == "POST" and "Idempotency-Key" not in request.headers:
+            request.headers["Idempotency-Key"] = str(uuid4())
+
+    def install(client):
+        client.event_hooks["request"].append(add_key)
+        return client
+
+    return install

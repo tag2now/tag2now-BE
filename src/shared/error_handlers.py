@@ -17,6 +17,7 @@ from shared.exceptions import (
     RateLimitedError,
     ServiceUnavailableError,
     UnauthorizedError,
+    UnprocessableError,
     ValidationError,
 )
 
@@ -28,6 +29,7 @@ _STATUS: dict[type[DomainError], int] = {
     ForbiddenError: 403,
     ValidationError: 400,
     ConflictError: 409,
+    UnprocessableError: 422,
     RateLimitedError: 429,
     ServiceUnavailableError: 502,
 }
@@ -89,6 +91,7 @@ _FIELD_LABELS = {
     "allow_dismiss_day": "하루 동안 보지 않기",
     "active": "활성",
     "q": "검색어",
+    "Idempotency-Key": "요청 키",
 }
 
 

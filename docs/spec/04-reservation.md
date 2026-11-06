@@ -76,7 +76,7 @@
 | 메서드 | 경로 | 설명 | 인증 |
 |--------|------|------|------|
 | GET | `/reservations` | 1시간 전부터 다음 06:00 KST까지의 `open`/`matched` 예약 목록 | 없음 |
-| POST | `/reservations` | 등록 → 예약 (201) | 로그인 |
+| POST | `/reservations` | 등록 → 예약 (201). `Idempotency-Key` 필수([06](06-cross-cutting.md#멱등-키-idempotency-key)) | 로그인 |
 | GET | `/reservations/{id}` | 단건 조회 | 없음 |
 | PATCH | `/reservations/{id}` | 부분 수정 | 방장 |
 | POST | `/reservations/{id}/participants` | 참가 → 예약 (201) | 로그인 |

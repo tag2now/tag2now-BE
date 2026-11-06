@@ -9,6 +9,7 @@ from datetime import time
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from idempotency.service import IdempotencyService
 from reservation.domain import Comment, MatchType, Reservation, ensure_conditions_valid, start_at_from
 from reservation.ports import ReservationRepository
 from shared.clock import Clock, SystemClock
@@ -19,10 +20,12 @@ class ReservationService:
         self,
         repo: ReservationRepository,
         sessions: async_sessionmaker[AsyncSession],
+        idempotency: IdempotencyService,
         clock: Clock | None = None,
     ):
         self._repo = repo
         self._sessions = sessions
+        self._idempotency = idempotency
         self._clock = clock or SystemClock()
 
     async def list_reservations(self) -> list[Reservation]:
@@ -40,19 +43,35 @@ class ReservationService:
         match_type: MatchType,
         capacity: int,
         memo: str,
-    ) -> Reservation:
+        idempotency_key: str,
+    ) -> dict:
+        """The created reservation as JSON, the same on every retry with the same key."""
         ensure_conditions_valid(match_type, ranks, capacity)
         start_at = start_at_from(start_time, self._clock.now())
+        request = {
+            "start_time": start_time,
+            "ranks": ranks,
+            "match_type": match_type,
+            "capacity": capacity,
+            "memo": memo,
+        }
         async with self._sessions() as session, session.begin():
-            return await self._repo.create(
+            return await self._idempotency.run_once(
                 session,
-                start_at=start_at,
-                host_subject=subject,
-                host_display_name=display_name,
-                host_ranks=ranks,
-                match_type=match_type,
-                capacity=capacity,
-                memo=memo.strip(),
+                subject,
+                idempotency_key,
+                "reservation.create",
+                request,
+                lambda: self._repo.create(
+                    session,
+                    start_at=start_at,
+                    host_subject=subject,
+                    host_display_name=display_name,
+                    host_ranks=ranks,
+                    match_type=match_type,
+                    capacity=capacity,
+                    memo=memo.strip(),
+                ),
             )
 
     async def get_reservation(self, reservation_id: int) -> Reservation:

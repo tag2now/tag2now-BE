@@ -83,8 +83,8 @@ def dependencies():
 
 
 @pytest.fixture
-def service(dependencies, sessions):
-    return ReservationService(dependencies, sessions, FixedClock())
+def service(dependencies, sessions, idempotency):
+    return ReservationService(dependencies, sessions, idempotency, FixedClock())
 
 
 @pytest.mark.asyncio
@@ -97,9 +97,10 @@ async def test_create_rank_reservation_uses_kst_today_and_records_the_host(servi
         match_type=MatchType.RANK,
         capacity=1,
         memo="hello",
+        idempotency_key="k",
     )
 
-    assert reservation.host_display_name == "Host"
+    assert reservation["host_display_name"] == "Host"
     assert dependencies.created["host_subject"] == "host"
     assert dependencies.created["start_at"].hour == 11  # 20:30 KST in UTC
 
@@ -115,6 +116,7 @@ async def test_create_rank_reservation_requires_rank(service, dependencies):
             match_type=MatchType.RANK,
             capacity=1,
             memo="",
+            idempotency_key="k",
         )
 
 
@@ -129,6 +131,7 @@ async def test_create_player_reservation_rejects_ranks(service, dependencies):
             match_type=MatchType.PLAYER,
             capacity=2,
             memo="",
+            idempotency_key="k",
         )
 
 
@@ -143,6 +146,7 @@ async def test_create_rejects_start_time_less_than_ten_minutes_away(service, dep
             match_type=MatchType.RANK,
             capacity=1,
             memo="",
+            idempotency_key="k",
         )
 
 
@@ -157,6 +161,7 @@ async def test_create_rank_reservation_rejects_capacity_other_than_one(service, 
             match_type=MatchType.RANK,
             capacity=2,
             memo="",
+            idempotency_key="k",
         )
 
 

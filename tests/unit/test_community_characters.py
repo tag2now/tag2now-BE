@@ -27,14 +27,14 @@ def test_edit_requires_an_explicit_character_list():
 
 
 @pytest.fixture
-def listing(sessions):
+def listing(sessions, idempotency):
     from shared.cache import cache_delete_pattern
 
     repo = AsyncMock()
     repo.list_posts.return_value = ([], 0)
     app = FastAPI()
     app.include_router(router, prefix="/community")
-    app.dependency_overrides[community_service] = lambda: CommunityService(repo, sessions)
+    app.dependency_overrides[community_service] = lambda: CommunityService(repo, sessions, idempotency)
     cache_delete_pattern("community:*")
     with TestClient(app) as client:
         yield client, repo

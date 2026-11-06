@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
+from idempotency.entities import IdempotencyKeyRow
 from reservation.entities import Reservation as ReservationRow
 from reservation.entities import ReservationComment as ReservationCommentRow
 from reservation.entities import ReservationParticipant as ReservationParticipantRow
@@ -23,9 +24,10 @@ def _empty_reservation_tables():
 
     TRUNCATE would do the same in one statement, but it takes an ACCESS
     EXCLUSIVE lock and CASCADEs into whatever else comes to reference these
-    tables later. A plain DELETE names exactly the three tables the suite owns
+    tables later. A plain DELETE names exactly the tables the suite owns
     and behaves like any other write, which matters because a local dev server
-    is usually pointed at this same database.
+    is usually pointed at this same database. The idempotency keys go too, or a
+    key a test reuses would replay the previous test's reservation.
     """
     from shared.database import close_database, get_session_factory, init_database
 
@@ -33,6 +35,7 @@ def _empty_reservation_tables():
         await init_database()
         try:
             async with get_session_factory()() as session, session.begin():
+                await session.execute(delete(IdempotencyKeyRow))
                 await session.execute(delete(ReservationCommentRow))
                 await session.execute(delete(ReservationParticipantRow))
                 await session.execute(delete(ReservationRow))
@@ -43,7 +46,7 @@ def _empty_reservation_tables():
 
 
 @pytest.fixture()
-def client():
+def client(send_idempotency_keys):
     """A client over an empty reservations table, left empty for the next test.
 
     The assertions here look for their own row by id rather than counting, so
@@ -54,7 +57,7 @@ def client():
     from app import app
 
     _empty_reservation_tables()
-    with TestClient(app) as tc:
+    with send_idempotency_keys(TestClient(app)) as tc:
         yield tc
     _empty_reservation_tables()
 
@@ -522,5 +525,26 @@ def test_an_empty_comment_is_refused_before_it_reaches_the_domain(client, as_use
     response = client.post(
         f"/reservations/{reservation['id']}/comments", json={"body": "   "}, headers=as_user("commenter")
     )
+
+    assert response.status_code == 422
+
+
+def test_a_retried_reservation_is_created_once_and_answered_alike(client, as_user):
+    headers = {**as_user("host"), "Idempotency-Key": "reservation-1"}
+
+    first = client.post("/reservations", json=_payload(), headers=headers)
+    retry = client.post("/reservations", json=_payload(), headers=headers)
+
+    assert (first.status_code, retry.status_code) == (201, 201)
+    assert first.json() == retry.json()
+    hosted = [item for item in client.get("/reservations").json() if item["host_username"] == "host"]
+    assert len(hosted) == 1
+
+
+def test_a_reservation_key_reused_for_other_conditions_is_refused(client, as_user):
+    headers = {**as_user("host"), "Idempotency-Key": "reservation-1"}
+    client.post("/reservations", json=_payload(), headers=headers)
+
+    response = client.post("/reservations", json=_payload(memo="다른 메모"), headers=headers)
 
     assert response.status_code == 422

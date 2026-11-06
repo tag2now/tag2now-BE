@@ -7,6 +7,7 @@ from shared.database import Base, build_dsn
 import chat.entities  # noqa
 import community.entities  # noqa
 import history.entities  # noqa
+import idempotency.entities  # noqa
 import popup.entities  # noqa
 import records.entities  # noqa
 import reservation.entities  # noqa

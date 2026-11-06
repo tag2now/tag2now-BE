@@ -40,7 +40,7 @@ def user(username: str, admin: bool = False) -> AuthUser:
 
 
 @pytest.fixture
-def board(sessions):
+def board(sessions, idempotency):
     from app import app
     from community.dependencies import community_service
     from community.service import CommunityService
@@ -49,7 +49,7 @@ def board(sessions):
     repo = AsyncMock()
     repo.get_post.return_value = dict(POST)
     repo.get_comment.return_value = comment(7, author="bob")
-    app.dependency_overrides[community_service] = lambda: CommunityService(repo, sessions)
+    app.dependency_overrides[community_service] = lambda: CommunityService(repo, sessions, idempotency)
     cache_delete_pattern("community:*")
     # No `with`: lifespan stays off, the service is ours.
     yield TestClient(app), repo

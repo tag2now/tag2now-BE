@@ -181,7 +181,7 @@ Cache TTLs are settings, not constants — `cache_ttl_servers`, `cache_ttl_leade
 
 ## Architecture
 
-Twelve modules under `src/` --- ten domains plus `auth/` and `admin/` --- a `shared/` layer and the standalone `rpcn_client` package.
+Thirteen modules under `src/` --- ten domains plus `auth/`, `admin/` and `idempotency/` --- a `shared/` layer and the standalone `rpcn_client` package.
 
 | Module | Responsibility |
 |--------|----------------|
@@ -197,6 +197,7 @@ Twelve modules under `src/` --- ten domains plus `auth/` and `admin/` --- a `sha
 | `streaming/` | Players' own Chzzk channels, and who in a room is live — carried on `/rooms/all` as each user's `stream` |
 | `popup/` | Popups admins write and every visitor sees on opening the site, images stored in PostgreSQL. Spec: `docs/spec/12-popup.md` |
 | `admin/` | RPCN account moderation (lookup, ban) through rpcn-narco's admin API, and the admin gate other routers use |
+| `idempotency/` | The `Idempotency-Key` creating routes require: a service runs its write once per key, inside its own transaction. Spec: `docs/spec/06-cross-cutting.md` |
 | `shared/` | Settings, cache, database, exceptions, TTT2's ids and character/rank tables (`ttt2.py`), and the rpcn-narco API server client `auth/` and `admin/` share (`rpcn_api.py`) |
 | `rpcn_client/` | Standalone RPCN protocol client (no FastAPI dependency) |
 

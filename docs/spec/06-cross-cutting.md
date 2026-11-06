@@ -39,6 +39,9 @@
 | `UnauthorizedError` (← `auth` 예외들) | 401, `WWW-Authenticate: Bearer` |
 | `ForbiddenError` | 403 |
 | `ValidationError` | 400 |
+| `ConflictError` | 409 |
+| `UnprocessableError` (← `IdempotencyKeyReusedError`) | 422 |
+| `RateLimitedError` | 429 |
 | `ServiceUnavailableError` (← `RpcnUnavailableError`, `AuthUnavailableError`) | 502 |
 
 FastAPI의 `RequestValidationError`는 422를 유지하되 응답을 재구성한다.
@@ -47,6 +50,32 @@ FastAPI의 `RequestValidationError`는 422를 유지하되 응답을 재구성�
 
 FE는 `main.tsx`에 전역 `unhandledrejection` 핸들러를 두어 토스트로 표시하고 `preventDefault()` 한다.
 인라인 에러 상태가 필요한 훅은 스스로 `catch`해 `e.message`를 보관한다.
+
+## 멱등 키 (`Idempotency-Key`)
+
+무언가를 새로 만드는 쓰기 --- `POST /community/posts`, `POST /community/posts/{id}/comments`,
+`POST /reservations` --- 는 `Idempotency-Key` 헤더(1~255자)를 **필수로** 받는다.
+IETF `draft-ietf-httpapi-idempotency-key-header`의 방식이다. FE는 시도 하나마다 UUID를 만들고,
+같은 내용을 다시 보낼 때는 같은 키를 쓴다.
+
+| 상황 | 응답 |
+|------|------|
+| 헤더 없음 | 422 `요청 키를 입력해 주세요.` (초안은 400이지만 FastAPI의 요청 검증을 그대로 쓴다) |
+| 처음 보는 키 | 실행하고, 응답 본문을 키와 함께 저장 |
+| 같은 키 + 같은 요청 | 실행하지 않고 저장된 본문을 같은 상태 코드(201)로 다시 준다 |
+| 같은 키 + 다른 요청 | 422 `이미 다른 요청에 쓰인 요청 키입니다. …` |
+| 실패한 요청(404 등)의 키 | 저장되지 않는다 --- 재시도는 새로 실행된다 |
+
+키는 **사용자별**이다(`(subject, key)` 유니크). "같은 요청"은 작업 이름(`community.comment` 등)과
+요청 필드의 sha256 지문(`idempotency/domain.py`)으로 판정하므로, 한 키를 다른 작업에 쓰면 422다.
+
+**정확성은 락이 아니라 PostgreSQL의 유니크 인덱스가 보장한다.** 키 기록(`idempotency_keys`),
+실제 쓰기, 응답 저장이 서비스가 연 **한 트랜잭션**에 들어간다(`IdempotencyService.run_once`).
+- 키는 `INSERT … ON CONFLICT DO NOTHING`으로 잡는다. 같은 키의 동시 요청은 첫 요청의 커밋되지 않은
+  인덱스 항목에서 기다리다가, 첫 요청이 커밋하면 충돌해 저장된 응답을 재생하고, 롤백하면 자신이 실행한다.
+  그래서 "처리 중" 상태도, 그에 대한 409도 없다.
+- 쓰기가 실패하면 키도 함께 롤백되므로, 키만 남아 재시도를 막는 일이 없다.
+- 키는 만료·정리하지 않는다. 쓰기량이 적어 행이 쌓이는 속도를 지켜보는 중이다.
 
 ## RPCN 클라이언트 수명주기
 

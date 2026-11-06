@@ -17,7 +17,7 @@
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
 | GET | `/community/posts?page&page_size&post_type&characters` | 목록 (page ≥ 1, page_size 1~100 기본 20) |
-| POST | `/community/posts` | 작성 (201) |
+| POST | `/community/posts` | 작성 (201). `Idempotency-Key` 필수([06](06-cross-cutting.md#멱등-키-idempotency-key)) |
 | GET | `/community/posts/{id}` | 상세 + 댓글 트리 |
 | PATCH | `/community/posts/{id}` | 수정 — 작성자 본인만(공지는 관리자 누구나), 편집 가능한 필드 전부를 보낸다 |
 | DELETE | `/community/posts/{id}` | 작성자 본인만, 공지는 관리자 누구나 (204) |
@@ -57,7 +57,7 @@ TTT2는 2인 태그 팀으로 싸우므로 글 하나에 **캐릭터를 최대 2
 
 ## 댓글
 
-`POST /community/posts/{post_id}/comments` — `body`(1~1000자), `parent_id`(선택).
+`POST /community/posts/{post_id}/comments` — `body`(1~1000자), `parent_id`(선택). `Idempotency-Key` 필수.
 
 - 저장은 평면 구조이고, **트리는 조회 시점에 서비스가 조립한다**: `parent_id`가 부모의 `replies`에 붙고,
   부모가 없거나 목록에 없으면 최상위로 승격된다(고아 댓글이 사라지지 않는다).

@@ -26,7 +26,7 @@ def test_existing_request_has_no_video():
 
 
 @pytest.mark.parametrize("video_id", [None, "dQw4w9WgXcQ"])
-def test_create_and_read_video_through_api(video_id, auth_headers, sessions):
+def test_create_and_read_video_through_api(video_id, auth_headers, sessions, idempotency, send_idempotency_keys):
     from shared.cache import cache_delete_pattern
 
     post = dict(
@@ -47,10 +47,10 @@ def test_create_and_read_video_through_api(video_id, auth_headers, sessions):
     repo.list_posts.return_value = ([post.copy()], 1)
     app = FastAPI()
     app.include_router(router, prefix="/community")
-    app.dependency_overrides[community_service] = lambda: CommunityService(repo, sessions)
+    app.dependency_overrides[community_service] = lambda: CommunityService(repo, sessions, idempotency)
     cache_delete_pattern("community:*")
     try:
-        with TestClient(app) as client:
+        with send_idempotency_keys(TestClient(app)) as client:
             response = client.post(
                 "/community/posts",
                 json={

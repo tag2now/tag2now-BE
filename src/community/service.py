@@ -7,6 +7,7 @@ from auth.models import AuthUser
 from community.exceptions import NoticeAdminOnlyError, OwnershipError
 from community.models import NOTICE_POST_TYPE
 from community.ports import CommunityRepository
+from idempotency.service import IdempotencyService
 from shared.cache import cache_delete, cache_delete_pattern, cache_get, cache_set
 from shared.settings import get_settings
 
@@ -88,9 +89,15 @@ def _nest_replies(comments: list[dict]) -> list[dict]:
 
 
 class CommunityService:
-    def __init__(self, repo: CommunityRepository, sessions: async_sessionmaker[AsyncSession]):
+    def __init__(
+        self,
+        repo: CommunityRepository,
+        sessions: async_sessionmaker[AsyncSession],
+        idempotency: IdempotencyService,
+    ):
         self._repo = repo
         self._sessions = sessions
+        self._idempotency = idempotency
 
     # -- Posts ---------------------------------------------------------------
 
@@ -128,11 +135,27 @@ class CommunityService:
         post_type: str = "자유",
         characters: list[str] | None = None,
         youtube_video_id: str | None = None,
+        *,
+        idempotency_key: str,
     ) -> dict:
         ensure_can_use_post_type(post_type, author)
+        request = {
+            "title": title,
+            "body": body,
+            "post_type": post_type,
+            "characters": list(characters or []),
+            "youtube_video_id": youtube_video_id,
+        }
         async with self._sessions() as session, session.begin():
-            post = await self._repo.create_post(
-                session, author.username, title, body, post_type, characters, youtube_video_id
+            post = await self._idempotency.run_once(
+                session,
+                author.username,
+                idempotency_key,
+                "community.post",
+                request,
+                lambda: self._repo.create_post(
+                    session, author.username, title, body, post_type, characters, youtube_video_id
+                ),
             )
         _invalidate_lists()
         return post
@@ -164,9 +187,19 @@ class CommunityService:
 
     # -- Comments ------------------------------------------------------------
 
-    async def create_comment(self, post_id: int, author: AuthUser, body: str, parent_id: int | None = None) -> dict:
+    async def create_comment(
+        self, post_id: int, author: AuthUser, body: str, parent_id: int | None = None, *, idempotency_key: str
+    ) -> dict:
+        request = {"post_id": post_id, "body": body, "parent_id": parent_id}
         async with self._sessions() as session, session.begin():
-            comment = await self._repo.create_comment(session, post_id, author.username, body, parent_id)
+            comment = await self._idempotency.run_once(
+                session,
+                author.username,
+                idempotency_key,
+                "community.comment",
+                request,
+                lambda: self._repo.create_comment(session, post_id, author.username, body, parent_id),
+            )
         _invalidate_post(post_id)
         return comment
 

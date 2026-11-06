@@ -26,7 +26,7 @@ def stored(author: str, post_type: str) -> dict:
 
 
 @pytest.fixture
-def board(sessions):
+def board(sessions, idempotency, send_idempotency_keys):
     from app import app
     from community.dependencies import community_service
     from community.service import CommunityService
@@ -37,10 +37,10 @@ def board(sessions):
     # A notice written by `root`; a test about another post says so.
     repo.get_post.return_value = stored("root", "공지")
     repo.update_post.return_value = stored("root", "공지")
-    app.dependency_overrides[community_service] = lambda: CommunityService(repo, sessions)
+    app.dependency_overrides[community_service] = lambda: CommunityService(repo, sessions, idempotency)
     cache_delete_pattern("community:*")
     # No `with`: lifespan stays off, the service is ours.
-    yield TestClient(app), repo
+    yield send_idempotency_keys(TestClient(app)), repo
     app.dependency_overrides.pop(community_service)
     cache_delete_pattern("community:*")
 

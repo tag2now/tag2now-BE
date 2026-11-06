@@ -25,6 +25,8 @@ from event.service import EventService
 from history.adapters.postgresql import PostgresHistoryAdapter
 from history.collector import Collector
 from history.service import HistoryService
+from idempotency.adapters.postgresql import PostgresIdempotencyStore
+from idempotency.service import IdempotencyService
 from matching.adapters.rpcn import RpcnGameServerAdapter
 from matching.rpcn_lifecycle import SharedRpcnClient, create_client
 from matching.service import MatchingService
@@ -81,6 +83,7 @@ async def build_container(stack: AsyncExitStack) -> Container:
     matching = MatchingService(game_server)
     history = HistoryService(PostgresHistoryAdapter(), sessions)
     records = RecordsService(PostgresRecordsAdapter(), sessions, save_server, history)
+    idempotency = IdempotencyService(PostgresIdempotencyStore())
     return Container(
         collector=Collector(matching, history),
         save_capture=SaveCapture(records),
@@ -89,13 +92,13 @@ async def build_container(stack: AsyncExitStack) -> Container:
         admin=AdminService(RpcnApiServerAccountAdmin(rpcn_api)),
         # The bus is memory and goes with the process; nothing to close.
         chat=ChatService(PostgresChatRepository(sessions, MAX_LISTED_MESSAGES), MemoryChatEventBus()),
-        community=CommunityService(PostgresCommunityRepository(), sessions),
+        community=CommunityService(PostgresCommunityRepository(), sessions, idempotency),
         event=EventService(load_baselines(settings.event_baseline_path), save_server),
         history=history,
         matching=matching,
         popups=PopupService(PostgresPopupRepository(), sessions),
         records=records,
-        reservations=ReservationService(PostgresReservationRepository(), sessions),
+        reservations=ReservationService(PostgresReservationRepository(), sessions, idempotency),
         saves=SavesService(save_server),
         streaming=StreamingService(PostgresStreamChannelRepository(), chzzk, sessions),
     )

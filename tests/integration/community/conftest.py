@@ -12,7 +12,7 @@ def _truncate_postgresql():
     async def _run():
         conn = await asyncpg.connect(build_dsn(driver=""))
         try:
-            await conn.execute("TRUNCATE posts, comments, thumbs RESTART IDENTITY CASCADE")
+            await conn.execute("TRUNCATE posts, comments, thumbs, idempotency_keys RESTART IDENTITY CASCADE")
         finally:
             await conn.close()
 
@@ -20,7 +20,7 @@ def _truncate_postgresql():
 
 
 @pytest.fixture()
-def client():
+def client(send_idempotency_keys):
     """Create a TestClient backed by PostgreSQL and Redis."""
     from fastapi.testclient import TestClient
     from app import app
@@ -28,7 +28,7 @@ def client():
 
     cache_delete_pattern("community:*")
 
-    with TestClient(app) as tc:
+    with send_idempotency_keys(TestClient(app)) as tc:
         yield tc
 
     # Clean up after the app pool is closed

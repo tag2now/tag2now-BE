@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Response
 
 from auth.dependencies import current_user
 from auth.models import AuthUser
+from idempotency.dependencies import idempotency_key
 from reservation import models
 from reservation.dependencies import reservation_service
 from reservation.service import ReservationService
@@ -19,10 +20,11 @@ async def list_reservations(service: ReservationService = Depends(reservation_se
 async def create_reservation(
     request: models.CreateReservationRequest,
     user: AuthUser = Depends(current_user),
+    key: str = Depends(idempotency_key),
     service: ReservationService = Depends(reservation_service),
 ):
     return await service.create_reservation(
-        subject=user.username, display_name=user.online_name, **request.model_dump()
+        subject=user.username, display_name=user.online_name, idempotency_key=key, **request.model_dump()
     )
 
 
