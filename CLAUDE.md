@@ -309,7 +309,7 @@ Its engine and session factory are the one module-level resource left; the
 container takes `sessions` from it once and passes it to whatever needs one.
 
 **A PostgreSQL repository runs in the session its service hands it** (`community/`,
-`popup/`): the service opens the session and the transaction, so two stores'
+`reservation/`, `popup/`): the service opens the session and the transaction, so two stores'
 writes can commit together. Some modules still open their own; convert one
 before putting a second store in its transaction.
 

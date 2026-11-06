@@ -32,7 +32,7 @@ def client(auth_headers, sessions):
     from reservation.service import ReservationService
 
     app.dependency_overrides[community_service] = lambda: CommunityService(AsyncMock(), sessions)
-    app.dependency_overrides[reservation_service] = lambda: ReservationService(AsyncMock())
+    app.dependency_overrides[reservation_service] = lambda: ReservationService(AsyncMock(), sessions)
     app.dependency_overrides[auth_service] = lambda: AuthService(AsyncMock())
     c = TestClient(app)
     c.headers.update(auth_headers("tester"))

@@ -7,18 +7,28 @@ router takes both from the signed-in user, never from the request body.
 
 from datetime import time
 
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
 from reservation.domain import Comment, MatchType, Reservation, ensure_conditions_valid, start_at_from
 from reservation.ports import ReservationRepository
 from shared.clock import Clock, SystemClock
 
 
 class ReservationService:
-    def __init__(self, repo: ReservationRepository, clock: Clock | None = None):
+    def __init__(
+        self,
+        repo: ReservationRepository,
+        sessions: async_sessionmaker[AsyncSession],
+        clock: Clock | None = None,
+    ):
         self._repo = repo
+        self._sessions = sessions
         self._clock = clock or SystemClock()
 
     async def list_reservations(self) -> list[Reservation]:
-        return await self._repo.list_upcoming()
+        # Listing retires finished reservations first, so it writes.
+        async with self._sessions() as session, session.begin():
+            return await self._repo.list_upcoming(session)
 
     async def create_reservation(
         self,
@@ -33,18 +43,21 @@ class ReservationService:
     ) -> Reservation:
         ensure_conditions_valid(match_type, ranks, capacity)
         start_at = start_at_from(start_time, self._clock.now())
-        return await self._repo.create(
-            start_at=start_at,
-            host_subject=subject,
-            host_display_name=display_name,
-            host_ranks=ranks,
-            match_type=match_type,
-            capacity=capacity,
-            memo=memo.strip(),
-        )
+        async with self._sessions() as session, session.begin():
+            return await self._repo.create(
+                session,
+                start_at=start_at,
+                host_subject=subject,
+                host_display_name=display_name,
+                host_ranks=ranks,
+                match_type=match_type,
+                capacity=capacity,
+                memo=memo.strip(),
+            )
 
     async def get_reservation(self, reservation_id: int) -> Reservation:
-        return await self._repo.get(reservation_id)
+        async with self._sessions() as session:
+            return await self._repo.get(session, reservation_id)
 
     async def update_reservation(
         self,
@@ -64,45 +77,55 @@ class ReservationService:
         validation and still produce a state the domain forbids. The current values
         are therefore merged in before the conditions are checked.
         """
-        current = await self._repo.get(reservation_id)
-        ensure_conditions_valid(
-            match_type if match_type is not None else current.match_type,
-            ranks if ranks is not None else current.host_ranks,
-            capacity if capacity is not None else current.capacity,
-        )
-        start_at = start_at_from(start_time, self._clock.now()) if start_time is not None else None
-        return await self._repo.update(
-            reservation_id,
-            subject,
-            self._clock.now(),
-            start_at=start_at,
-            ranks=ranks,
-            match_type=match_type,
-            capacity=capacity,
-            memo=memo.strip() if memo is not None else None,
-        )
+        async with self._sessions() as session, session.begin():
+            current = await self._repo.get(session, reservation_id)
+            ensure_conditions_valid(
+                match_type if match_type is not None else current.match_type,
+                ranks if ranks is not None else current.host_ranks,
+                capacity if capacity is not None else current.capacity,
+            )
+            start_at = start_at_from(start_time, self._clock.now()) if start_time is not None else None
+            return await self._repo.update(
+                session,
+                reservation_id,
+                subject,
+                self._clock.now(),
+                start_at=start_at,
+                ranks=ranks,
+                match_type=match_type,
+                capacity=capacity,
+                memo=memo.strip() if memo is not None else None,
+            )
 
     async def join_reservation(
         self, reservation_id: int, *, subject: str, display_name: str, ranks: list[str]
     ) -> Reservation:
-        reservation, _ = await self._repo.join(
-            reservation_id, subject=subject, display_name=display_name, ranks=ranks, now=self._clock.now()
-        )
+        async with self._sessions() as session, session.begin():
+            reservation, _ = await self._repo.join(
+                session, reservation_id, subject=subject, display_name=display_name, ranks=ranks, now=self._clock.now()
+            )
         return reservation
 
     async def cancel_participation(self, reservation_id: int, subject: str) -> Reservation:
-        return await self._repo.cancel_participation(reservation_id, subject, self._clock.now())
+        async with self._sessions() as session, session.begin():
+            return await self._repo.cancel_participation(session, reservation_id, subject, self._clock.now())
 
     async def list_comments(self, reservation_id: int) -> list[Comment]:
-        return await self._repo.list_comments(reservation_id)
+        async with self._sessions() as session:
+            return await self._repo.list_comments(session, reservation_id)
 
     async def add_comment(self, reservation_id: int, *, subject: str, display_name: str, body: str) -> Comment:
-        return await self._repo.add_comment(
-            reservation_id, author_subject=subject, author=display_name, body=body.strip()
-        )
+        async with self._sessions() as session, session.begin():
+            return await self._repo.add_comment(
+                session, reservation_id, author_subject=subject, author=display_name, body=body.strip()
+            )
 
     async def delete_comment(self, reservation_id: int, comment_id: int, subject: str, *, admin: bool) -> None:
-        await self._repo.delete_comment(reservation_id, comment_id, subject, self._clock.now(), admin=admin)
+        async with self._sessions() as session, session.begin():
+            await self._repo.delete_comment(
+                session, reservation_id, comment_id, subject, self._clock.now(), admin=admin
+            )
 
     async def cancel_reservation(self, reservation_id: int, subject: str) -> None:
-        await self._repo.cancel(reservation_id, subject, self._clock.now())
+        async with self._sessions() as session, session.begin():
+            await self._repo.cancel(session, reservation_id, subject, self._clock.now())

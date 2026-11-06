@@ -32,7 +32,7 @@ class FakeRepository:
             datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc),
         )
 
-    async def create(self, **values):
+    async def create(self, session, **values):
         self.created = values
         return Reservation(
             1,
@@ -47,7 +47,7 @@ class FakeRepository:
             values["start_at"],
         )
 
-    async def join(self, reservation_id, **values):
+    async def join(self, session, reservation_id, **values):
         self.joined = (reservation_id, values)
         return Reservation(
             reservation_id,
@@ -62,17 +62,17 @@ class FakeRepository:
             datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc),
         ), None
 
-    async def cancel_participation(self, reservation_id, subject, now):
+    async def cancel_participation(self, session, reservation_id, subject, now):
         self.cancelled_participation = (reservation_id, subject, now)
         return Reservation(reservation_id, now, "Host", [], MatchType.RANK, 1, "", ReservationStatus.OPEN, 0, now)
 
-    async def cancel(self, reservation_id, subject, now):
+    async def cancel(self, session, reservation_id, subject, now):
         self.cancelled = (reservation_id, subject, now)
 
-    async def get(self, reservation_id):
+    async def get(self, session, reservation_id):
         return self.existing
 
-    async def update(self, reservation_id, subject, now, **changes):
+    async def update(self, session, reservation_id, subject, now, **changes):
         self.updated = (reservation_id, subject, changes)
         return self.existing
 
@@ -83,8 +83,8 @@ def dependencies():
 
 
 @pytest.fixture
-def service(dependencies):
-    return ReservationService(dependencies, FixedClock())
+def service(dependencies, sessions):
+    return ReservationService(dependencies, sessions, FixedClock())
 
 
 @pytest.mark.asyncio

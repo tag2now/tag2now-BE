@@ -16,12 +16,29 @@ from reservation.exceptions import ReservationAccessError, ReservationNotFoundEr
 from shared.database import close_database, get_session_factory, init_database
 
 
+class _OwnTransactions:
+    """Runs each repository call in a transaction of its own, as the service does."""
+
+    def __init__(self, repo, sessions):
+        self._repo = repo
+        self._sessions = sessions
+
+    def __getattr__(self, name):
+        method = getattr(self._repo, name)
+
+        async def call(*args, **kwargs):
+            async with self._sessions() as session, session.begin():
+                return await method(session, *args, **kwargs)
+
+        return call
+
+
 @pytest_asyncio.fixture
 async def repository():
     from reservation.adapters.postgresql import PostgresReservationRepository
 
     await init_database()
-    repo = PostgresReservationRepository(get_session_factory())
+    repo = _OwnTransactions(PostgresReservationRepository(), get_session_factory())
     async with get_session_factory()() as session, session.begin():
         await session.execute(delete(ReservationCommentRow))
         await session.execute(delete(ReservationParticipantRow))

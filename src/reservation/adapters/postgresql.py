@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import case, func, select, update
 from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from reservation.domain import (
     LISTING_GRACE,
@@ -63,11 +63,7 @@ def _reservation(row: ReservationRow, participant_count: int, participants: list
 
 
 class PostgresReservationRepository(ReservationRepository):
-    """Reservation persistence using the application's shared session factory."""
-
-    def __init__(self, sessions: async_sessionmaker[AsyncSession]):
-        # The shared database lifecycle owns the engine; this only borrows sessions.
-        self._sessions = sessions
+    """Reservation persistence inside the session, and transaction, the service hands it."""
 
     @staticmethod
     def _with_participant_count():
@@ -166,7 +162,7 @@ class PostgresReservationRepository(ReservationRepository):
             .values(cancelled_at=now)
         )
 
-    async def list_upcoming(self) -> list[Reservation]:
+    async def list_upcoming(self, session: AsyncSession) -> list[Reservation]:
         """Everything from an hour ago up to the next 06:00 KST.
 
         The window is anchored to now rather than to a date. It reaches an hour
@@ -175,174 +171,182 @@ class PostgresReservationRepository(ReservationRepository):
         so dropping it at the stroke of its start time would strand them.
         """
         now = datetime.now(timezone.utc)
-        async with self._sessions() as session, session.begin():
-            await self._expire_finished(session, now)
-            result = await session.execute(
-                self._with_participant_count()
-                .where(
-                    ReservationRow.start_at > now - LISTING_GRACE,
-                    ReservationRow.start_at < window_end(now),
-                    ReservationRow.status.in_(("open", "matched")),
-                )
-                .order_by(ReservationRow.start_at, case((ReservationRow.status == "open", 0), else_=1))
+        await self._expire_finished(session, now)
+        result = await session.execute(
+            self._with_participant_count()
+            .where(
+                ReservationRow.start_at > now - LISTING_GRACE,
+                ReservationRow.start_at < window_end(now),
+                ReservationRow.status.in_(("open", "matched")),
             )
-            return [_reservation(*item) for item in result.all()]
+            .order_by(ReservationRow.start_at, case((ReservationRow.status == "open", 0), else_=1))
+        )
+        return [_reservation(*item) for item in result.all()]
 
-    async def get(self, reservation_id: int) -> Reservation:
-        async with self._sessions() as session:
-            result = await session.execute(self._with_participant_count().where(ReservationRow.id == reservation_id))
-            found = result.one_or_none()
-            if found is None:
-                raise ReservationNotFoundError("Reservation not found")
-            return _reservation(*found)
+    async def get(self, session: AsyncSession, reservation_id: int) -> Reservation:
+        result = await session.execute(self._with_participant_count().where(ReservationRow.id == reservation_id))
+        found = result.one_or_none()
+        if found is None:
+            raise ReservationNotFoundError("Reservation not found")
+        return _reservation(*found)
 
-    async def create(self, **values) -> Reservation:
-        async with self._sessions() as session, session.begin():
-            row = ReservationRow(
-                start_at=values["start_at"],
-                host_subject=values["host_subject"],
-                host_display_name=values["host_display_name"],
-                host_ranks=values["host_ranks"],
-                match_type=values["match_type"].value,
-                capacity=values["capacity"],
-                memo=values["memo"],
-            )
-            session.add(row)
-            await session.flush()
-            await session.refresh(row)
-            return _reservation(row, 0)
+    async def create(self, session: AsyncSession, **values) -> Reservation:
+        row = ReservationRow(
+            start_at=values["start_at"],
+            host_subject=values["host_subject"],
+            host_display_name=values["host_display_name"],
+            host_ranks=values["host_ranks"],
+            match_type=values["match_type"].value,
+            capacity=values["capacity"],
+            memo=values["memo"],
+        )
+        session.add(row)
+        await session.flush()
+        await session.refresh(row)
+        return _reservation(row, 0)
 
-    async def update(self, reservation_id: int, host_subject: str, now: datetime, **changes) -> Reservation:
-        async with self._sessions() as session, session.begin():
-            row = await session.scalar(
-                select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update()
-            )
-            if row is None:
-                raise ReservationNotFoundError("Reservation not found")
-            ensure_edited_by_host(row.host_subject, host_subject)
-            count = await self._active_participant_count(session, reservation_id)
-            ensure_editable(ReservationStatus(row.status), row.start_at, count, now)
+    async def update(
+        self, session: AsyncSession, reservation_id: int, host_subject: str, now: datetime, **changes
+    ) -> Reservation:
+        row = await session.scalar(select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update())
+        if row is None:
+            raise ReservationNotFoundError("Reservation not found")
+        ensure_edited_by_host(row.host_subject, host_subject)
+        count = await self._active_participant_count(session, reservation_id)
+        ensure_editable(ReservationStatus(row.status), row.start_at, count, now)
 
-            applied = {field: value for field, value in changes.items() if value is not None}
-            if "match_type" in applied:
-                applied["match_type"] = applied["match_type"].value
-            if "ranks" in applied:
-                applied["host_ranks"] = applied.pop("ranks")
-            for field, value in applied.items():
-                setattr(row, field, value)
-            row.updated_at = now
-            await session.flush()
-            await session.refresh(row)
-            return _reservation(row, count)
+        applied = {field: value for field, value in changes.items() if value is not None}
+        if "match_type" in applied:
+            applied["match_type"] = applied["match_type"].value
+        if "ranks" in applied:
+            applied["host_ranks"] = applied.pop("ranks")
+        for field, value in applied.items():
+            setattr(row, field, value)
+        row.updated_at = now
+        await session.flush()
+        await session.refresh(row)
+        return _reservation(row, count)
 
     async def join(
-        self, reservation_id: int, *, subject: str, display_name: str, ranks: list[str], now: datetime
+        self,
+        session: AsyncSession,
+        reservation_id: int,
+        *,
+        subject: str,
+        display_name: str,
+        ranks: list[str],
+        now: datetime,
     ) -> tuple[Reservation, Participant]:
         try:
-            return await self._join(reservation_id, subject=subject, display_name=display_name, ranks=ranks, now=now)
+            return await self._join(
+                session, reservation_id, subject=subject, display_name=display_name, ranks=ranks, now=now
+            )
         except IntegrityError as exc:
             # The row lock serialises joins to one reservation, so the check
             # below normally answers first; the unique index is the backstop.
             raise ReservationStateError("이미 참가한 예약입니다.") from exc
 
     async def _join(
-        self, reservation_id: int, *, subject: str, display_name: str, ranks: list[str], now: datetime
+        self,
+        session: AsyncSession,
+        reservation_id: int,
+        *,
+        subject: str,
+        display_name: str,
+        ranks: list[str],
+        now: datetime,
     ) -> tuple[Reservation, Participant]:
-        async with self._sessions() as session, session.begin():
-            row = await session.scalar(
-                select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update()
+        row = await session.scalar(select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update())
+        if row is None:
+            raise ReservationNotFoundError("Reservation not found")
+        count = await session.scalar(
+            select(func.count())
+            .select_from(ReservationParticipantRow)
+            .where(
+                ReservationParticipantRow.reservation_id == reservation_id,
+                ReservationParticipantRow.cancelled_at.is_(None),
             )
-            if row is None:
-                raise ReservationNotFoundError("Reservation not found")
-            count = await session.scalar(
-                select(func.count())
-                .select_from(ReservationParticipantRow)
-                .where(
-                    ReservationParticipantRow.reservation_id == reservation_id,
-                    ReservationParticipantRow.cancelled_at.is_(None),
-                )
-            )
-            already_joined = await self._active_participation(session, reservation_id, subject) is not None
-            ensure_joinable_by(row.host_subject, subject, already_joined)
-            ensure_joinable(ReservationStatus(row.status), row.start_at, count, row.capacity, now)
-            participant = ReservationParticipantRow(
-                reservation_id=reservation_id,
-                subject=subject,
-                display_name=display_name,
-                ranks=ranks,
-            )
-            session.add(participant)
-            count += 1
-            row.status = status_for(count, row.capacity).value
-            row.updated_at = now
-            await session.flush()
-            await session.refresh(participant)
-            result = await session.execute(self._with_participant_count().where(ReservationRow.id == reservation_id))
-            return _reservation(*result.one()), Participant(
-                id=participant.id,
-                reservation_id=reservation_id,
-                display_name=participant.display_name,
-                ranks=list(participant.ranks),
-                joined_at=participant.joined_at,
-            )
+        )
+        already_joined = await self._active_participation(session, reservation_id, subject) is not None
+        ensure_joinable_by(row.host_subject, subject, already_joined)
+        ensure_joinable(ReservationStatus(row.status), row.start_at, count, row.capacity, now)
+        participant = ReservationParticipantRow(
+            reservation_id=reservation_id,
+            subject=subject,
+            display_name=display_name,
+            ranks=ranks,
+        )
+        session.add(participant)
+        count += 1
+        row.status = status_for(count, row.capacity).value
+        row.updated_at = now
+        await session.flush()
+        await session.refresh(participant)
+        result = await session.execute(self._with_participant_count().where(ReservationRow.id == reservation_id))
+        return _reservation(*result.one()), Participant(
+            id=participant.id,
+            reservation_id=reservation_id,
+            display_name=participant.display_name,
+            ranks=list(participant.ranks),
+            joined_at=participant.joined_at,
+        )
 
-    async def cancel_participation(self, reservation_id: int, subject: str, now: datetime) -> Reservation:
-        async with self._sessions() as session, session.begin():
-            row = await session.scalar(
-                select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update()
+    async def cancel_participation(
+        self, session: AsyncSession, reservation_id: int, subject: str, now: datetime
+    ) -> Reservation:
+        row = await session.scalar(select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update())
+        if row is None:
+            raise ReservationNotFoundError("Reservation not found")
+        participant = await self._active_participation(session, reservation_id, subject)
+        ensure_participation_cancellable(
+            ReservationStatus(row.status), row.start_at, now, participating=participant is not None
+        )
+        participant.cancelled_at = now
+        await session.flush()
+        count = await session.scalar(
+            select(func.count())
+            .select_from(ReservationParticipantRow)
+            .where(
+                ReservationParticipantRow.reservation_id == reservation_id,
+                ReservationParticipantRow.cancelled_at.is_(None),
             )
-            if row is None:
-                raise ReservationNotFoundError("Reservation not found")
-            participant = await self._active_participation(session, reservation_id, subject)
-            ensure_participation_cancellable(
-                ReservationStatus(row.status), row.start_at, now, participating=participant is not None
-            )
-            participant.cancelled_at = now
-            await session.flush()
-            count = await session.scalar(
-                select(func.count())
-                .select_from(ReservationParticipantRow)
-                .where(
-                    ReservationParticipantRow.reservation_id == reservation_id,
-                    ReservationParticipantRow.cancelled_at.is_(None),
-                )
-            )
-            row.status, row.updated_at = status_for(count, row.capacity).value, now
-            await session.flush()
-            result = await session.execute(self._with_participant_count().where(ReservationRow.id == reservation_id))
-            return _reservation(*result.one())
+        )
+        row.status, row.updated_at = status_for(count, row.capacity).value, now
+        await session.flush()
+        result = await session.execute(self._with_participant_count().where(ReservationRow.id == reservation_id))
+        return _reservation(*result.one())
 
-    async def list_comments(self, reservation_id: int) -> list[Comment]:
-        async with self._sessions() as session:
-            rows = await session.scalars(
-                select(ReservationCommentRow)
-                .where(
-                    ReservationCommentRow.reservation_id == reservation_id,
-                    ReservationCommentRow.deleted_at.is_(None),
-                )
-                .order_by(ReservationCommentRow.created_at, ReservationCommentRow.id)
+    async def list_comments(self, session: AsyncSession, reservation_id: int) -> list[Comment]:
+        rows = await session.scalars(
+            select(ReservationCommentRow)
+            .where(
+                ReservationCommentRow.reservation_id == reservation_id,
+                ReservationCommentRow.deleted_at.is_(None),
             )
-            return [_comment(row) for row in rows]
+            .order_by(ReservationCommentRow.created_at, ReservationCommentRow.id)
+        )
+        return [_comment(row) for row in rows]
 
-    async def add_comment(self, reservation_id: int, *, author_subject: str, author: str, body: str) -> Comment:
-        async with self._sessions() as session, session.begin():
-            reservation = await session.get(ReservationRow, reservation_id)
-            if reservation is None:
-                raise ReservationNotFoundError("Reservation not found")
-            ensure_commentable(ReservationStatus(reservation.status))
-            row = ReservationCommentRow(
-                reservation_id=reservation_id,
-                author_subject=author_subject,
-                author=author,
-                body=body,
-            )
-            session.add(row)
-            await session.flush()
-            await session.refresh(row)
-            return _comment(row)
+    async def add_comment(
+        self, session: AsyncSession, reservation_id: int, *, author_subject: str, author: str, body: str
+    ) -> Comment:
+        reservation = await session.get(ReservationRow, reservation_id)
+        if reservation is None:
+            raise ReservationNotFoundError("Reservation not found")
+        ensure_commentable(ReservationStatus(reservation.status))
+        row = ReservationCommentRow(
+            reservation_id=reservation_id,
+            author_subject=author_subject,
+            author=author,
+            body=body,
+        )
+        session.add(row)
+        await session.flush()
+        await session.refresh(row)
+        return _comment(row)
 
     async def delete_comment(
-        self, reservation_id: int, comment_id: int, subject: str, now: datetime, *, admin: bool
+        self, session: AsyncSession, reservation_id: int, comment_id: int, subject: str, now: datetime, *, admin: bool
     ) -> None:
         """Soft delete, so a reply reading as an answer to nothing is at least rare.
 
@@ -350,20 +354,16 @@ class PostgresReservationRepository(ReservationRepository):
         creation and people quote each other; a hole is easier to read than a
         renumbered thread.
         """
-        async with self._sessions() as session, session.begin():
-            row = await session.get(ReservationCommentRow, comment_id)
-            if row is None or row.reservation_id != reservation_id or row.deleted_at is not None:
-                raise ReservationNotFoundError("Comment not found")
-            ensure_comment_deletable_by(row.author_subject, subject, admin=admin)
-            row.deleted_at = now
+        row = await session.get(ReservationCommentRow, comment_id)
+        if row is None or row.reservation_id != reservation_id or row.deleted_at is not None:
+            raise ReservationNotFoundError("Comment not found")
+        ensure_comment_deletable_by(row.author_subject, subject, admin=admin)
+        row.deleted_at = now
 
-    async def cancel(self, reservation_id: int, host_subject: str, now: datetime) -> None:
-        async with self._sessions() as session, session.begin():
-            row = await session.scalar(
-                select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update()
-            )
-            if row is None:
-                raise ReservationNotFoundError("Reservation not found")
-            ensure_cancellable(row.host_subject, host_subject, ReservationStatus(row.status), row.start_at, now)
-            row.status, row.cancelled_at, row.updated_at = ReservationStatus.CANCELLED.value, now, now
-            await self._release_participants(session, reservation_id, now)
+    async def cancel(self, session: AsyncSession, reservation_id: int, host_subject: str, now: datetime) -> None:
+        row = await session.scalar(select(ReservationRow).where(ReservationRow.id == reservation_id).with_for_update())
+        if row is None:
+            raise ReservationNotFoundError("Reservation not found")
+        ensure_cancellable(row.host_subject, host_subject, ReservationStatus(row.status), row.start_at, now)
+        row.status, row.cancelled_at, row.updated_at = ReservationStatus.CANCELLED.value, now, now
+        await self._release_participants(session, reservation_id, now)

@@ -95,7 +95,7 @@ async def build_container(stack: AsyncExitStack) -> Container:
         matching=matching,
         popups=PopupService(PostgresPopupRepository(), sessions),
         records=records,
-        reservations=ReservationService(PostgresReservationRepository(sessions)),
+        reservations=ReservationService(PostgresReservationRepository(), sessions),
         saves=SavesService(save_server),
         streaming=StreamingService(PostgresStreamChannelRepository(), chzzk, sessions),
     )
