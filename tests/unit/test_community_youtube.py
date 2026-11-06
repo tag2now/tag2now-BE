@@ -1,6 +1,6 @@
 """YouTube attachments through public request models and HTTP endpoints."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -26,7 +26,7 @@ def test_existing_request_has_no_video():
 
 
 @pytest.mark.parametrize("video_id", [None, "dQw4w9WgXcQ"])
-def test_create_and_read_video_through_api(video_id, auth_headers):
+def test_create_and_read_video_through_api(video_id, auth_headers, sessions):
     from shared.cache import cache_delete_pattern
 
     post = dict(
@@ -47,7 +47,7 @@ def test_create_and_read_video_through_api(video_id, auth_headers):
     repo.list_posts.return_value = ([post.copy()], 1)
     app = FastAPI()
     app.include_router(router, prefix="/community")
-    app.dependency_overrides[community_service] = lambda: CommunityService(repo)
+    app.dependency_overrides[community_service] = lambda: CommunityService(repo, sessions)
     cache_delete_pattern("community:*")
     try:
         with TestClient(app) as client:
@@ -61,7 +61,7 @@ def test_create_and_read_video_through_api(video_id, auth_headers):
                 headers=auth_headers("testuser"),
             )
             assert response.status_code == 201
-            repo.create_post.assert_awaited_once_with("testuser", "test", "body", "자유", [], video_id)
+            repo.create_post.assert_awaited_once_with(ANY, "testuser", "test", "body", "자유", [], video_id)
             assert response.json()["youtube_video_id"] == video_id
             assert client.get("/community/posts/987654").json()["youtube_video_id"] == video_id
             assert client.get("/community/posts").json()["posts"][0]["youtube_video_id"] == video_id

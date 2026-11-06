@@ -1,7 +1,7 @@
 """SQLAlchemy ORM adapter for the community repository."""
 
 from sqlalchemy import and_, case, func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from community.entities import Comment, Post, Thumb
 from community.exceptions import AlreadyVotedError, CommentNotFoundError, NestingDepthError, PostNotFoundError
@@ -14,15 +14,11 @@ def _as_dict(row) -> dict:
 
 
 class PostgresCommunityRepository(CommunityRepository):
-    """Community persistence using the application's shared session factory."""
-
-    def __init__(self, sessions: async_sessionmaker[AsyncSession]):
-        # The shared database lifecycle owns the engine; this only borrows sessions.
-        self._sessions = sessions
+    """Community persistence inside the session, and transaction, the service hands it."""
 
     # -- Posts ---------------------------------------------------------------
 
-    async def list_posts(self, page, page_size, post_type=None, characters=None):
+    async def list_posts(self, session, page, page_size, post_type=None, characters=None):
         # Notices are pinned above the list, so the unfiltered list leaves them out.
         filters = [Post.post_type == post_type if post_type else Post.post_type != NOTICE_POST_TYPE]
         if characters:
@@ -38,25 +34,22 @@ class PostgresCommunityRepository(CommunityRepository):
             .limit(page_size)
             .offset((page - 1) * page_size)
         )
-        async with self._sessions() as session:
-            total = await session.scalar(select(func.count()).select_from(Post).where(*filters))
-            rows = (await session.execute(page_query)).all()
-            return [{**_as_dict(post), "comment_count": count} for post, count in rows], total
+        total = await session.scalar(select(func.count()).select_from(Post).where(*filters))
+        rows = (await session.execute(page_query)).all()
+        return [{**_as_dict(post), "comment_count": count} for post, count in rows], total
 
-    async def get_post(self, post_id):
-        async with self._sessions() as session:
-            post = await session.get(Post, post_id)
-            if post is None:
-                raise PostNotFoundError("Post not found")
-            return _as_dict(post)
+    async def get_post(self, session, post_id):
+        post = await session.get(Post, post_id)
+        if post is None:
+            raise PostNotFoundError("Post not found")
+        return _as_dict(post)
 
-    async def get_post_comments(self, post_id):
+    async def get_post_comments(self, session, post_id):
         query = select(Comment).where(Comment.post_id == post_id).order_by(Comment.created_at)
-        async with self._sessions() as session:
-            comments = (await session.scalars(query)).all()
-            return [_as_dict(comment) for comment in comments]
+        comments = (await session.scalars(query)).all()
+        return [_as_dict(comment) for comment in comments]
 
-    async def create_post(self, author, title, body, post_type="자유", characters=None, youtube_video_id=None):
+    async def create_post(self, session, author, title, body, post_type="자유", characters=None, youtube_video_id=None):
         post = Post(
             author=author,
             title=title,
@@ -65,61 +58,53 @@ class PostgresCommunityRepository(CommunityRepository):
             characters=list(characters or []),
             youtube_video_id=youtube_video_id,
         )
-        async with self._sessions() as session, session.begin():
-            session.add(post)
-            await session.flush()
-            await session.refresh(post)
-            return _as_dict(post)
+        session.add(post)
+        await session.flush()
+        await session.refresh(post)
+        return _as_dict(post)
 
-    async def update_post(self, post_id, title, body, post_type, characters, youtube_video_id):
-        async with self._sessions() as session, session.begin():
-            post = await session.scalar(select(Post).where(Post.id == post_id).with_for_update())
-            if post is None:
-                raise PostNotFoundError("Post not found")
-            post.title = title
-            post.body = body
-            post.post_type = post_type
-            post.characters = list(characters)
-            post.youtube_video_id = youtube_video_id
-            await session.flush()
-            comment_count = await session.scalar(
-                select(func.count())
-                .select_from(Comment)
-                .where(Comment.post_id == post_id, Comment.deleted_at.is_(None))
-            )
-            return {**_as_dict(post), "comment_count": comment_count}
+    async def update_post(self, session, post_id, title, body, post_type, characters, youtube_video_id):
+        post = await session.scalar(select(Post).where(Post.id == post_id).with_for_update())
+        if post is None:
+            raise PostNotFoundError("Post not found")
+        post.title = title
+        post.body = body
+        post.post_type = post_type
+        post.characters = list(characters)
+        post.youtube_video_id = youtube_video_id
+        await session.flush()
+        comment_count = await session.scalar(
+            select(func.count()).select_from(Comment).where(Comment.post_id == post_id, Comment.deleted_at.is_(None))
+        )
+        return {**_as_dict(post), "comment_count": comment_count}
 
-    async def delete_post(self, post_id):
-        async with self._sessions() as session, session.begin():
-            post = await session.get(Post, post_id)
-            if post is None:
-                raise PostNotFoundError("Post not found")
-            await session.delete(post)
+    async def delete_post(self, session, post_id):
+        post = await session.get(Post, post_id)
+        if post is None:
+            raise PostNotFoundError("Post not found")
+        await session.delete(post)
 
     # -- Comments ------------------------------------------------------------
 
-    async def create_comment(self, post_id, author, body, parent_id=None):
-        async with self._sessions() as session, session.begin():
-            if await session.get(Post, post_id) is None:
-                raise PostNotFoundError("Post not found")
-            if parent_id is not None:
-                await self._ensure_repliable(session, post_id, parent_id)
-            comment = Comment(post_id=post_id, parent_id=parent_id, author=author, body=body)
-            session.add(comment)
-            await session.flush()
-            await session.refresh(comment)
-            return _as_dict(comment)
+    async def create_comment(self, session, post_id, author, body, parent_id=None):
+        if await session.get(Post, post_id) is None:
+            raise PostNotFoundError("Post not found")
+        if parent_id is not None:
+            await self._ensure_repliable(session, post_id, parent_id)
+        comment = Comment(post_id=post_id, parent_id=parent_id, author=author, body=body)
+        session.add(comment)
+        await session.flush()
+        await session.refresh(comment)
+        return _as_dict(comment)
 
-    async def get_comment(self, post_id, comment_id):
-        async with self._sessions() as session:
-            comment = await session.get(Comment, comment_id)
-            if not _is_live_on(comment, post_id):
-                raise CommentNotFoundError("Comment not found")
-            return _as_dict(comment)
+    async def get_comment(self, session, post_id, comment_id):
+        comment = await session.get(Comment, comment_id)
+        if not _is_live_on(comment, post_id):
+            raise CommentNotFoundError("Comment not found")
+        return _as_dict(comment)
 
-    async def delete_comment(self, comment_id):
-        async with self._sessions() as session, session.begin():
-            await session.execute(update(Comment).where(Comment.id == comment_id).values(deleted_at=func.now()))
+    async def delete_comment(self, session, comment_id):
+        await session.execute(update(Comment).where(Comment.id == comment_id).values(deleted_at=func.now()))
 
     @staticmethod
     async def _ensure_repliable(session: AsyncSession, post_id: int, parent_id: int) -> None:
@@ -131,21 +116,20 @@ class PostgresCommunityRepository(CommunityRepository):
 
     # -- Thumbs (posts only) -------------------------------------------------
 
-    async def add_thumb(self, post_id, voter, direction):
-        async with self._sessions() as session, session.begin():
-            # Locks the post so concurrent votes recount one after another.
-            post = await session.scalar(select(Post).where(Post.id == post_id).with_for_update())
-            if post is None:
-                raise PostNotFoundError("Post not found")
-            voted = await session.scalar(select(Thumb.id).where(Thumb.post_id == post_id, Thumb.voter == voter))
-            if voted is not None:
-                raise AlreadyVotedError("이미 추천·비추천한 글입니다.")
-            session.add(Thumb(post_id=post_id, voter=voter, direction=direction))
-            await session.flush()
+    async def add_thumb(self, session, post_id, voter, direction):
+        # Locks the post so concurrent votes recount one after another.
+        post = await session.scalar(select(Post).where(Post.id == post_id).with_for_update())
+        if post is None:
+            raise PostNotFoundError("Post not found")
+        voted = await session.scalar(select(Thumb.id).where(Thumb.post_id == post_id, Thumb.voter == voter))
+        if voted is not None:
+            raise AlreadyVotedError("이미 추천·비추천한 글입니다.")
+        session.add(Thumb(post_id=post_id, voter=voter, direction=direction))
+        await session.flush()
 
-            up, down = (await session.execute(_thumb_counts(post_id))).one()
-            post.thumbs_up, post.thumbs_down = up, down
-            return {"thumbs_up": up, "thumbs_down": down}
+        up, down = (await session.execute(_thumb_counts(post_id))).one()
+        post.thumbs_up, post.thumbs_down = up, down
+        return {"thumbs_up": up, "thumbs_down": down}
 
 
 def _is_live_on(comment: Comment | None, post_id: int) -> bool:

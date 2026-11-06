@@ -1,6 +1,8 @@
 """Fixtures shared by unit and integration tests."""
 
 import os
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -26,3 +28,21 @@ def auth_headers():
         return {"Authorization": f"Bearer {token}"}
 
     return make
+
+
+@pytest.fixture
+def sessions():
+    """A session factory for services whose fake repositories ignore the session."""
+    session = AsyncMock()
+
+    @asynccontextmanager
+    async def begin():
+        yield
+
+    session.begin = begin
+
+    @asynccontextmanager
+    async def open_session():
+        yield session
+
+    return open_session

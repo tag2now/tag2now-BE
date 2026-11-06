@@ -308,9 +308,15 @@ The database opens first and closes last, through `shared.database.open_database
 Its engine and session factory are the one module-level resource left; the
 container takes `sessions` from it once and passes it to whatever needs one.
 
+**A PostgreSQL repository runs in the session its service hands it** (`community/`,
+`popup/`): the service opens the session and the transaction, so two stores'
+writes can commit together. Some modules still open their own; convert one
+before putting a second store in its transaction.
+
 Tests swap a service with FastAPI's own seam,
-`app.dependency_overrides[community_service] = lambda: CommunityService(fake_repo)`,
-or construct the service directly; neither needs a module patched.
+`app.dependency_overrides[community_service] = lambda: CommunityService(fake_repo, sessions)`
+--- `sessions` is the fake factory in `tests/conftest.py` --- or construct the
+service directly; neither needs a module patched.
 `current_user` and `admin_user` read only the token, so they need no service.
 
 A service that judges time takes a `shared.clock.Clock` (default `SystemClock`),

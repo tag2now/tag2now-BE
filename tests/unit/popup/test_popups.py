@@ -1,9 +1,7 @@
 """Popup routes over an in-memory repository."""
 
-from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock
 
 import pytest
 
@@ -55,24 +53,6 @@ class MemoryRepository(PopupRepository):
     async def delete(self, session, popup_id):
         self.images.pop(popup_id, None)
         return self.rows.pop(popup_id, None) is not None
-
-
-@pytest.fixture
-def sessions():
-    """A session factory whose sessions the in-memory repository ignores."""
-    session = AsyncMock()
-
-    @asynccontextmanager
-    async def begin():
-        yield
-
-    session.begin = begin
-
-    @asynccontextmanager
-    async def open_session():
-        yield session
-
-    return open_session
 
 
 @pytest.fixture(autouse=True)

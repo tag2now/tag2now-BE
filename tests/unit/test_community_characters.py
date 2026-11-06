@@ -1,6 +1,6 @@
 """Character tags through the public request models and the list route."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -27,14 +27,14 @@ def test_edit_requires_an_explicit_character_list():
 
 
 @pytest.fixture
-def listing():
+def listing(sessions):
     from shared.cache import cache_delete_pattern
 
     repo = AsyncMock()
     repo.list_posts.return_value = ([], 0)
     app = FastAPI()
     app.include_router(router, prefix="/community")
-    app.dependency_overrides[community_service] = lambda: CommunityService(repo)
+    app.dependency_overrides[community_service] = lambda: CommunityService(repo, sessions)
     cache_delete_pattern("community:*")
     with TestClient(app) as client:
         yield client, repo
@@ -48,7 +48,7 @@ def test_list_passes_the_team_regardless_of_order(listing):
     client.get("/community/posts", params=[("characters", "Jin"), ("characters", "Kazuya")])
 
     # Both orders name the same team, so the second read is served from cache.
-    repo.list_posts.assert_awaited_once_with(1, 20, None, ["Jin", "Kazuya"])
+    repo.list_posts.assert_awaited_once_with(ANY, 1, 20, None, ["Jin", "Kazuya"])
 
 
 def test_list_without_characters_filters_nothing(listing):
@@ -56,4 +56,4 @@ def test_list_without_characters_filters_nothing(listing):
 
     client.get("/community/posts", params={"post_type": "공략"})
 
-    repo.list_posts.assert_awaited_once_with(1, 20, "공략", [])
+    repo.list_posts.assert_awaited_once_with(ANY, 1, 20, "공략", [])

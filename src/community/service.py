@@ -1,7 +1,7 @@
 """Business logic for the community board: rules, read-through caching, and
 invalidation after every write."""
 
-import asyncio
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from auth.models import AuthUser
 from community.exceptions import NoticeAdminOnlyError, OwnershipError
@@ -88,8 +88,9 @@ def _nest_replies(comments: list[dict]) -> list[dict]:
 
 
 class CommunityService:
-    def __init__(self, repo: CommunityRepository):
+    def __init__(self, repo: CommunityRepository, sessions: async_sessionmaker[AsyncSession]):
         self._repo = repo
+        self._sessions = sessions
 
     # -- Posts ---------------------------------------------------------------
 
@@ -101,7 +102,8 @@ class CommunityService:
         key = _list_key(page, page_size, post_type, team)
         if cached := cache_get(key):
             return cached
-        posts, total = await self._repo.list_posts(page, page_size, post_type, team)
+        async with self._sessions() as session:
+            posts, total = await self._repo.list_posts(session, page, page_size, post_type, team)
         result = {"posts": posts, "total": total, "page": page, "page_size": page_size}
         cache_set(key, result, _ttl())
         return result
@@ -111,7 +113,9 @@ class CommunityService:
         key = _post_key(post_id)
         if cached := cache_get(key):
             return cached
-        post, comments = await asyncio.gather(self._repo.get_post(post_id), self._repo.get_post_comments(post_id))
+        async with self._sessions() as session:
+            post = await self._repo.get_post(session, post_id)
+            comments = await self._repo.get_post_comments(session, post_id)
         post["comments"] = _nest_replies(_hide_deleted(comments))
         cache_set(key, post, _ttl())
         return post
@@ -126,7 +130,10 @@ class CommunityService:
         youtube_video_id: str | None = None,
     ) -> dict:
         ensure_can_use_post_type(post_type, author)
-        post = await self._repo.create_post(author.username, title, body, post_type, characters, youtube_video_id)
+        async with self._sessions() as session, session.begin():
+            post = await self._repo.create_post(
+                session, author.username, title, body, post_type, characters, youtube_video_id
+            )
         _invalidate_lists()
         return post
 
@@ -141,33 +148,38 @@ class CommunityService:
         youtube_video_id: str | None,
     ) -> dict:
         ensure_can_use_post_type(post_type, user)
-        ensure_can_manage_post(await self._repo.get_post(post_id), user)
-        post = await self._repo.update_post(post_id, title, body, post_type, characters, youtube_video_id)
+        async with self._sessions() as session, session.begin():
+            ensure_can_manage_post(await self._repo.get_post(session, post_id), user)
+            post = await self._repo.update_post(session, post_id, title, body, post_type, characters, youtube_video_id)
         _invalidate_lists()
         _invalidate_post(post_id)
         return post
 
     async def delete_post(self, post_id: int, user: AuthUser) -> None:
-        ensure_can_manage_post(await self._repo.get_post(post_id), user)
-        await self._repo.delete_post(post_id)
+        async with self._sessions() as session, session.begin():
+            ensure_can_manage_post(await self._repo.get_post(session, post_id), user)
+            await self._repo.delete_post(session, post_id)
         _invalidate_lists()
         _invalidate_post(post_id)
 
     # -- Comments ------------------------------------------------------------
 
     async def create_comment(self, post_id: int, author: AuthUser, body: str, parent_id: int | None = None) -> dict:
-        comment = await self._repo.create_comment(post_id, author.username, body, parent_id)
+        async with self._sessions() as session, session.begin():
+            comment = await self._repo.create_comment(session, post_id, author.username, body, parent_id)
         _invalidate_post(post_id)
         return comment
 
     async def delete_comment(self, post_id: int, comment_id: int, user: AuthUser) -> None:
-        ensure_can_delete_comment(await self._repo.get_comment(post_id, comment_id), user)
-        await self._repo.delete_comment(comment_id)
+        async with self._sessions() as session, session.begin():
+            ensure_can_delete_comment(await self._repo.get_comment(session, post_id, comment_id), user)
+            await self._repo.delete_comment(session, comment_id)
         _invalidate_post(post_id)
 
     # -- Thumbs (posts only) -------------------------------------------------
 
     async def add_thumb(self, post_id: int, voter: AuthUser, direction: int) -> dict:
-        result = await self._repo.add_thumb(post_id, voter.username, direction)
+        async with self._sessions() as session, session.begin():
+            result = await self._repo.add_thumb(session, post_id, voter.username, direction)
         _invalidate_post(post_id)
         return result

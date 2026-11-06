@@ -1,6 +1,6 @@
 """Comment deletion: the author's or any admin's, and a deleted comment stays only above live replies."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -40,7 +40,7 @@ def user(username: str, admin: bool = False) -> AuthUser:
 
 
 @pytest.fixture
-def board():
+def board(sessions):
     from app import app
     from community.dependencies import community_service
     from community.service import CommunityService
@@ -49,7 +49,7 @@ def board():
     repo = AsyncMock()
     repo.get_post.return_value = dict(POST)
     repo.get_comment.return_value = comment(7, author="bob")
-    app.dependency_overrides[community_service] = lambda: CommunityService(repo)
+    app.dependency_overrides[community_service] = lambda: CommunityService(repo, sessions)
     cache_delete_pattern("community:*")
     # No `with`: lifespan stays off, the service is ours.
     yield TestClient(app), repo
@@ -76,8 +76,8 @@ def test_delete_route_soft_deletes_after_the_rule(board, auth_headers):
     response = client.delete("/community/posts/1/comments/7", headers=auth_headers("root", admin=True))
 
     assert response.status_code == 204
-    repo.get_comment.assert_awaited_once_with(1, 7)
-    repo.delete_comment.assert_awaited_once_with(7)
+    repo.get_comment.assert_awaited_once_with(ANY, 1, 7)
+    repo.delete_comment.assert_awaited_once_with(ANY, 7)
 
 
 def test_delete_route_refuses_a_stranger(board, auth_headers):

@@ -89,7 +89,7 @@ async def build_container(stack: AsyncExitStack) -> Container:
         admin=AdminService(RpcnApiServerAccountAdmin(rpcn_api)),
         # The bus is memory and goes with the process; nothing to close.
         chat=ChatService(PostgresChatRepository(sessions, MAX_LISTED_MESSAGES), MemoryChatEventBus()),
-        community=CommunityService(PostgresCommunityRepository(sessions)),
+        community=CommunityService(PostgresCommunityRepository(), sessions),
         event=EventService(load_baselines(settings.event_baseline_path), save_server),
         history=history,
         matching=matching,

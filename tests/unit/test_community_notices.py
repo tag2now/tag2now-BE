@@ -1,6 +1,6 @@
 """Notices: only an admin may write one, and every admin may manage one."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -26,7 +26,7 @@ def stored(author: str, post_type: str) -> dict:
 
 
 @pytest.fixture
-def board():
+def board(sessions):
     from app import app
     from community.dependencies import community_service
     from community.service import CommunityService
@@ -37,7 +37,7 @@ def board():
     # A notice written by `root`; a test about another post says so.
     repo.get_post.return_value = stored("root", "공지")
     repo.update_post.return_value = stored("root", "공지")
-    app.dependency_overrides[community_service] = lambda: CommunityService(repo)
+    app.dependency_overrides[community_service] = lambda: CommunityService(repo, sessions)
     cache_delete_pattern("community:*")
     # No `with`: lifespan stays off, the service is ours.
     yield TestClient(app), repo
@@ -51,7 +51,7 @@ def test_admin_posts_a_notice_as_themselves(board, auth_headers):
     response = client.post("/community/posts", json=NOTICE, headers=auth_headers("root", admin=True))
 
     assert response.status_code == 201
-    repo.create_post.assert_awaited_once_with("root", "점검 안내", "내일 점검합니다", "공지", [], None)
+    repo.create_post.assert_awaited_once_with(ANY, "root", "점검 안내", "내일 점검합니다", "공지", [], None)
 
 
 def test_non_admin_cannot_post_a_notice(board, auth_headers):
@@ -91,7 +91,7 @@ def test_admin_edits_another_admins_notice(board, auth_headers):
     response = client.patch("/community/posts/1", json=EDIT, headers=auth_headers("second", admin=True))
 
     assert response.status_code == 200
-    repo.update_post.assert_awaited_once_with(1, "점검 안내", "내일 점검합니다", "공지", [], None)
+    repo.update_post.assert_awaited_once_with(ANY, 1, "점검 안내", "내일 점검합니다", "공지", [], None)
 
 
 def test_admin_deletes_another_admins_notice(board, auth_headers):
@@ -100,7 +100,7 @@ def test_admin_deletes_another_admins_notice(board, auth_headers):
     response = client.delete("/community/posts/1", headers=auth_headers("second", admin=True))
 
     assert response.status_code == 204
-    repo.delete_post.assert_awaited_once_with(1)
+    repo.delete_post.assert_awaited_once_with(ANY, 1)
 
 
 def test_non_admin_cannot_edit_a_notice(board, auth_headers):
