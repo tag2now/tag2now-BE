@@ -211,6 +211,8 @@ def test_the_client_cannot_name_the_stored_type(client, admin, repo):
         (b"<svg><script>alert(1)</script></svg>", "PNG, JPEG, WebP, GIF 이미지만 올릴 수 있습니다."),
         (PNG.ljust(MAX_IMAGE_BYTES + 1, b"\0"), "이미지는 5MB를 넘을 수 없습니다."),
     ],
+    # pytest puts the test id in an environment variable, which Windows caps at 32767 characters.
+    ids=["not-an-image", "over-5mb"],
 )
 def test_a_bad_image_stores_nothing(client, admin, repo, image, detail):
     answer = _create(client, admin, image=image)
