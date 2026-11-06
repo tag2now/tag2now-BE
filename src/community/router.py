@@ -99,4 +99,4 @@ async def thumb_post(
     user: AuthUser = Depends(current_user),
     service: CommunityService = Depends(community_service),
 ):
-    return await service.toggle_thumb(post_id, user, req.direction_int)
+    return await service.add_thumb(post_id, user, req.direction_int)

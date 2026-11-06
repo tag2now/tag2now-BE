@@ -167,7 +167,7 @@ class CommunityService:
 
     # -- Thumbs (posts only) -------------------------------------------------
 
-    async def toggle_thumb(self, post_id: int, voter: AuthUser, direction: int) -> dict:
-        result = await self._repo.toggle_thumb(post_id, voter.username, direction)
+    async def add_thumb(self, post_id: int, voter: AuthUser, direction: int) -> dict:
+        result = await self._repo.add_thumb(post_id, voter.username, direction)
         _invalidate_post(post_id)
         return result

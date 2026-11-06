@@ -1,6 +1,6 @@
 """Community board domain exceptions."""
 
-from shared.exceptions import NotFoundError, ForbiddenError, ValidationError
+from shared.exceptions import ConflictError, NotFoundError, ForbiddenError, ValidationError
 
 
 class PostNotFoundError(NotFoundError):
@@ -21,3 +21,7 @@ class NoticeAdminOnlyError(ForbiddenError):
 
 class NestingDepthError(ValidationError):
     """Comment nesting depth exceeded."""
+
+
+class AlreadyVotedError(ConflictError):
+    """The caller already thumbed this post; a vote is final."""

@@ -4,7 +4,7 @@ from sqlalchemy import and_, case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from community.entities import Comment, Post, Thumb
-from community.exceptions import CommentNotFoundError, NestingDepthError, PostNotFoundError
+from community.exceptions import AlreadyVotedError, CommentNotFoundError, NestingDepthError, PostNotFoundError
 from community.models import NOTICE_POST_TYPE
 from community.ports import CommunityRepository
 
@@ -131,19 +131,16 @@ class PostgresCommunityRepository(CommunityRepository):
 
     # -- Thumbs (posts only) -------------------------------------------------
 
-    async def toggle_thumb(self, post_id, voter, direction):
+    async def add_thumb(self, post_id, voter, direction):
         async with self._sessions() as session, session.begin():
             # Locks the post so concurrent votes recount one after another.
             post = await session.scalar(select(Post).where(Post.id == post_id).with_for_update())
             if post is None:
                 raise PostNotFoundError("Post not found")
-            thumb = await session.scalar(select(Thumb).where(Thumb.post_id == post_id, Thumb.voter == voter))
-            if thumb is None:
-                session.add(Thumb(post_id=post_id, voter=voter, direction=direction))
-            elif thumb.direction == direction:
-                await session.delete(thumb)
-            else:
-                thumb.direction = direction
+            voted = await session.scalar(select(Thumb.id).where(Thumb.post_id == post_id, Thumb.voter == voter))
+            if voted is not None:
+                raise AlreadyVotedError("이미 추천·비추천한 글입니다.")
+            session.add(Thumb(post_id=post_id, voter=voter, direction=direction))
             await session.flush()
 
             up, down = (await session.execute(_thumb_counts(post_id))).one()

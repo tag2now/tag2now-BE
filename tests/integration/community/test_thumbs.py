@@ -1,4 +1,4 @@
-"""Tests for community thumb toggle logic."""
+"""Tests for community thumbs: one final vote per user and post."""
 
 from . import signed_in
 
@@ -19,21 +19,26 @@ def test_thumb_up_post(client):
     assert r.json()["thumbs_down"] == 0
 
 
-def test_thumb_toggle_off(client):
-    post_id = _create_post(client)
-    # thumb up
-    client.post(f"/community/posts/{post_id}/thumb", json={"direction": "up"}, headers=HEADERS)
-    # same direction again → toggle off
-    r = client.post(f"/community/posts/{post_id}/thumb", json={"direction": "up"}, headers=HEADERS)
-    assert r.json()["thumbs_up"] == 0
+def _thumb(client, post_id, direction):
+    return client.post(f"/community/posts/{post_id}/thumb", json={"direction": direction}, headers=HEADERS)
 
 
-def test_thumb_switch_direction(client):
+def test_second_vote_same_direction_is_refused(client):
     post_id = _create_post(client)
-    client.post(f"/community/posts/{post_id}/thumb", json={"direction": "up"}, headers=HEADERS)
-    r = client.post(f"/community/posts/{post_id}/thumb", json={"direction": "down"}, headers=HEADERS)
-    assert r.json()["thumbs_up"] == 0
-    assert r.json()["thumbs_down"] == 1
+    _thumb(client, post_id, "up")
+    r = _thumb(client, post_id, "up")
+    assert r.status_code == 409
+    assert r.json()["detail"] == "이미 추천·비추천한 글입니다."
+    assert client.get(f"/community/posts/{post_id}").json()["thumbs_up"] == 1
+
+
+def test_second_vote_other_direction_is_refused(client):
+    post_id = _create_post(client)
+    _thumb(client, post_id, "up")
+    r = _thumb(client, post_id, "down")
+    assert r.status_code == 409
+    post = client.get(f"/community/posts/{post_id}").json()
+    assert (post["thumbs_up"], post["thumbs_down"]) == (1, 0)
 
 
 def test_thumb_invalid_direction(client):
