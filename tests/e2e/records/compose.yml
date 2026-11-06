@@ -38,6 +38,8 @@ services:
     environment:
       SAVE_ADMIN_KEY: replay-key
       TAG2NOW_API_URL: http://be:8000
+      # The replay judges the saves it wrote; a floor would rewrite them.
+      FLOOR_SCHEDULER: "off"
     # A volume, not a host folder: SQLite's locking is only dependable on the Linux side.
     volumes:
       - rpcn:/home/ec2-user/rpcn-data
